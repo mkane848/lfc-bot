@@ -41,6 +41,14 @@ Tests live in `tests/`. Service tests mock the Scryfall client, database tests
 run against in-memory SQLite, and command tests mock Discord interactions. Please
 add or update tests that cover your change.
 
+## Changelog
+
+User-facing changes are documented in `CHANGELOG.md`, which follows the
+[Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format. When your pull
+request changes behavior, add an entry under the `Unreleased` section using the
+appropriate type: `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, or
+`Security`. Releases are tagged as `vMAJOR.MINOR.PATCH`.
+
 ## Pull Requests
 
 - Open a PR against `main`.

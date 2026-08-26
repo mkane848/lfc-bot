@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Project documentation, including the MIT license, code of conduct, and
+  contributing guide.
+
+### Changed
+
+- The `/sell` command's `price` option is now optional, so members can post
+  sell listings without specifying a price.
+
+### Fixed
+
+- Corrected the `DISCORD_GUILD_ID` documentation in `.env.example`; it accepts
+  a single guild ID, not a comma-separated list.
+
+## [1.0.0] - 2026-08-25
+
+### Added
+
 - Multi-server Discord bot for buying, selling, and trading Magic: The Gathering
   cards, with card data from the Scryfall API.
 - Member-facing commands for creating, searching, editing, fulfilling, and
@@ -26,3 +43,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removal of a guild's data 30 days after the bot leaves that guild.
 - CI workflow running lint, format check, type-check, and tests on every push
   to `main` and every pull request.
+
+[Unreleased]: https://github.com/mkane848/lfc-bot/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/mkane848/lfc-bot/releases/tag/v1.0.0
