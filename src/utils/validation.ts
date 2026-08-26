@@ -72,7 +72,7 @@ export function validateCardName(input: string): string {
 }
 
 /**
- * Normalise a string into a stable search key: lowercase, trim whitespace, and
+ * Normalize a string into a stable search key: lowercase, trim whitespace, and
  * strip punctuation and diacritics.
  */
 export function normalizeCardName(input: string): string {

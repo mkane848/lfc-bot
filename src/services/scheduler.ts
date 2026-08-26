@@ -27,7 +27,7 @@ export function scheduleAllDigests(client: Client): void {
 
 /**
  * Re-read a server's config and rebuild its cron job. Call this after any
- * admin digest configuration change. Initialises the watermark when the mode
+ * admin digest configuration change. Initializes the watermark when the mode
  * transitions from disabled to active.
  */
 export function refreshServerDigest(client: Client, serverId: string): void {

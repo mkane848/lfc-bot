@@ -12,7 +12,7 @@ export async function handleCardAutocomplete(interaction: AutocompleteInteractio
   );
 }
 
-/** Resolve the card for a command, returning an ephemeral error when ambiguous. */
+/** Resolve a card for a command, returning an ephemeral error when ambiguous. */
 export async function resolveCardForCommand(
   interaction: ChatInputCommandInteraction,
   cardName: string,
@@ -30,7 +30,7 @@ export async function resolveCardForCommand(
   return resolved;
 }
 
-/** Normalise a card name for search matching. */
+/** Normalize a card name for search matching. */
 export function searchKey(cardName: string): string {
   return normalizeCardName(cardName);
 }
