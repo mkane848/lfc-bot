@@ -39,9 +39,10 @@ migration.
    cp .env.example .env
    ```
 
-   Fill in at least `DISCORD_TOKEN` and `DISCORD_CLIENT_ID`. The bot token comes
-   from the environment and is never committed. During development, set
-   `DISCORD_GUILD_ID` to register commands only to your test server.
+   Fill in at least `DISCORD_TOKEN` and `DISCORD_CLIENT_ID`. The bot reads them
+   from your environment or your `.env` file, and the token is never committed.
+   During development, set `DISCORD_GUILD_ID` to register commands only to your
+   test server.
 
 3. Run migrations and start the bot:
 

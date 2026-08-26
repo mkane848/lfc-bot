@@ -63,7 +63,7 @@ describe('digest state', () => {
     expect(rows.map((r) => r.cardName)).toEqual(['Card 2']);
   });
 
-  it('initialises the watermark when enabling an active mode for the first time', () => {
+  it('initializes the watermark when enabling an active mode for the first time', () => {
     getDb().insert(servers).values(serverRow).run();
     upsertServerConfig({ serverId: '300', digestMode: 'channel' });
     const config = getServerConfig('300')!;

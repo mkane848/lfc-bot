@@ -52,7 +52,7 @@ export function setServerWatermark(serverId: string, timestamp: number): void {
 }
 
 /**
- * Initialise the watermark to the current time when digest mode moves from
+ * Initialize the watermark to the current time when digest mode moves from
  * disabled to an active mode, so a digest does not flood with old listings.
  */
 export function initializeWatermarkIfNeeded(server: ServerRow): void {

@@ -28,8 +28,8 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
     await replyError(interaction, 'Invalid condition.');
     return;
   }
-  const priceInput = interaction.options.getString('price', true);
-  const priceCents = parsePriceToCents(priceInput);
+  const priceInput = interaction.options.getString('price');
+  const priceCents = priceInput ? parsePriceToCents(priceInput) : null;
   const quantity = interaction.options.getInteger('quantity') ?? 1;
   const notes = validateNotes(interaction.options.getString('notes'));
 
@@ -80,7 +80,7 @@ export const sellCommand: GuildCommand = {
         .addChoices(...CARD_CONDITIONS.map((c) => ({ name: c.toUpperCase(), value: c }))),
     )
     .addStringOption((option) =>
-      option.setName('price').setDescription('Price in USD, e.g. 2.50').setRequired(true),
+      option.setName('price').setDescription('Price in USD, e.g. 2.50 (optional)'),
     )
     .addStringOption((option) => option.setName('set').setDescription('Card set code, e.g. MH3'))
     .addIntegerOption((option) =>

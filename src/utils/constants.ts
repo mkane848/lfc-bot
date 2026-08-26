@@ -13,7 +13,7 @@ export const LISTING_COOLDOWN_MS = 10 * 1000; // 10 seconds
 export const DUPLICATE_WINDOW_MS = 24 * 60 * 60 * 1000; // 24 hours
 export const GUILD_RETENTION_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
-export const MAX_PRICE_CENTS = 100_000_00; // $100,000.00
+export const MAX_PRICE_CENTS = 10_000_000; // $100,000.00
 export const MIN_PRICE_CENTS = 0;
 export const MAX_NOTES_LENGTH = 500;
 export const MAX_QUANTITY = 99;

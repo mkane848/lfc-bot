@@ -50,7 +50,7 @@ export function getSqliteClient(): Database.Database {
     getDb();
   }
   if (!client) {
-    throw new Error('Database client was not initialised');
+    throw new Error('Database client was not initialized');
   }
   return client;
 }

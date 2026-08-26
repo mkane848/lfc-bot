@@ -22,7 +22,7 @@ interface AutocompleteResponse {
 
 /**
  * A tiny sequential queue that enforces Scryfall's minimum request interval.
- * Every outbound request is serialised so a burst of autocomplete calls cannot
+ * Every outbound request is serialized so a burst of autocomplete calls cannot
  * trip the rate limiter.
  */
 class RateLimiter {
