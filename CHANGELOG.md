@@ -7,8 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-08-26
+
 ### Added
 
+- Docker packaging for self-hosted and free-cloud deployment: a multi-stage
+  `Dockerfile`, a `.dockerignore`, and a `docker-compose.yml` with a named
+  `lfcbot-data` volume.
+- `docs/DEPLOYMENT.md` covering a shared bot your friends can invite and
+  per-community free-VM setup (Oracle Cloud Free Tier and Google Cloud Free
+  Tier), including SQLite backup guidance.
 - Project documentation, including the MIT license, code of conduct, and
   contributing guide.
 
@@ -44,5 +52,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CI workflow running lint, format check, type-check, and tests on every push
   to `main` and every pull request.
 
-[Unreleased]: https://github.com/mkane848/lfc-bot/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/mkane848/lfc-bot/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/mkane848/lfc-bot/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/mkane848/lfc-bot/releases/tag/v1.0.0

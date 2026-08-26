@@ -1,0 +1,13 @@
+services:
+  bot:
+    build:
+      context: .
+    image: lfcbot:latest
+    env_file:
+      - .env
+    restart: unless-stopped
+    volumes:
+      - lfcbot-data:/app/data
+
+volumes:
+  lfcbot-data:

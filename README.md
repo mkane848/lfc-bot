@@ -103,6 +103,10 @@ then `npm start` in production, or use any process manager of your choice. The
 bot stops all scheduled jobs gracefully on SIGINT/SIGTERM and rebuilds them from
 the database on boot.
 
+For containerized or free-cloud deployment, including a shared bot your friends
+can invite and per-community VM setup, see
+[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
 ## Security and Privacy
 
 - The bot stores only Discord user IDs, display names, listing content, and
