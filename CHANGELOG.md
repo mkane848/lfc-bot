@@ -7,11 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-08-26
+
 ### Added
 
 - `scripts/backup.sh`, a helper that snapshots the SQLite database from the
   Docker named volume to a compressed archive, restarts the bot, and prunes
   archives older than a configurable retention window.
+- A documented path to run the bot from the prebuilt multi-architecture GHCR
+  image instead of building from source.
 
 ## [1.1.0] - 2026-08-26
 
@@ -63,6 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CI workflow running lint, format check, type-check, and tests on every push
   to `main` and every pull request.
 
-[Unreleased]: https://github.com/mkane848/lfc-bot/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/mkane848/lfc-bot/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/mkane848/lfc-bot/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/mkane848/lfc-bot/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/mkane848/lfc-bot/releases/tag/v1.0.0
