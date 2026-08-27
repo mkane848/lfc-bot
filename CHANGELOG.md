@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `scripts/backup.sh`, a helper that snapshots the SQLite database from the
+  Docker named volume to a compressed archive, restarts the bot, and prunes
+  archives older than a configurable retention window.
+
 ## [1.1.0] - 2026-08-26
 
 ### Added
@@ -14,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Docker packaging for self-hosted and free-cloud deployment: a multi-stage
   `Dockerfile`, a `.dockerignore`, and a `docker-compose.yml` with a named
   `lfcbot-data` volume.
+- A GitHub Actions release workflow that builds a multi-architecture image
+  (amd64 and arm64), publishes it to GitHub Container Registry, and creates a
+  GitHub Release whenever a `v*` tag is pushed.
 - `docs/DEPLOYMENT.md` covering a shared bot your friends can invite and
   per-community free-VM setup (Oracle Cloud Free Tier and Google Cloud Free
   Tier), including SQLite backup guidance.
@@ -22,6 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Bumped the runtime from Node.js 20 to Node.js 22+ (Node 24 in the Docker
+  image and CI) to satisfy `better-sqlite3`'s engine requirement.
 - The `/sell` command's `price` option is now optional, so members can post
   sell listings without specifying a price.
 

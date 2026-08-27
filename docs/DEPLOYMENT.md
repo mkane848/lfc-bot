@@ -170,24 +170,52 @@ echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 Then follow the Docker install and clone steps from
 [Option A](#3-install-docker) onward.
 
+## Run from the prebuilt image
+
+The release workflow publishes a multi-architecture image (amd64 and arm64) to
+`ghcr.io/mkane848/lfc-bot`. You can run it directly instead of building from
+source, which is faster and needs no build toolchain:
+
+```sh
+docker login ghcr.io -u YOUR_GITHUB_USERNAME
+docker pull ghcr.io/mkane848/lfc-bot:latest
+docker run -d --name lfcbot \
+  --env-file .env \
+  -v lfcbot-data:/app/data \
+  --restart unless-stopped \
+  ghcr.io/mkane848/lfc-bot:latest
+```
+
+Pin a specific release tag (for example `:1.1.0`) for reproducible rollbacks,
+or use `:latest` for the newest build. GHCR packages are private by default;
+make the package public (or sign in) before friends pull it.
+
 ## Backups
 
 The VM disk is persistent but not backed up automatically. Back up the SQLite
-file regularly. With Docker Compose, the database lives in the named volume
-`lfcbot-data`.
-
-Stop the bot briefly for a consistent copy, then snapshot the volume:
+file regularly using `scripts/backup.sh`:
 
 ```sh
-docker compose stop bot
-docker run --rm -v lfcbot-data:/data -v "$PWD/backups":/backup \
-  ubuntu tar czf /backup/lfcbot-$(date +%F).tar.gz -C /data .
-docker compose start bot
+./scripts/backup.sh
 ```
 
-Schedule that on a cron timer and copy the archives off-box (for example to
-object storage or a second machine). A SQLite copy taken while the bot is
-running can be torn, so stop the service first.
+By default it stops the bot for a consistent snapshot, writes a compressed
+archive to `./backups/`, restarts the bot, and prunes archives older than 14
+days. Point `BACKUP_DIR` at a directory that is itself copied off-box (object
+storage or a second machine) for real durability:
+
+```sh
+BACKUP_DIR=/mnt/offbox/lfcbot-backups ./scripts/backup.sh
+```
+
+Schedule it with cron, for example daily at 04:30:
+
+```cron
+30 4 * * * cd /path/to/lfc-bot && ./scripts/backup.sh >> /var/log/lfcbot-backup.log 2>&1
+```
+
+A SQLite copy taken while the bot is running can be torn, so the script stops
+the service first.
 
 ## Configuration reference
 

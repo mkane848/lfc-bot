@@ -25,7 +25,10 @@ Vitest for tests.
 
 CI (`.github/workflows/ci.yml`) runs lint, format check, type-check, and tests
 on every push to `main` and every pull request. Run those four checks locally
-before considering work done.
+before considering work done. A separate release workflow
+(`.github/workflows/release.yml`) builds a multi-architecture Docker image,
+publishes it to GHCR, and creates a GitHub Release whenever a `v*` tag is
+pushed.
 
 ## Environment
 
@@ -48,6 +51,9 @@ is the documentation surface for environment variables.
 - `src/services/` - Scryfall client, card cache, listings, digests, scheduler
 - `src/utils/` - validation, embeds, permissions, logging, constants
 - `tests/` - mirrors `src`; `tests/helpers/db.ts` provides in-memory SQLite
+- `scripts/` - operational helpers, including `backup.sh` for the SQLite volume
+- `docs/` - deployment and hosting documentation
+- `Dockerfile`, `docker-compose.yml`, `.dockerignore` - container packaging
 
 ## Conventions
 
