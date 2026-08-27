@@ -6,7 +6,7 @@ Guidance for coding agents working in this repository.
 
 LFCbot is a multi-server Discord bot for buy, sell, and trade listings of
 trading cards. Version 1 targets Magic: The Gathering via the Scryfall API.
-Stack: Node.js 20+, TypeScript (strict, ESM with `NodeNext`), discord.js v14,
+Stack: Node.js 22+, TypeScript (strict, ESM with `NodeNext`), discord.js v14,
 Drizzle ORM with better-sqlite3, node-cron for per-guild digest schedules, and
 Vitest for tests.
 

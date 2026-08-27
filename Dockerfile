@@ -1,4 +1,4 @@
-FROM node:20-bookworm-slim AS build
+FROM node:24-bookworm-slim AS build
 
 # python3/make/g++ let better-sqlite3 compile from source when no prebuilt
 # binary matches the target platform (amd64 or arm64).
@@ -19,7 +19,7 @@ RUN npm run build
 # Drop devDependencies so the runtime layer stays lean.
 RUN npm prune --omit=dev
 
-FROM node:20-bookworm-slim AS runtime
+FROM node:24-bookworm-slim AS runtime
 
 ENV NODE_ENV=production \
     DATABASE_PATH=/app/data/lfcbot.db

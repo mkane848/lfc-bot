@@ -18,7 +18,7 @@ migration, but no other game is selectable in v1.
 
 | Layer | Choice | Rationale |
 |-------|--------|-----------|
-| Runtime | Node.js 20+ with TypeScript | Required by discord.js v14 and provides strong typing |
+| Runtime | Node.js 22+ with TypeScript | Required by discord.js v14 and provides strong typing |
 | Discord | discord.js v14 | Most mature Discord library |
 | ORM | Drizzle ORM | TypeScript-native and supports generated migrations |
 | Database | better-sqlite3 | File-based, simple to self-host, and appropriate for small deployments |
