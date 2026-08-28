@@ -22,16 +22,21 @@ describe('scryfall service', () => {
     await expect(autocompleteCards('black')).resolves.toEqual(['Black Lotus', 'Black Vice']);
   });
 
-  it('resolves a card through the fuzzy endpoint and caches it', async () => {
+  it('resolves a card through the paper-preferring default search and caches it', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
         jsonResponse({
-          id: 'lotus-id',
-          name: 'Black Lotus',
-          set: 'LEA',
-          collector_number: '232',
-          image_uris: { normal: 'http://img/lotus.png' },
+          data: [
+            {
+              id: 'lotus-id',
+              name: 'Black Lotus',
+              set: 'LEA',
+              collector_number: '232',
+              games: ['paper'],
+              image_uris: { normal: 'http://img/lotus.png' },
+            },
+          ],
         }),
       ),
     );
@@ -50,6 +55,76 @@ describe('scryfall service', () => {
     const cached = await resolveCard('Black Lotus');
     expect(cached.cardName).toBe('Black Lotus');
     expect(fetchMock.mock.calls.length).toBe(callsBefore);
+  });
+
+  it('prefers a paper printing over a digital-only fuzzy default when no printing filter is given', async () => {
+    const fetchMock = vi.fn((url: string) => {
+      if (url.includes('/cards/search')) {
+        const query = decodeURIComponent(url.split('q=')[1] ?? '');
+        expect(query).toContain('game:paper');
+        return Promise.resolve(
+          jsonResponse({
+            data: [
+              {
+                id: 'paper-id',
+                name: 'Black Lotus',
+                set: '2ed',
+                collector_number: '233',
+                games: ['paper'],
+                image_uris: { normal: 'http://img/2ed-lotus.png' },
+              },
+            ],
+          }),
+        );
+      }
+      // The fuzzy endpoint would return the digital-only VMA printing; it
+      // should not be reached since the paper search already found a match.
+      return Promise.resolve(
+        jsonResponse({
+          id: 'digital-id',
+          name: 'Black Lotus',
+          set: 'vma',
+          collector_number: '4',
+          games: ['mtgo'],
+          image_uris: { normal: 'http://img/vma-lotus.png' },
+        }),
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const resolved = await resolveCard('Black Lotus');
+    expect(resolved.cardSet).toBe('2ed');
+    expect(resolved.manapoolUrl).toBe('https://manapool.com/card/2ed/233/black-lotus');
+    expect(fetchMock.mock.calls.some((call) => String(call[0]).includes('/cards/named'))).toBe(
+      false,
+    );
+  });
+
+  it('does not build a Manapool link for a digital-only printing', async () => {
+    const fetchMock = vi.fn((url: string) => {
+      if (url.includes('/cards/search')) {
+        // No paper printing exists for this card.
+        return Promise.resolve(jsonResponse({ data: [] }));
+      }
+      return Promise.resolve(
+        jsonResponse({
+          id: 'digital-id',
+          name: 'Some Arena Card',
+          set: 'ana',
+          collector_number: '1',
+          games: ['arena'],
+          image_uris: { normal: 'http://img/arena-card.png' },
+        }),
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const resolved = await resolveCard('Some Arena Card');
+    expect(resolved.resolved).toBe(true);
+    expect(resolved.manapoolUrl).toBeNull();
+    expect(fetchMock.mock.calls.some((call) => String(call[0]).includes('manapool.com'))).toBe(
+      false,
+    );
   });
 
   it('falls back to an unresolved entry when Scryfall is unavailable', async () => {
@@ -112,6 +187,7 @@ describe('scryfall service', () => {
           name: 'Lightning Bolt',
           set: 'mh3',
           collector_number: '128',
+          games: ['paper'],
           image_uris: { normal: 'http://img/bolt.png' },
         }),
       );
@@ -140,6 +216,7 @@ describe('scryfall service', () => {
           name: 'Lightning Bolt',
           set: 'mh3',
           collector_number: '128',
+          games: ['paper'],
           image_uris: { normal: 'http://img/bolt.png' },
         }),
       );

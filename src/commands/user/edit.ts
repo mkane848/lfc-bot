@@ -7,10 +7,13 @@ import {
 } from 'discord.js';
 import type { ChatInputCommandInteraction, ModalSubmitInteraction } from 'discord.js';
 import { getListingById, updateListing } from '../../services/listings.js';
+import { resolveCard } from '../../services/scryfall.js';
 import type { GuildCommand } from '../../types/index.js';
 import { replyError, replySuccess } from '../../utils/replies.js';
 import {
   isCardCondition,
+  isCardFinish,
+  isCardVariant,
   parsePriceToCents,
   parseQuantity,
   validateNotes,
@@ -136,13 +139,36 @@ export async function handleEditModal(interaction: ModalSubmitInteraction): Prom
     const notes = validateNotes(notesRaw);
     const cardSet = setRaw.trim() !== '' ? setRaw.trim().toUpperCase() : null;
 
-    updateListing(id, {
-      condition: condition ?? null,
-      priceCents,
-      quantity,
-      notes,
-      cardSet,
-    });
+    const baseFields = { condition: condition ?? null, priceCents, quantity, notes };
+
+    // Changing the set changes the printing, so re-resolve to keep the
+    // collector number, card image, and Manapool link consistent with it
+    // instead of leaving them pointing at the old printing.
+    if (cardSet === listing.cardSet) {
+      updateListing(id, { ...baseFields, cardSet });
+    } else {
+      const finish = listing.finish && isCardFinish(listing.finish) ? listing.finish : null;
+      const variant = listing.variant && isCardVariant(listing.variant) ? listing.variant : null;
+      const resolved = await resolveCard(listing.cardName, { cardSet, finish, variant });
+      if (!resolved.resolved) {
+        await interaction.reply({
+          content: `Could not find "${listing.cardName}" in set ${cardSet ?? '(none)'}. Check the set code and try again.`,
+          ephemeral: true,
+        });
+        return;
+      }
+      // Use the set Scryfall actually resolved to, in case of a
+      // normalization difference (e.g. casing) from what the user typed.
+      updateListing(id, {
+        ...baseFields,
+        cardSet: resolved.cardSet ?? cardSet,
+        cardName: resolved.cardName,
+        cardNameNormalized: resolved.cardNameNormalized,
+        cardImageUrl: resolved.cardImageUrl,
+        collectorNumber: resolved.collectorNumber ?? null,
+        manapoolUrl: resolved.manapoolUrl,
+      });
+    }
     await replySuccess(interaction, `Listing #${id} updated.`);
   } catch (err) {
     await interaction.reply({

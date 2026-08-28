@@ -202,6 +202,11 @@ export function updateListing(
     quantity?: number;
     notes?: string | null;
     cardSet?: string | null;
+    cardName?: string;
+    cardNameNormalized?: string;
+    cardImageUrl?: string | null;
+    collectorNumber?: string | null;
+    manapoolUrl?: string | null;
   },
 ): ListingRow | undefined {
   const db = getDb();
@@ -211,6 +216,12 @@ export function updateListing(
   if (fields.quantity !== undefined) update.quantity = fields.quantity;
   if (fields.notes !== undefined) update.notes = fields.notes;
   if (fields.cardSet !== undefined) update.cardSet = fields.cardSet;
+  if (fields.cardName !== undefined) update.cardName = fields.cardName;
+  if (fields.cardNameNormalized !== undefined)
+    update.cardNameNormalized = fields.cardNameNormalized;
+  if (fields.cardImageUrl !== undefined) update.cardImageUrl = fields.cardImageUrl;
+  if (fields.collectorNumber !== undefined) update.collectorNumber = fields.collectorNumber;
+  if (fields.manapoolUrl !== undefined) update.manapoolUrl = fields.manapoolUrl;
   db.update(listings).set(update).where(eq(listings.id, id)).run();
   return getListingById(id);
 }

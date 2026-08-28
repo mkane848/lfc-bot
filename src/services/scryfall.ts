@@ -14,6 +14,7 @@ interface ScryfallCard {
   name?: string | null;
   set?: string | null;
   collector_number?: string | null;
+  games?: string[] | null;
   image_uris?: { normal?: string | null; large?: string | null } | null;
   card_faces?: Array<{
     image_uris?: { normal?: string | null; large?: string | null } | null;
@@ -180,21 +181,31 @@ export async function resolveCard(
       card = await fuzzyLookup(input);
     }
   } else {
-    card = await fuzzyLookup(input);
+    // With no printing filter, prefer a paper printing over Scryfall's fuzzy
+    // default, which can land on a digital-only (MTGO/Arena) printing that
+    // has no real-world market and therefore no Manapool listing.
+    const paperSearch = await limiter.run(() =>
+      scryfallFetch<{ data: ScryfallCard[] }>(
+        `/cards/search?q=${encodeURIComponent(`!"${input}" game:paper`)}`,
+      ),
+    );
+    card = paperSearch?.data?.[0] ?? (await fuzzyLookup(input));
   }
 
   if (card?.name) {
     const scryfallId = card.id ?? null;
     const cardSetCode = card.set ?? null;
     const cardCollectorNumber = card.collector_number ?? null;
-    const manapool = scryfallId ? await lookupManapoolPrinting(scryfallId) : null;
-    const manapoolUrl =
-      manapool?.url ??
-      buildManapoolUrl({
-        cardName: card.name,
-        cardSet: cardSetCode,
-        collectorNumber: cardCollectorNumber,
-      });
+    const isPaperCard = card.games?.includes('paper') ?? false;
+    const manapool = isPaperCard && scryfallId ? await lookupManapoolPrinting(scryfallId) : null;
+    const manapoolUrl = isPaperCard
+      ? (manapool?.url ??
+        buildManapoolUrl({
+          cardName: card.name,
+          cardSet: cardSetCode,
+          collectorNumber: cardCollectorNumber,
+        }))
+      : null;
     const resolved: ResolvedCard = {
       scryfallId,
       cardName: card.name,

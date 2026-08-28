@@ -7,6 +7,7 @@ import {
   fulfillListing,
   searchListings,
   softDeleteListing,
+  updateListing,
 } from '../../src/services/listings.js';
 import { setupTestDb } from '../helpers/db.js';
 
@@ -182,5 +183,67 @@ describe('search and status transitions', () => {
     expect(searchListings('200', 'black lotus', undefined, 'both', 1)).toHaveLength(0);
     expect(searchListings('200', 'black lotus', undefined, 'cash', 1)).toHaveLength(1);
     expect(searchListings('200', 'black lotus', undefined, 'trade', 1)).toHaveLength(0);
+  });
+});
+
+describe('updateListing', () => {
+  it('leaves printing fields untouched when they are not included in the update', () => {
+    seedServer();
+    const { listing } = createListing({
+      ...baseInput(),
+      intent: 'have',
+      accepts: 'cash',
+      cardSet: 'LEA',
+      collectorNumber: '232',
+      manapoolUrl: 'https://manapool.com/card/lea/232/black-lotus',
+    });
+    const updated = updateListing(listing.id, { priceCents: 2000 });
+    expect(updated?.cardSet).toBe('LEA');
+    expect(updated?.collectorNumber).toBe('232');
+    expect(updated?.manapoolUrl).toBe('https://manapool.com/card/lea/232/black-lotus');
+    expect(updated?.priceCents).toBe(2000);
+  });
+
+  it('updates the printing fields together when a new set is resolved', () => {
+    seedServer();
+    const { listing } = createListing({
+      ...baseInput(),
+      intent: 'have',
+      accepts: 'cash',
+      cardSet: 'LEA',
+      collectorNumber: '232',
+      cardImageUrl: 'http://img/lea-lotus.png',
+      manapoolUrl: 'https://manapool.com/card/lea/232/black-lotus',
+    });
+    const updated = updateListing(listing.id, {
+      cardSet: '2ED',
+      collectorNumber: '233',
+      cardImageUrl: 'http://img/2ed-lotus.png',
+      manapoolUrl: 'https://manapool.com/card/2ed/233/black-lotus',
+    });
+    expect(updated?.cardSet).toBe('2ED');
+    expect(updated?.collectorNumber).toBe('233');
+    expect(updated?.cardImageUrl).toBe('http://img/2ed-lotus.png');
+    expect(updated?.manapoolUrl).toBe('https://manapool.com/card/2ed/233/black-lotus');
+  });
+
+  it('can clear the collector number and Manapool link (e.g. when the set is cleared)', () => {
+    seedServer();
+    const { listing } = createListing({
+      ...baseInput(),
+      intent: 'have',
+      accepts: 'cash',
+      cardSet: 'LEA',
+      collectorNumber: '232',
+      manapoolUrl: 'https://manapool.com/card/lea/232/black-lotus',
+    });
+    const updated = updateListing(listing.id, {
+      cardSet: null,
+      collectorNumber: null,
+      manapoolUrl: null,
+    });
+    expect(updated?.cardSet).toBeNull();
+    expect(updated?.collectorNumber).toBeNull();
+    expect(updated?.manapoolUrl).toBeNull();
   });
 });
