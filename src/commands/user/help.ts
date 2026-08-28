@@ -12,7 +12,8 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
   embed.addFields(
     {
       name: 'Post a listing',
-      value: '`/sell`, `/buy`, `/trade` create active listings',
+      value:
+        '`/have` posts a card you have (accepting cash, trade, or both); `/want` posts a card you want',
       inline: false,
     },
     {

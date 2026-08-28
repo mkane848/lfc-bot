@@ -4,11 +4,14 @@ Guidance for coding agents working in this repository.
 
 ## Project
 
-LFCbot is a multi-server Discord bot for buy, sell, and trade listings of
-trading cards. Version 1 targets Magic: The Gathering via the Scryfall API.
-Stack: Node.js 22+, TypeScript (strict, ESM with `NodeNext`), discord.js v14,
-Drizzle ORM with better-sqlite3, node-cron for per-guild digest schedules, and
-Vitest for tests.
+LFCbot is a multi-server Discord bot for have/want trading card listings:
+members post a card they have or want, whether they'll accept cash, trade, or
+both, and optionally an exact printing (set, finish, variant, collector
+number). Version 1 targets Magic: The Gathering via the Scryfall API, with
+optional links to the exact printing on Manapool. Stack: Node.js 22+,
+TypeScript (strict, ESM with `NodeNext`), discord.js v14, Drizzle ORM with
+better-sqlite3, node-cron for per-guild digest schedules, and Vitest for
+tests.
 
 ## Commands
 
@@ -35,7 +38,10 @@ pushed.
 Copy `.env.example` to `.env`. Required: `DISCORD_TOKEN` and
 `DISCORD_CLIENT_ID`. Optional: `DATABASE_PATH` (default `./data/lfcbot.db`),
 `DISCORD_GUILD_ID` (registers commands to a test guild in development instead
-of globally), `NODE_ENV`, and `LOG_LEVEL`.
+of globally), `NODE_ENV`, `LOG_LEVEL`, and `MANAPOOL_API_KEY` (a Mana Pool API
+access token, `mpat_...`; enables live "View on Manapool" links and price
+lookups for exact printings, otherwise the bot falls back to a locally-built
+link or none).
 
 Never read, quote, or commit `.env`; it contains the bot token. `.env.example`
 is the documentation surface for environment variables.
@@ -48,7 +54,8 @@ is the documentation surface for environment variables.
 - `src/commands/admin/` - `/admin` subcommands; require Manage Server
 - `src/events/` - Discord event handlers
 - `src/db/` - Drizzle schema, connection singleton, and generated migrations
-- `src/services/` - Scryfall client, card cache, listings, digests, scheduler
+- `src/services/` - Scryfall client, Manapool client, card cache, listings,
+  digests, scheduler
 - `src/utils/` - validation, embeds, permissions, logging, constants
 - `tests/` - mirrors `src`; `tests/helpers/db.ts` provides in-memory SQLite
 - `scripts/` - operational helpers, including `backup.sh` for the SQLite volume
@@ -77,6 +84,16 @@ generated SQL and meta files under `src/db/migrations/`. Do not use
 automatically at startup and the database file's parent directory is created on
 boot.
 
+To add a `NOT NULL` column backed by existing data (SQLite can't add a
+`NOT NULL` column without a constant default, and can't backfill from another
+column in the same `ALTER TABLE`), generate in two passes: first add the
+column nullable and run `db:generate`, then hand-edit that migration to
+`UPDATE` the backfilled values, then flip the column to `.notNull()` in
+`schema.ts` and run `db:generate` again — drizzle-kit will emit a SQLite
+table-rebuild migration that succeeds because the data is already backfilled.
+See `src/db/migrations/0001_have_want_printing_fields.sql` and
+`0002_listings_intent_accepts_not_null.sql` for a worked example.
+
 ## Testing
 
 Service tests mock the Scryfall client, database tests run against in-memory
@@ -91,6 +108,12 @@ change pass.
 - Digest deduplication is driven solely by `servers.last_digest_at`; the
   watermark advances only after at least one configured delivery succeeds.
 - Scryfall requests go through the rate-limited queue in
-  `src/services/scryfall.ts`, with a 24-hour cache in the `card_cache` table.
+  `src/services/scryfall.ts`, with a 24-hour cache in the `card_cache` table
+  keyed by name plus set/finish/variant/collector number.
+- Each listing's Manapool link is resolved once, at card-resolution time, and
+  frozen onto the row (`listings.manapool_url`) and the card cache — it is
+  not re-fetched live when rendering embeds or digests. `src/utils/manapool.ts`
+  builds the local fallback URL; `src/services/manapool.ts` does the live
+  lookup and is a no-op (no network call) when `MANAPOOL_API_KEY` is unset.
 - When the bot is removed from a guild, that guild's data is removed after a
   30-day retention window.

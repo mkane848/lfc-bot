@@ -1,5 +1,6 @@
 import type { AutocompleteInteraction, ChatInputCommandInteraction } from 'discord.js';
-import { autocompleteCards, resolveCard } from '../services/scryfall.js';
+import { autocompleteCards, autocompleteSets, resolveCard } from '../services/scryfall.js';
+import type { ResolveCardOptions } from '../services/scryfall.js';
 import type { ResolvedCard } from '../types/index.js';
 import { normalizeCardName } from './validation.js';
 
@@ -12,13 +13,20 @@ export async function handleCardAutocomplete(interaction: AutocompleteInteractio
   );
 }
 
+/** Shared autocomplete handler for set-code inputs. */
+export async function handleSetAutocomplete(interaction: AutocompleteInteraction): Promise<void> {
+  const query = interaction.options.getFocused();
+  const choices = await autocompleteSets(query);
+  await interaction.respond(choices);
+}
+
 /** Resolve a card for a command, returning an ephemeral error when ambiguous. */
 export async function resolveCardForCommand(
   interaction: ChatInputCommandInteraction,
   cardName: string,
-  cardSet?: string | null,
+  options: ResolveCardOptions = {},
 ): Promise<ResolvedCard | null> {
-  const resolved = await resolveCard(cardName, cardSet);
+  const resolved = await resolveCard(cardName, options);
   if (!resolved.resolved) {
     await interaction.reply({
       content:

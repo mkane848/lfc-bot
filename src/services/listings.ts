@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gte, sql } from 'drizzle-orm';
+import { and, count, desc, eq, gte, or, sql } from 'drizzle-orm';
 import { getDb } from '../db/index.js';
 import { listings, type ListingRow, type NewListingRow } from '../db/schema.js';
 import {
@@ -8,7 +8,7 @@ import {
   MY_LISTINGS_PAGE_SIZE,
   SEARCH_PAGE_SIZE,
 } from '../utils/constants.js';
-import type { ListingCreateInput, ListingType } from '../types/index.js';
+import type { Accepts, ListingCreateInput, ListingIntent } from '../types/index.js';
 
 const now = () => Date.now();
 
@@ -31,12 +31,17 @@ export function createListing(input: ListingCreateInput): CreateListingResult {
     serverId: input.serverId,
     userId: input.userId,
     username: input.username,
-    listingType: input.listingType,
+    intent: input.intent,
+    accepts: input.accepts,
     game: input.game ?? 'mtg',
     cardName: input.cardName,
     cardNameNormalized: input.cardNameNormalized,
     cardSet: input.cardSet ?? null,
     cardImageUrl: input.cardImageUrl ?? null,
+    finish: input.finish ?? null,
+    variant: input.variant ?? null,
+    collectorNumber: input.collectorNumber ?? null,
+    manapoolUrl: input.manapoolUrl ?? null,
     condition: input.condition ?? null,
     priceCents: input.priceCents ?? null,
     quantity: input.quantity ?? 1,
@@ -79,7 +84,11 @@ function duplicateWarning(input: ListingCreateInput, at: number): string | undef
         eq(listings.userId, input.userId),
         eq(listings.status, 'active'),
         eq(listings.cardNameNormalized, input.cardNameNormalized),
-        eq(listings.listingType, input.listingType),
+        eq(listings.intent, input.intent),
+        eq(listings.accepts, input.accepts),
+        sql`${listings.finish} IS ${input.finish ?? null}`,
+        sql`${listings.variant} IS ${input.variant ?? null}`,
+        sql`${listings.collectorNumber} IS ${input.collectorNumber ?? null}`,
         sql`${listings.condition} IS ${input.condition ?? null}`,
         sql`${listings.priceCents} IS ${input.priceCents ?? null}`,
         gte(listings.createdAt, windowStart),
@@ -96,11 +105,12 @@ function duplicateWarning(input: ListingCreateInput, at: number): string | undef
 export function searchListings(
   serverId: string,
   cardNameNormalized: string,
-  listingType: ListingType | undefined,
+  intent: ListingIntent | undefined,
+  accepts: Accepts | undefined,
   page: number,
 ): ListingRow[] {
   const db = getDb();
-  const conditions = searchConditions(serverId, cardNameNormalized, listingType);
+  const conditions = searchConditions(serverId, cardNameNormalized, intent, accepts);
   const offset = Math.max(0, page - 1) * SEARCH_PAGE_SIZE;
   return db
     .select()
@@ -116,10 +126,11 @@ export function searchListings(
 export function countSearchResults(
   serverId: string,
   cardNameNormalized: string,
-  listingType: ListingType | undefined,
+  intent: ListingIntent | undefined,
+  accepts: Accepts | undefined,
 ): number {
   const db = getDb();
-  const conditions = searchConditions(serverId, cardNameNormalized, listingType);
+  const conditions = searchConditions(serverId, cardNameNormalized, intent, accepts);
   const row = db
     .select({ value: count() })
     .from(listings)
@@ -128,14 +139,30 @@ export function countSearchResults(
   return row?.value ?? 0;
 }
 
-function searchConditions(serverId: string, cardNameNormalized: string, listingType?: ListingType) {
+function searchConditions(
+  serverId: string,
+  cardNameNormalized: string,
+  intent?: ListingIntent,
+  accepts?: Accepts,
+) {
   const conditions = [
     eq(listings.serverId, serverId),
     eq(listings.status, 'active'),
     eq(listings.cardNameNormalized, cardNameNormalized),
   ];
-  if (listingType) {
-    conditions.push(eq(listings.listingType, listingType));
+  if (intent) {
+    conditions.push(eq(listings.intent, intent));
+  }
+  if (accepts) {
+    // A listing that accepts 'both' should match a filter for either 'cash'
+    // or 'trade'; only an exact 'both' filter should require 'both' itself.
+    const clause =
+      accepts === 'both'
+        ? eq(listings.accepts, 'both')
+        : or(eq(listings.accepts, accepts), eq(listings.accepts, 'both'));
+    if (clause) {
+      conditions.push(clause);
+    }
   }
   return conditions;
 }

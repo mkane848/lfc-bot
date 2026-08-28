@@ -8,6 +8,20 @@
       "when": 1787669406611,
       "tag": "0000_outstanding_boomer",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1787883542389,
+      "tag": "0001_have_want_printing_fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1787883552493,
+      "tag": "0002_listings_intent_accepts_not_null",
+      "breakpoints": true
     }
   ]
 }

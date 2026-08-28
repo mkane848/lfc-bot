@@ -1,13 +1,14 @@
 import { EmbedBuilder, SlashCommandBuilder } from 'discord.js';
 import type { ChatInputCommandInteraction } from 'discord.js';
 import { countSearchResults, searchListings } from '../../services/listings.js';
-import type { GuildCommand, ListingType } from '../../types/index.js';
-import { LISTING_TYPES } from '../../types/index.js';
+import type { Accepts, GuildCommand, ListingIntent } from '../../types/index.js';
+import { ACCEPTS_VALUES, LISTING_INTENTS } from '../../types/index.js';
+import { ACCEPTS_LABELS, INTENT_LABELS } from '../../utils/constants.js';
 import { brandColor, formatPrice } from '../../utils/embeds.js';
 import { handleCardAutocomplete, searchKey } from '../../utils/cards.js';
 import { replyError } from '../../utils/replies.js';
 import { SEARCH_PAGE_SIZE } from '../../utils/constants.js';
-import { isListingType, validateCardName } from '../../utils/validation.js';
+import { isAccepts, isListingIntent, validateCardName } from '../../utils/validation.js';
 
 async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
   const guild = interaction.guild;
@@ -17,17 +18,23 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
   }
 
   const cardName = validateCardName(interaction.options.getString('card_name', true));
-  const typeInput = interaction.options.getString('listing_type');
-  if (typeInput && !isListingType(typeInput)) {
-    await replyError(interaction, 'Invalid listing type.');
+  const intentInput = interaction.options.getString('intent');
+  if (intentInput && !isListingIntent(intentInput)) {
+    await replyError(interaction, 'Invalid intent.');
     return;
   }
-  const listingType = (typeInput as ListingType | undefined) ?? undefined;
+  const intent = (intentInput as ListingIntent | undefined) ?? undefined;
+  const acceptsInput = interaction.options.getString('accepts');
+  if (acceptsInput && !isAccepts(acceptsInput)) {
+    await replyError(interaction, 'Invalid accepts value.');
+    return;
+  }
+  const accepts = (acceptsInput as Accepts | undefined) ?? undefined;
   const page = Math.max(1, interaction.options.getInteger('page') ?? 1);
 
   const key = searchKey(cardName);
-  const results = searchListings(guild.id, key, listingType, page);
-  const total = countSearchResults(guild.id, key, listingType);
+  const results = searchListings(guild.id, key, intent, accepts, page);
+  const total = countSearchResults(guild.id, key, intent, accepts);
 
   if (results.length === 0) {
     await interaction.reply({
@@ -51,8 +58,12 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
     }
     parts.push(`qty ${listing.quantity}`);
     const line = parts.join(' · ');
+    const intentLabel =
+      INTENT_LABELS[listing.intent as keyof typeof INTENT_LABELS] ?? listing.intent;
+    const acceptsLabel =
+      ACCEPTS_LABELS[listing.accepts as keyof typeof ACCEPTS_LABELS] ?? listing.accepts;
     embed.addFields({
-      name: `#${listing.id} · ${listing.listingType.toUpperCase()} · @${listing.username}`,
+      name: `#${listing.id} · ${intentLabel} · ${acceptsLabel} · @${listing.username}`,
       value: line,
       inline: false,
     });
@@ -75,9 +86,15 @@ export const searchCommand: GuildCommand = {
     )
     .addStringOption((option) =>
       option
-        .setName('listing_type')
-        .setDescription('Filter by listing type')
-        .addChoices(...LISTING_TYPES.map((t) => ({ name: t, value: t }))),
+        .setName('intent')
+        .setDescription('Filter by have/want')
+        .addChoices(...LISTING_INTENTS.map((i) => ({ name: INTENT_LABELS[i], value: i }))),
+    )
+    .addStringOption((option) =>
+      option
+        .setName('accepts')
+        .setDescription('Filter by what they accept')
+        .addChoices(...ACCEPTS_VALUES.map((a) => ({ name: ACCEPTS_LABELS[a], value: a }))),
     )
     .addIntegerOption((option) =>
       option.setName('page').setDescription('Page number').setMinValue(1),

@@ -1,8 +1,9 @@
 # LFCbot
 
-LFCbot is a multi-server Discord bot for buy, sell, and trade listings of
-trading cards. Users post listings, search what others are offering, and
-admins receive configurable daily digest notifications of new activity.
+LFCbot is a multi-server Discord bot for have/want trading card listings.
+Members post a card they have or want, whether they'll accept cash, trade, or
+both, search what others are offering, and admins receive configurable daily
+digest notifications of new activity.
 
 Version 1 targets **Magic: The Gathering** through the Scryfall API. The data
 model keeps a `game` column so other games can be added later without a schema
@@ -10,8 +11,10 @@ migration.
 
 ## Features
 
-- Post `/sell`, `/buy`, and `/trade` listings with Scryfall card resolution and
-  autocomplete.
+- Post `/have` and `/want` listings with Scryfall card resolution and
+  autocomplete, choosing whether you accept cash, trade, or both.
+- Optionally pin a listing to an exact printing (set, finish, variant,
+  collector number), and link out to it on Manapool.
 - Search active listings by card with filtered, paginated results.
 - Manage your own listings with `/mylistings`, `/edit`, `/fulfill`, and
   `/delete`.
@@ -42,7 +45,8 @@ migration.
    Fill in at least `DISCORD_TOKEN` and `DISCORD_CLIENT_ID`. The bot reads them
    from your environment or your `.env` file, and the token is never committed.
    During development, set `DISCORD_GUILD_ID` to register commands only to your
-   test server.
+   test server. Optionally set `MANAPOOL_API_KEY` to enable live "View on
+   Manapool" links and price lookups for exact printings.
 
 3. Run migrations and start the bot:
 
@@ -71,9 +75,8 @@ Admin commands require the **Manage Server** permission.
 
 | Command | Description |
 |---------|-------------|
-| `/sell` | Post a card you want to sell |
-| `/buy` | Post a card you want to buy |
-| `/trade` | Post a card you want to trade |
+| `/have` | Post a card you have, accepting cash, trade, or both |
+| `/want` | Post a card you want, offering cash, trade, or both |
 | `/search` | Search active listings for a card |
 | `/mylistings` | Show your active listings with actions |
 | `/edit` | Edit one of your listings via a modal |

@@ -13,6 +13,7 @@ import {
   softDeleteListing,
 } from '../../services/listings.js';
 import type { GuildCommand } from '../../types/index.js';
+import { ACCEPTS_LABELS, INTENT_LABELS } from '../../utils/constants.js';
 import { brandColor, formatPrice } from '../../utils/embeds.js';
 import { replyError } from '../../utils/replies.js';
 
@@ -43,8 +44,12 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
     if (listing.priceCents !== null && listing.priceCents !== undefined) {
       parts.push(formatPrice(listing.priceCents));
     }
+    const intentLabel =
+      INTENT_LABELS[listing.intent as keyof typeof INTENT_LABELS] ?? listing.intent;
+    const acceptsLabel =
+      ACCEPTS_LABELS[listing.accepts as keyof typeof ACCEPTS_LABELS] ?? listing.accepts;
     embed.addFields({
-      name: `#${listing.id} · ${listing.listingType.toUpperCase()} · ${listing.cardName}`,
+      name: `#${listing.id} · ${intentLabel} · ${acceptsLabel} · ${listing.cardName}`,
       value: parts.join(' · ') || '—',
       inline: false,
     });

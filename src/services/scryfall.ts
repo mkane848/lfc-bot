@@ -1,15 +1,19 @@
 import { PROJECT_NAME, PROJECT_REPOSITORY } from '../utils/constants.js';
-import type { ResolvedCard } from '../types/index.js';
+import { buildManapoolUrl } from '../utils/manapool.js';
+import type { CardFinish, CardVariant, ResolvedCard } from '../types/index.js';
 import { normalizeCardName } from '../utils/validation.js';
 import { buildCacheKey, getCachedCard, upsertCachedCard } from './card-cache.js';
+import { lookupManapoolPrinting } from './manapool.js';
 
 const SCRYFALL_BASE = 'https://api.scryfall.com';
 const MIN_REQUEST_INTERVAL_MS = 100;
+const SET_LIST_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 interface ScryfallCard {
   id?: string | null;
   name?: string | null;
   set?: string | null;
+  collector_number?: string | null;
   image_uris?: { normal?: string | null; large?: string | null } | null;
   card_faces?: Array<{
     image_uris?: { normal?: string | null; large?: string | null } | null;
@@ -18,6 +22,22 @@ interface ScryfallCard {
 
 interface AutocompleteResponse {
   data: string[];
+}
+
+interface ScryfallSet {
+  code?: string | null;
+  name?: string | null;
+}
+
+interface SetListResponse {
+  data: ScryfallSet[];
+}
+
+export interface ResolveCardOptions {
+  cardSet?: string | null;
+  finish?: CardFinish | null;
+  variant?: CardVariant | null;
+  collectorNumber?: string | null;
 }
 
 /**
@@ -100,14 +120,34 @@ function pickImageUrl(card: ScryfallCard): string | null {
   return null;
 }
 
+const FINISH_PREDICATES: Record<CardFinish, string> = {
+  nonfoil: '',
+  foil: ' is:foil',
+  etched: ' is:etched',
+};
+
+const VARIANT_PREDICATES: Record<CardVariant, string> = {
+  extended: ' is:extended',
+  showcase: ' is:showcase',
+  borderless: ' is:borderless',
+  retro: ' is:retro',
+  full: ' is:full',
+};
+
 /**
  * Resolve a full card name against Scryfall. Uses the database cache first,
- * then the fuzzy endpoint, and falls back to an unresolved raw-name entry when
- * Scryfall is unreachable.
+ * then a printing-filtered search (when any printing details are given) or
+ * the fuzzy endpoint, and falls back to an unresolved raw-name entry when
+ * Scryfall is unreachable. Also resolves the card's Manapool link, preferring
+ * a live lookup and falling back to a locally-built URL.
  */
-export async function resolveCard(input: string, cardSet?: string | null): Promise<ResolvedCard> {
+export async function resolveCard(
+  input: string,
+  options: ResolveCardOptions = {},
+): Promise<ResolvedCard> {
+  const { cardSet, finish, variant, collectorNumber } = options;
   const normalizedInput = normalizeCardName(input);
-  const cacheKey = buildCacheKey(input, cardSet);
+  const cacheKey = buildCacheKey(input, cardSet, finish, variant, collectorNumber);
   const cached = getCachedCard(cacheKey);
   if (cached) {
     return {
@@ -116,21 +156,26 @@ export async function resolveCard(input: string, cardSet?: string | null): Promi
       cardNameNormalized: cached.cardNameNormalized,
       cardSet: cached.cardSet,
       cardImageUrl: cached.cardImageUrl,
+      collectorNumber: cached.collectorNumber,
+      manapoolUrl: cached.manapoolUrl,
+      manapoolPriceCents: cached.manapoolPriceCents,
       resolved: cached.resolved === 1,
     };
   }
 
+  const hasPrintingFilter = Boolean(cardSet || finish || variant || collectorNumber);
   let card: ScryfallCard | null = null;
-  if (cardSet) {
+  if (hasPrintingFilter) {
+    let query = `!"${input}"`;
+    if (cardSet) query += ` set:${cardSet.replace(/[^a-zA-Z0-9]/g, '')}`;
+    if (finish) query += FINISH_PREDICATES[finish];
+    if (variant) query += VARIANT_PREDICATES[variant];
+    if (collectorNumber) query += ` cn:${collectorNumber.replace(/[^A-Za-z0-9★-]/g, '')}`;
     const search = await limiter.run(() =>
-      scryfallFetch<{ data: ScryfallCard[] }>(
-        `/cards/search?q=${encodeURIComponent(
-          `!"${input}" set:${cardSet.replace(/[^a-zA-Z0-9]/g, '')}`,
-        )}`,
-      ),
+      scryfallFetch<{ data: ScryfallCard[] }>(`/cards/search?q=${encodeURIComponent(query)}`),
     );
     card = search?.data?.[0] ?? null;
-    // Set-filtered search can be brittle; fall back to a plain fuzzy lookup.
+    // Printing-filtered search can be brittle; fall back to a plain fuzzy lookup.
     if (!card) {
       card = await fuzzyLookup(input);
     }
@@ -139,12 +184,26 @@ export async function resolveCard(input: string, cardSet?: string | null): Promi
   }
 
   if (card?.name) {
+    const scryfallId = card.id ?? null;
+    const cardSetCode = card.set ?? null;
+    const cardCollectorNumber = card.collector_number ?? null;
+    const manapool = scryfallId ? await lookupManapoolPrinting(scryfallId) : null;
+    const manapoolUrl =
+      manapool?.url ??
+      buildManapoolUrl({
+        cardName: card.name,
+        cardSet: cardSetCode,
+        collectorNumber: cardCollectorNumber,
+      });
     const resolved: ResolvedCard = {
-      scryfallId: card.id ?? null,
+      scryfallId,
       cardName: card.name,
       cardNameNormalized: normalizeCardName(card.name),
-      cardSet: card.set ?? null,
+      cardSet: cardSetCode,
       cardImageUrl: pickImageUrl(card),
+      collectorNumber: cardCollectorNumber,
+      manapoolUrl,
+      manapoolPriceCents: manapool?.priceCents ?? null,
       resolved: true,
     };
     upsertCachedCard({
@@ -154,6 +213,9 @@ export async function resolveCard(input: string, cardSet?: string | null): Promi
       cardNameNormalized: resolved.cardNameNormalized,
       cardSet: resolved.cardSet,
       cardImageUrl: resolved.cardImageUrl,
+      collectorNumber: resolved.collectorNumber,
+      manapoolUrl: resolved.manapoolUrl,
+      manapoolPriceCents: resolved.manapoolPriceCents,
       resolved: true,
     });
     return resolved;
@@ -168,6 +230,9 @@ export async function resolveCard(input: string, cardSet?: string | null): Promi
     cardNameNormalized: normalizedInput,
     cardSet: cardSet ?? null,
     cardImageUrl: null,
+    collectorNumber: null,
+    manapoolUrl: null,
+    manapoolPriceCents: null,
     resolved: false,
   };
   upsertCachedCard({
@@ -177,6 +242,9 @@ export async function resolveCard(input: string, cardSet?: string | null): Promi
     cardNameNormalized: normalizedInput,
     cardSet: cardSet ?? null,
     cardImageUrl: null,
+    collectorNumber: null,
+    manapoolUrl: null,
+    manapoolPriceCents: null,
     resolved: false,
   });
   return fallback;
@@ -186,4 +254,39 @@ function fuzzyLookup(input: string): Promise<ScryfallCard | null> {
   return limiter.run(() =>
     scryfallFetch<ScryfallCard>(`/cards/named?fuzzy=${encodeURIComponent(input)}`),
   );
+}
+
+let setListCache: { sets: ScryfallSet[]; fetchedAt: number } | null = null;
+
+async function loadSetList(): Promise<ScryfallSet[]> {
+  if (setListCache && Date.now() - setListCache.fetchedAt < SET_LIST_TTL_MS) {
+    return setListCache.sets;
+  }
+  const data = await limiter.run(() => scryfallFetch<SetListResponse>('/sets'));
+  const sets = data?.data ?? [];
+  if (sets.length > 0) {
+    setListCache = { sets, fetchedAt: Date.now() };
+  }
+  return sets;
+}
+
+/**
+ * Return set-code autocomplete choices for a partial set name or code.
+ * Scryfall has no set-search endpoint, so the full set list is fetched once
+ * and cached in memory, then filtered by prefix/substring match here.
+ */
+export async function autocompleteSets(
+  query: string,
+): Promise<Array<{ name: string; value: string }>> {
+  const q = query.trim().toLowerCase();
+  const sets = await loadSetList();
+  const matches = sets.filter((set) => {
+    const code = (set.code ?? '').toLowerCase();
+    const name = (set.name ?? '').toLowerCase();
+    return q.length === 0 || code.startsWith(q) || name.includes(q);
+  });
+  return matches.slice(0, 25).map((set) => ({
+    name: `${set.name} (${(set.code ?? '').toUpperCase()})`.slice(0, 100),
+    value: (set.code ?? '').toUpperCase(),
+  }));
 }

@@ -1,4 +1,11 @@
-import { CARD_CONDITIONS, DIGEST_MODES, LISTING_TYPES } from '../types/index.js';
+import {
+  ACCEPTS_VALUES,
+  CARD_CONDITIONS,
+  CARD_FINISHES,
+  CARD_VARIANTS,
+  DIGEST_MODES,
+  LISTING_INTENTS,
+} from '../types/index.js';
 
 export const PROJECT_NAME = 'LFCbot';
 export const PROJECT_REPOSITORY = 'https://github.com/example/lfcbot';
@@ -30,10 +37,29 @@ export const CONDITION_LABELS: Record<(typeof CARD_CONDITIONS)[number], string> 
   dmg: 'DMG',
 };
 
-export const LISTING_TYPE_LABELS: Record<(typeof LISTING_TYPES)[number], string> = {
-  buy: 'Buy',
-  sell: 'Sell',
+export const INTENT_LABELS: Record<(typeof LISTING_INTENTS)[number], string> = {
+  have: 'Have',
+  want: 'Want',
+};
+
+export const ACCEPTS_LABELS: Record<(typeof ACCEPTS_VALUES)[number], string> = {
+  cash: 'Cash',
   trade: 'Trade',
+  both: 'Cash or Trade',
+};
+
+export const FINISH_LABELS: Record<(typeof CARD_FINISHES)[number], string> = {
+  nonfoil: 'Nonfoil',
+  foil: 'Foil',
+  etched: 'Etched',
+};
+
+export const VARIANT_LABELS: Record<(typeof CARD_VARIANTS)[number], string> = {
+  extended: 'Extended Art',
+  showcase: 'Showcase',
+  borderless: 'Borderless',
+  retro: 'Retro Frame',
+  full: 'Full Art',
 };
 
 export const DIGEST_MODE_LABELS: Record<(typeof DIGEST_MODES)[number], string> = {

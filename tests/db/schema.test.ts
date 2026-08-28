@@ -41,12 +41,17 @@ describe('database schema', () => {
       serverId: '101',
       userId: 'u1',
       username: 'alice',
-      listingType: 'sell',
+      intent: 'have',
+      accepts: 'cash',
       game: 'mtg',
       cardName: 'Black Lotus',
       cardNameNormalized: 'black lotus',
       cardSet: null,
       cardImageUrl: null,
+      finish: null,
+      variant: null,
+      collectorNumber: null,
+      manapoolUrl: null,
       condition: 'nm',
       priceCents: 1000,
       quantity: 1,
@@ -61,5 +66,20 @@ describe('database schema', () => {
 
     db.delete(servers).where(eq(servers.id, '101')).run();
     expect(sql().prepare('select count(*) as c from listings').get()).toEqual({ c: 0 });
+  });
+
+  it('rejects listings without intent or accepts', () => {
+    const db = getDb();
+    db.insert(servers)
+      .values(serverRow({ id: '102' }))
+      .run();
+    expect(() =>
+      sql()
+        .prepare(
+          `insert into listings (server_id, user_id, username, game, card_name, card_name_normalized, quantity, status, expires_at, created_at, updated_at)
+           values ('102', 'u1', 'alice', 'mtg', 'Black Lotus', 'black lotus', 1, 'active', 200, 100, 100)`,
+        )
+        .run(),
+    ).toThrow(/NOT NULL constraint failed/);
   });
 });

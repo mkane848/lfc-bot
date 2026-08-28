@@ -222,6 +222,10 @@ the service first.
 - `DISCORD_TOKEN` and `DISCORD_CLIENT_ID` are required.
 - Leave `DISCORD_GUILD_ID` empty in production so commands register globally.
 - Set `NODE_ENV=production` to use the compact JSON logger.
+- Optionally set `MANAPOOL_API_KEY` to a Mana Pool API access token (from
+  <https://manapool.com/seller/integrations/manapool-api>) to enable live
+  "View on Manapool" links and price lookups for exact printings. Without it,
+  listings fall back to a locally-built link (or no link).
 - `DATABASE_PATH` must resolve under the mounted `/app/data` volume so the
   database survives restarts and redeploys.
 - The VM is always-on, so the Discord gateway and per-server digests never

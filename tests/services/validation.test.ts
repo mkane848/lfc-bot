@@ -1,32 +1,71 @@
 import { describe, expect, it } from 'vitest';
 import {
+  isAccepts,
   isCardCondition,
+  isCardFinish,
+  isCardVariant,
   isDigestMode,
-  isListingType,
+  isListingIntent,
   normalizeCardName,
   parsePriceToCents,
   parseQuantity,
+  validateCollectorNumber,
   validateNotes,
   ValidationError,
 } from '../../src/utils/validation.js';
 
-describe('condition/type/mode guards', () => {
+describe('condition/intent/accepts/mode guards', () => {
   it('accepts valid card conditions', () => {
     expect(isCardCondition('nm')).toBe(true);
     expect(isCardCondition('dmg')).toBe(true);
     expect(isCardCondition('mint')).toBe(false);
   });
 
-  it('accepts valid listing types', () => {
-    expect(isListingType('buy')).toBe(true);
-    expect(isListingType('trade')).toBe(true);
-    expect(isListingType('rent')).toBe(false);
+  it('accepts valid listing intents', () => {
+    expect(isListingIntent('have')).toBe(true);
+    expect(isListingIntent('want')).toBe(true);
+    expect(isListingIntent('rent')).toBe(false);
+  });
+
+  it('accepts valid accepts values', () => {
+    expect(isAccepts('cash')).toBe(true);
+    expect(isAccepts('trade')).toBe(true);
+    expect(isAccepts('both')).toBe(true);
+    expect(isAccepts('crypto')).toBe(false);
+  });
+
+  it('accepts valid card finishes', () => {
+    expect(isCardFinish('nonfoil')).toBe(true);
+    expect(isCardFinish('foil')).toBe(true);
+    expect(isCardFinish('etched')).toBe(true);
+    expect(isCardFinish('holographic')).toBe(false);
+  });
+
+  it('accepts valid card variants', () => {
+    expect(isCardVariant('extended')).toBe(true);
+    expect(isCardVariant('borderless')).toBe(true);
+    expect(isCardVariant('signed')).toBe(false);
   });
 
   it('accepts valid digest modes', () => {
     expect(isDigestMode('both')).toBe(true);
     expect(isDigestMode('disabled')).toBe(true);
     expect(isDigestMode('carrier-pigeon')).toBe(false);
+  });
+});
+
+describe('validateCollectorNumber', () => {
+  it('accepts alphanumeric collector numbers', () => {
+    expect(validateCollectorNumber('89')).toBe('89');
+    expect(validateCollectorNumber(' 123a ')).toBe('123a');
+    expect(validateCollectorNumber('★7')).toBe('★7');
+  });
+
+  it('rejects empty or invalid collector numbers', () => {
+    expect(() => validateCollectorNumber('')).toThrow(ValidationError);
+    expect(() => validateCollectorNumber('   ')).toThrow(ValidationError);
+    expect(() => validateCollectorNumber('89/100')).toThrow(ValidationError);
+    expect(() => validateCollectorNumber('x'.repeat(21))).toThrow(ValidationError);
   });
 });
 

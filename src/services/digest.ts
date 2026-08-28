@@ -21,9 +21,8 @@ export interface DigestResult {
  */
 export function formatDigest(listingsToShow: ListingRow[]): string {
   const groups = {
-    sell: listingsToShow.filter((l) => l.listingType === 'sell'),
-    buy: listingsToShow.filter((l) => l.listingType === 'buy'),
-    trade: listingsToShow.filter((l) => l.listingType === 'trade'),
+    have: listingsToShow.filter((l) => l.intent === 'have'),
+    want: listingsToShow.filter((l) => l.intent === 'want'),
   };
 
   const sections: string[] = [];
@@ -38,9 +37,8 @@ export function formatDigest(listingsToShow: ListingRow[]): string {
     sections.push(`${title} (${rows.length})\n${lines}${overflow}`);
   };
 
-  pushSection('NEW SELLS', groups.sell);
-  pushSection('NEW BUYS', groups.buy);
-  pushSection('NEW TRADES', groups.trade);
+  pushSection('NEW HAVES', groups.have);
+  pushSection('NEW WANTS', groups.want);
 
   return sections.join('\n\n');
 }

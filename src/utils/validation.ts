@@ -5,7 +5,17 @@ import {
   MIN_PRICE_CENTS,
   MIN_QUANTITY,
 } from './constants.js';
-import { CARD_CONDITIONS, DIGEST_MODES, LISTING_TYPES } from '../types/index.js';
+import {
+  ACCEPTS_VALUES,
+  CARD_CONDITIONS,
+  CARD_FINISHES,
+  CARD_VARIANTS,
+  DIGEST_MODES,
+  LISTING_INTENTS,
+} from '../types/index.js';
+
+const COLLECTOR_NUMBER_PATTERN = /^[A-Za-z0-9★-]+$/;
+const MAX_COLLECTOR_NUMBER_LENGTH = 20;
 
 export class ValidationError extends Error {}
 
@@ -13,8 +23,20 @@ export function isCardCondition(value: string): value is (typeof CARD_CONDITIONS
   return (CARD_CONDITIONS as readonly string[]).includes(value);
 }
 
-export function isListingType(value: string): value is (typeof LISTING_TYPES)[number] {
-  return (LISTING_TYPES as readonly string[]).includes(value);
+export function isListingIntent(value: string): value is (typeof LISTING_INTENTS)[number] {
+  return (LISTING_INTENTS as readonly string[]).includes(value);
+}
+
+export function isAccepts(value: string): value is (typeof ACCEPTS_VALUES)[number] {
+  return (ACCEPTS_VALUES as readonly string[]).includes(value);
+}
+
+export function isCardFinish(value: string): value is (typeof CARD_FINISHES)[number] {
+  return (CARD_FINISHES as readonly string[]).includes(value);
+}
+
+export function isCardVariant(value: string): value is (typeof CARD_VARIANTS)[number] {
+  return (CARD_VARIANTS as readonly string[]).includes(value);
 }
 
 export function isDigestMode(value: string): value is (typeof DIGEST_MODES)[number] {
@@ -56,6 +78,17 @@ export function validateNotes(input: string | undefined | null): string | null {
   const trimmed = input.trim();
   if (trimmed.length > MAX_NOTES_LENGTH) {
     throw new ValidationError(`Notes must be ${MAX_NOTES_LENGTH} characters or fewer.`);
+  }
+  return trimmed;
+}
+
+export function validateCollectorNumber(input: string): string {
+  const trimmed = input.trim();
+  if (trimmed.length === 0) {
+    throw new ValidationError('Collector number is required.');
+  }
+  if (trimmed.length > MAX_COLLECTOR_NUMBER_LENGTH || !COLLECTOR_NUMBER_PATTERN.test(trimmed)) {
+    throw new ValidationError('Collector number must be letters, numbers, ★, or - only.');
   }
   return trimmed;
 }

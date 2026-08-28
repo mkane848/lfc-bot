@@ -1,7 +1,6 @@
 import type { GuildCommand } from '../types/index.js';
-import { sellCommand } from './user/sell.js';
-import { buyCommand } from './user/buy.js';
-import { tradeCommand } from './user/trade.js';
+import { haveCommand } from './user/have.js';
+import { wantCommand } from './user/want.js';
 import { searchCommand } from './user/search.js';
 import { myListingsCommand } from './user/mylistings.js';
 import { editCommand } from './user/edit.js';
@@ -11,9 +10,8 @@ import { helpCommand } from './user/help.js';
 import { adminCommand } from './admin/admin.js';
 
 export const commands: GuildCommand[] = [
-  sellCommand,
-  buyCommand,
-  tradeCommand,
+  haveCommand,
+  wantCommand,
   searchCommand,
   myListingsCommand,
   editCommand,

@@ -39,6 +39,10 @@ function baseInput() {
     cardNameNormalized: 'black lotus',
     cardSet: null,
     cardImageUrl: null,
+    finish: null,
+    variant: null,
+    collectorNumber: null,
+    manapoolUrl: null,
     condition: 'nm',
     priceCents: 1000,
     quantity: 1,
@@ -50,15 +54,17 @@ function baseInput() {
 describe('createListing', () => {
   it('creates an active listing with a 30-day expiry', () => {
     seedServer();
-    const { listing } = createListing({ ...baseInput(), listingType: 'sell' });
+    const { listing } = createListing({ ...baseInput(), intent: 'have', accepts: 'cash' });
     expect(listing.status).toBe('active');
     expect(listing.expiresAt - listing.createdAt).toBe(30 * 24 * 3600 * 1000);
+    expect(listing.intent).toBe('have');
+    expect(listing.accepts).toBe('cash');
   });
 
   it('blocks a second listing within the cooldown', () => {
     seedServer();
-    createListing({ ...baseInput(), listingType: 'sell' });
-    expect(() => createListing({ ...baseInput(), listingType: 'buy' })).toThrow(
+    createListing({ ...baseInput(), intent: 'have', accepts: 'cash' });
+    expect(() => createListing({ ...baseInput(), intent: 'want', accepts: 'cash' })).toThrow(
       /posting too quickly/,
     );
   });
@@ -72,12 +78,17 @@ describe('createListing', () => {
         serverId: '200',
         userId: 'u1',
         username: 'alice',
-        listingType: 'sell',
+        intent: 'have',
+        accepts: 'cash',
         game: 'mtg',
         cardName: 'Black Lotus',
         cardNameNormalized: 'black lotus',
         cardSet: null,
         cardImageUrl: null,
+        finish: null,
+        variant: null,
+        collectorNumber: null,
+        manapoolUrl: null,
         condition: 'nm',
         priceCents: 1000,
         quantity: 1,
@@ -89,30 +100,87 @@ describe('createListing', () => {
       })
       .run();
 
-    const result = createListing({ ...baseInput(), listingType: 'sell' });
+    const result = createListing({ ...baseInput(), intent: 'have', accepts: 'cash' });
     expect(result.warning).toMatch(/already have an active matching listing/);
+  });
+
+  it('does not warn when the printing details differ', () => {
+    seedServer();
+    const db = getDb();
+    const past = Date.now() - 60_000; // past the 10s cooldown, inside the 24h window
+    db.insert(listings)
+      .values({
+        serverId: '200',
+        userId: 'u1',
+        username: 'alice',
+        intent: 'have',
+        accepts: 'cash',
+        game: 'mtg',
+        cardName: 'Black Lotus',
+        cardNameNormalized: 'black lotus',
+        cardSet: null,
+        cardImageUrl: null,
+        finish: null,
+        variant: null,
+        collectorNumber: null,
+        manapoolUrl: null,
+        condition: 'nm',
+        priceCents: 1000,
+        quantity: 1,
+        notes: null,
+        status: 'active',
+        expiresAt: past + 30 * 24 * 3600 * 1000,
+        createdAt: past,
+        updatedAt: past,
+      })
+      .run();
+
+    const result = createListing({
+      ...baseInput(),
+      intent: 'have',
+      accepts: 'cash',
+      collectorNumber: '1',
+      finish: 'foil',
+    });
+    expect(result.warning).toBeUndefined();
   });
 });
 
 describe('search and status transitions', () => {
   it('searches active listings and excludes non-matching statuses', () => {
     seedServer();
-    const { listing } = createListing({ ...baseInput(), listingType: 'sell' });
-    expect(searchListings('200', 'black lotus', undefined, 1)).toHaveLength(1);
-    expect(countSearchResults('200', 'black lotus', undefined)).toBe(1);
+    const { listing } = createListing({ ...baseInput(), intent: 'have', accepts: 'cash' });
+    expect(searchListings('200', 'black lotus', undefined, undefined, 1)).toHaveLength(1);
+    expect(countSearchResults('200', 'black lotus', undefined, undefined)).toBe(1);
 
     fulfillListing(listing.id);
-    expect(searchListings('200', 'black lotus', undefined, 1)).toHaveLength(0);
-    expect(countSearchResults('200', 'black lotus', undefined)).toBe(0);
+    expect(searchListings('200', 'black lotus', undefined, undefined, 1)).toHaveLength(0);
+    expect(countSearchResults('200', 'black lotus', undefined, undefined)).toBe(0);
 
     softDeleteListing(listing.id);
-    expect(searchListings('200', 'black lotus', undefined, 1)).toHaveLength(0);
+    expect(searchListings('200', 'black lotus', undefined, undefined, 1)).toHaveLength(0);
   });
 
-  it('filters search by listing type', () => {
+  it('filters search by intent', () => {
     seedServer();
-    createListing({ ...baseInput(), listingType: 'sell' });
-    expect(searchListings('200', 'black lotus', 'buy', 1)).toHaveLength(0);
-    expect(searchListings('200', 'black lotus', 'sell', 1)).toHaveLength(1);
+    createListing({ ...baseInput(), intent: 'have', accepts: 'cash' });
+    expect(searchListings('200', 'black lotus', 'want', undefined, 1)).toHaveLength(0);
+    expect(searchListings('200', 'black lotus', 'have', undefined, 1)).toHaveLength(1);
+  });
+
+  it('matches an accepts:both listing against a cash or trade filter, but not the reverse', () => {
+    seedServer();
+    createListing({ ...baseInput(), intent: 'have', accepts: 'both' });
+    expect(searchListings('200', 'black lotus', undefined, 'cash', 1)).toHaveLength(1);
+    expect(searchListings('200', 'black lotus', undefined, 'trade', 1)).toHaveLength(1);
+    expect(searchListings('200', 'black lotus', undefined, 'both', 1)).toHaveLength(1);
+  });
+
+  it('an exact-only cash listing does not match a both filter', () => {
+    seedServer();
+    createListing({ ...baseInput(), intent: 'have', accepts: 'cash' });
+    expect(searchListings('200', 'black lotus', undefined, 'both', 1)).toHaveLength(0);
+    expect(searchListings('200', 'black lotus', undefined, 'cash', 1)).toHaveLength(1);
+    expect(searchListings('200', 'black lotus', undefined, 'trade', 1)).toHaveLength(0);
   });
 });

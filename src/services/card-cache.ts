@@ -36,6 +36,9 @@ export function upsertCachedCard(input: {
   cardNameNormalized: string;
   cardSet?: string | null;
   cardImageUrl?: string | null;
+  collectorNumber?: string | null;
+  manapoolUrl?: string | null;
+  manapoolPriceCents?: number | null;
   resolved: boolean;
 }): void {
   const db = getDb();
@@ -47,6 +50,9 @@ export function upsertCachedCard(input: {
     cardNameNormalized: input.cardNameNormalized,
     cardSet: input.cardSet ?? null,
     cardImageUrl: input.cardImageUrl ?? null,
+    collectorNumber: input.collectorNumber ?? null,
+    manapoolUrl: input.manapoolUrl ?? null,
+    manapoolPriceCents: input.manapoolPriceCents ?? null,
     resolved: input.resolved ? 1 : 0,
     resolvedAt: timestamp,
     expiresAt: timestamp + CARD_CACHE_TTL_MS,
@@ -61,6 +67,9 @@ export function upsertCachedCard(input: {
         cardNameNormalized: row.cardNameNormalized,
         cardSet: row.cardSet,
         cardImageUrl: row.cardImageUrl,
+        collectorNumber: row.collectorNumber,
+        manapoolUrl: row.manapoolUrl,
+        manapoolPriceCents: row.manapoolPriceCents,
         resolved: row.resolved,
         resolvedAt: row.resolvedAt,
         expiresAt: row.expiresAt,
@@ -69,9 +78,15 @@ export function upsertCachedCard(input: {
     .run();
 }
 
-/** Build the canonical cache key for a card name + optional set. */
-export function buildCacheKey(cardName: string, cardSet?: string | null): string {
-  return cardKey(cardName, cardSet);
+/** Build the canonical cache key for a card name + optional printing details. */
+export function buildCacheKey(
+  cardName: string,
+  cardSet?: string | null,
+  finish?: string | null,
+  variant?: string | null,
+  collectorNumber?: string | null,
+): string {
+  return cardKey(cardName, cardSet, finish, variant, collectorNumber);
 }
 
 /**

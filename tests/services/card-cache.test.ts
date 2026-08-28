@@ -18,11 +18,17 @@ describe('card cache', () => {
       cardNameNormalized: 'black lotus',
       cardSet: 'LEA',
       cardImageUrl: 'http://img/black-lotus.png',
+      collectorNumber: '232',
+      manapoolUrl: 'https://manapool.com/card/lea/232/black-lotus',
+      manapoolPriceCents: 4500000,
       resolved: true,
     });
     const row = getCachedCard('black-lotus::LEA');
     expect(row?.cardName).toBe('Black Lotus');
     expect(row?.resolved).toBe(1);
+    expect(row?.collectorNumber).toBe('232');
+    expect(row?.manapoolUrl).toBe('https://manapool.com/card/lea/232/black-lotus');
+    expect(row?.manapoolPriceCents).toBe(4500000);
   });
 
   it('prunes expired rows and treats them as a miss', () => {
@@ -49,5 +55,13 @@ describe('card cache', () => {
   it('builds stable cache keys with optional set', () => {
     expect(buildCacheKey('Black Lotus', 'lea')).toBe('black lotus::LEA');
     expect(buildCacheKey('Sol Ring')).toBe('sol ring');
+  });
+
+  it('distinguishes cache keys by printing details', () => {
+    const nonfoil = buildCacheKey('Lightning Bolt', 'MH3', 'nonfoil', undefined, '128');
+    const foil = buildCacheKey('Lightning Bolt', 'MH3', 'foil', undefined, '128');
+    const extended = buildCacheKey('Lightning Bolt', 'MH3', 'foil', 'extended', '128');
+    expect(nonfoil).not.toBe(foil);
+    expect(foil).not.toBe(extended);
   });
 });
