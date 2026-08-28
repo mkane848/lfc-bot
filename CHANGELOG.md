@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-08-27
+
+### Added
+
+- `/have` and `/want` commands, replacing `/sell`, `/buy`, and `/trade`, built
+  on a two-axis listing model: `intent` (have/want) and `accepts` (cash,
+  trade, or both).
+- Optional exact-printing metadata on listings: set (now autocompleted),
+  finish, variant, and collector number, resolved against a
+  printing-filtered Scryfall search.
+- Manapool integration: listings link out to their exact printing on
+  manapool.com via a live lookup (`MANAPOOL_API_KEY`, optional) with a
+  locally-built fallback link when the API key isn't set or the printing
+  isn't carried; listing embeds and digest lines now show a "View on
+  Manapool" link.
+
+### Changed
+
+- `/search` filters by `intent` and `accepts` instead of a single listing
+  type; an `accepts: both` listing matches a filter for cash or trade.
+- The daily digest groups listings into "New Haves" and "New Wants" instead
+  of separate sell/buy/trade sections.
+- The database migration backfills existing listings' `intent`/`accepts`
+  from their prior `listing_type` (`sell` → have/cash, `buy` → want/cash,
+  `trade` → have/trade) automatically at startup; no manual data migration
+  is required.
+
+### Removed
+
+- `/sell`, `/buy`, and `/trade` commands (replaced by `/have` and `/want`).
+
 ## [1.2.0] - 2026-08-26
 
 ### Added
@@ -67,7 +98,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CI workflow running lint, format check, type-check, and tests on every push
   to `main` and every pull request.
 
-[Unreleased]: https://github.com/mkane848/lfc-bot/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/mkane848/lfc-bot/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/mkane848/lfc-bot/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/mkane848/lfc-bot/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/mkane848/lfc-bot/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/mkane848/lfc-bot/releases/tag/v1.0.0
