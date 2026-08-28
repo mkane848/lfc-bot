@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-08-28
+
+### Fixed
+
+- A card resolved with no set/finish/variant/collector number specified could
+  land on a digital-only (MTGO/Arena) printing (e.g. Vintage Masters for
+  "Black Lotus"), which has no real-world market and produced a broken
+  Manapool link. Resolution now prefers a paper printing when one exists, and
+  a Manapool link is only ever built for a paper printing.
+- Changing a listing's set via `/edit` left its collector number, card image,
+  and Manapool link pointing at the old printing. The card is now re-resolved
+  against the new set (keeping any pinned finish/variant) and all of those
+  fields are updated together; if the new set can't be resolved, the edit is
+  rejected with a clear message instead of applying a mismatched state.
+
 ## [1.3.0] - 2026-08-27
 
 ### Added
@@ -98,7 +113,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CI workflow running lint, format check, type-check, and tests on every push
   to `main` and every pull request.
 
-[Unreleased]: https://github.com/mkane848/lfc-bot/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/mkane848/lfc-bot/compare/v1.3.1...HEAD
+[1.3.1]: https://github.com/mkane848/lfc-bot/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/mkane848/lfc-bot/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/mkane848/lfc-bot/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/mkane848/lfc-bot/compare/v1.0.0...v1.1.0
