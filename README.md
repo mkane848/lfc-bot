@@ -1,9 +1,10 @@
 # LFCbot
 
-LFCbot is a multi-server Discord bot for have/want trading card listings.
-Members post a card they have or want, whether they'll accept cash, trade, or
-both, search what others are offering, and admins receive configurable daily
-digest notifications of new activity.
+LFCbot is a free, multi-server Discord bot for have/want trading card listings,
+designed for friend groups, online communities, and Local Game Stores. Members
+post a card they have or want, whether they'll accept cash, trade, or both,
+search what others are offering, and admins receive configurable daily digest
+notifications of new activity.
 
 Version 1 targets **Magic: The Gathering** through the Scryfall API. The data
 model keeps a `game` column so other games can be added later without a schema
