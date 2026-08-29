@@ -67,8 +67,12 @@ sudo systemctl enable docker
 
 ## Update the bot in the VM
 
-The VM runs the build-from-source path (`docker compose up -d --build`). To pull
-in a new release:
+The VM runs the build-from-source path (`docker compose up -d --build`). You can
+update either manually or automatically.
+
+### Manual update
+
+To pull in a new release manually:
 
 1. SSH in and move to the repository:
 
@@ -95,6 +99,52 @@ in a new release:
    ```
 
    Look for `Bot is online` and no `Fatal startup error`.
+
+### Automatic updates with cron
+
+To automatically pull and deploy new releases, set up the `scripts/auto-update.sh`
+cron job:
+
+1. Make the script executable:
+
+   ```sh
+   chmod +x scripts/auto-update.sh
+   ```
+
+2. Test it manually to make sure it works:
+
+   ```sh
+   ./scripts/auto-update.sh
+   ```
+
+   If the bot is already up to date, the script will log "No updates available"
+   and exit cleanly. If updates exist, it will pull, rebuild, and verify the
+   bot came online.
+
+3. Schedule it with cron. For example, daily at 05:00 (after the 04:30 backup):
+
+   ```sh
+   crontab -e
+   ```
+
+   Add this line, then save and exit:
+
+   ```cron
+   0 5 * * * cd ~/lfc-bot && ./scripts/auto-update.sh >> /var/log/lfcbot-auto-update.log 2>&1
+   ```
+
+4. Confirm the job is registered:
+
+   ```sh
+   crontab -l
+   ```
+
+The script will:
+- Fetch the latest refs from the remote without modifying your working tree
+- Check if updates are available
+- Pull, rebuild, and restart if new code is detected
+- Log all actions to `logs/auto-update.log` and the cron log file
+- Verify the bot came online cleanly
 
 The SQLite database and per-server config live in the `lfcbot-data` named
 volume, so rebuilding the image does not touch them. Database migrations run
