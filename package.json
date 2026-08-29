@@ -27,7 +27,7 @@
     "discord.js": "^14.16.3",
     "dotenv": "^16.4.5",
     "drizzle-orm": "^0.36.4",
-    "node-cron": "3.0.3",
+    "node-cron": "4.6.0",
     "pino": "^9.5.0",
     "pino-pretty": "^11.3.0"
   },
