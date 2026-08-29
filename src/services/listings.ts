@@ -17,16 +17,8 @@ export interface CreateListingResult {
   warning?: string;
 }
 
-/**
- * Create an active listing after applying the cooldown and duplicate guards.
- * Throws a human-readable error when the user is on cooldown.
- */
-export function createListing(input: ListingCreateInput): CreateListingResult {
+function insertListingRow(input: ListingCreateInput, created: number): ListingRow {
   const db = getDb();
-  const created = now();
-  const warning = duplicateWarning(input, created);
-  enforceCooldown(input.serverId, input.userId, created);
-
   const row: NewListingRow = {
     serverId: input.serverId,
     userId: input.userId,
@@ -51,8 +43,40 @@ export function createListing(input: ListingCreateInput): CreateListingResult {
     createdAt: created,
     updatedAt: created,
   };
-  const inserted = db.insert(listings).values(row).returning().get();
+  return db.insert(listings).values(row).returning().get();
+}
+
+/**
+ * Create an active listing after applying the cooldown and duplicate guards.
+ * Throws a human-readable error when the user is on cooldown.
+ */
+export function createListing(input: ListingCreateInput): CreateListingResult {
+  const created = now();
+  const warning = duplicateWarning(input, created);
+  enforceCooldown(input.serverId, input.userId, created);
+  const inserted = insertListingRow(input, created);
   return { listing: inserted, warning };
+}
+
+/**
+ * Create several listings from one batch submission. The cooldown is checked once
+ * for the whole batch rather than once per card, since cards created milliseconds
+ * apart within the same submission would otherwise trip each other's cooldown.
+ * Throws the same cooldown error as `createListing` if the batch itself is blocked;
+ * otherwise every input is inserted (duplicate warnings still apply per card).
+ */
+export function createListingsBatch(inputs: ListingCreateInput[]): CreateListingResult[] {
+  const [first] = inputs;
+  if (!first) {
+    return [];
+  }
+  const created = now();
+  enforceCooldown(first.serverId, first.userId, created);
+  return inputs.map((input) => {
+    const warning = duplicateWarning(input, created);
+    const inserted = insertListingRow(input, created);
+    return { listing: inserted, warning };
+  });
 }
 
 function enforceCooldown(serverId: string, userId: string, at: number): void {
@@ -184,6 +208,28 @@ export function myListings(serverId: string, userId: string, page: number): List
     .orderBy(desc(listings.createdAt))
     .limit(MY_LISTINGS_PAGE_SIZE)
     .offset(offset)
+    .all();
+}
+
+/**
+ * The user's most recent active listings, uncapped by page size (up to `limit`).
+ * Used to populate the batch-action select menus on `/mylistings`, which can
+ * reference listings beyond whatever page is currently displayed.
+ */
+export function activeListingsForUser(serverId: string, userId: string, limit = 25): ListingRow[] {
+  const db = getDb();
+  return db
+    .select()
+    .from(listings)
+    .where(
+      and(
+        eq(listings.serverId, serverId),
+        eq(listings.userId, userId),
+        eq(listings.status, 'active'),
+      ),
+    )
+    .orderBy(desc(listings.createdAt))
+    .limit(limit)
     .all();
 }
 

@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-08-29
+
+### Added
+
+- `/have-multi` and `/want-multi` commands to post up to 3 cards in one form,
+  each with its own condition, price, and (for `have`) quantity — one line per
+  card, shared accepts (cash/trade/both) for the batch. Cards that fail to
+  parse or resolve are reported individually without blocking the rest of the
+  batch from posting.
+- Two dropdowns on `/mylistings` to delete or fulfill several of your active
+  listings at once, alongside the existing per-listing buttons.
+- A third `/mylistings` dropdown to edit several listings in sequence, reusing
+  the existing `/edit` form for each one so every listing's changes stay
+  independent.
+
+### Fixed
+
+- `/edit` modal submissions were silently failing for every user — a customId
+  parsing bug meant the handler always returned before loading the listing.
+  Submitting the edit form appeared to do nothing (Discord would show "This
+  interaction failed"). Fixed as part of adding the batch-edit flow above,
+  which touches the same code path.
+
 ## [1.3.1] - 2026-08-28
 
 ### Fixed

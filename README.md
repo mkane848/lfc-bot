@@ -14,11 +14,14 @@ migration.
 
 - Post `/have` and `/want` listings with Scryfall card resolution and
   autocomplete, choosing whether you accept cash, trade, or both.
+- Post up to 3 cards at once with `/have-multi` and `/want-multi`, each card
+  with its own condition/price/quantity.
 - Optionally pin a listing to an exact printing (set, finish, variant,
   collector number), and link out to it on Manapool.
 - Search active listings by card with filtered, paginated results.
 - Manage your own listings with `/mylistings`, `/edit`, `/fulfill`, and
-  `/delete`.
+  `/delete`. `/mylistings` also offers dropdowns to delete, fulfill, or edit
+  several listings in one go.
 - Per-server admin configuration of a daily digest (channel and/or DM) with its
   own cron schedule and timezone.
 - Active listings expire after 30 days and are excluded from search and digests.
@@ -127,6 +130,11 @@ can invite and per-community VM setup, see
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines. The test
 suite, linter, and type-checker all run in CI on every push and pull request.
+
+## Legal
+
+- **Terms of Service**: See [TERMS_OF_SERVICE.md](TERMS_OF_SERVICE.md)
+- **Privacy Policy**: See [PRIVACY_POLICY.md](PRIVACY_POLICY.md)
 
 ## License
 

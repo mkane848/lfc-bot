@@ -17,13 +17,20 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
       inline: false,
     },
     {
+      name: 'Post multiple cards at once',
+      value:
+        '`/have-multi` and `/want-multi` open a form for up to 3 cards in one go, one line each: `Card Name | condition | price | qty`',
+      inline: false,
+    },
+    {
       name: 'Find cards',
       value: '`/search <card>` shows active listings, 10 per page',
       inline: false,
     },
     {
       name: 'Manage your listings',
-      value: '`/mylistings`, `/edit`, `/fulfill`, `/delete`',
+      value:
+        '`/mylistings`, `/edit`, `/fulfill`, `/delete` — `/mylistings` also has dropdowns to delete, fulfill, or edit several listings at once',
       inline: false,
     },
     {
