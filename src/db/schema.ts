@@ -105,3 +105,26 @@ export type NewDigestLogRow = typeof digestLog.$inferInsert;
 
 export type CardCacheRow = typeof cardCache.$inferSelect;
 export type NewCardCacheRow = typeof cardCache.$inferInsert;
+
+export const adminAuditLog = sqliteTable(
+  'admin_audit_log',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    serverId: text('server_id')
+      .notNull()
+      .references(() => servers.id, { onDelete: 'cascade' }),
+    adminId: text('admin_id').notNull(),
+    adminUsername: text('admin_username').notNull(),
+    action: text('action').notNull(),
+    details: text('details'),
+    createdAt: integer('created_at').notNull(),
+  },
+  (table) => {
+    return {
+      serverIdx: index('admin_audit_log_server_idx').on(table.serverId, table.createdAt),
+    };
+  },
+);
+
+export type AdminAuditLogRow = typeof adminAuditLog.$inferSelect;
+export type NewAdminAuditLogRow = typeof adminAuditLog.$inferInsert;
