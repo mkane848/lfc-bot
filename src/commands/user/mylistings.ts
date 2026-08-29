@@ -21,6 +21,12 @@ import {
 import type { ListingRow } from '../../db/schema.js';
 import type { GuildCommand } from '../../types/index.js';
 import { ACCEPTS_LABELS, INTENT_LABELS } from '../../utils/constants.js';
+import {
+  decodeBatchSelectId,
+  decodeListingActionId,
+  encodeBatchSelectId,
+  encodeListingActionId,
+} from '../../utils/customId.js';
 import { brandColor, formatPrice } from '../../utils/embeds.js';
 import { replyError } from '../../utils/replies.js';
 import { buildEditModal } from './edit.js';
@@ -97,13 +103,13 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
   const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
     ...rows.map((listing) =>
       new ButtonBuilder()
-        .setCustomId(`lfc:fulfill:${listing.id}`)
+        .setCustomId(encodeListingActionId('fulfill', listing.id))
         .setLabel(`Fulfill #${listing.id}`)
         .setStyle(ButtonStyle.Success),
     ),
     ...rows.map((listing) =>
       new ButtonBuilder()
-        .setCustomId(`lfc:delete:${listing.id}`)
+        .setCustomId(encodeListingActionId('delete', listing.id))
         .setLabel(`Delete #${listing.id}`)
         .setStyle(ButtonStyle.Danger),
     ),
@@ -118,9 +124,17 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
   const batchable = activeListingsForUser(guild.id, interaction.user.id, BATCH_SELECT_LIMIT);
   if (batchable.length > 0) {
     components.push(
-      buildBatchSelectRow('lfc:batchdelete', 'Select listings to delete…', batchable),
-      buildBatchSelectRow('lfc:batchfulfill', 'Select listings to fulfill…', batchable),
-      buildBatchSelectRow('lfc:batchedit', 'Select listings to edit…', batchable),
+      buildBatchSelectRow(
+        encodeBatchSelectId('batchdelete'),
+        'Select listings to delete…',
+        batchable,
+      ),
+      buildBatchSelectRow(
+        encodeBatchSelectId('batchfulfill'),
+        'Select listings to fulfill…',
+        batchable,
+      ),
+      buildBatchSelectRow(encodeBatchSelectId('batchedit'), 'Select listings to edit…', batchable),
     );
   }
 
@@ -129,8 +143,8 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
 
 /** Handle a batch-action select menu (delete/fulfill/edit several listings at once). */
 export async function handleBatchSelect(interaction: StringSelectMenuInteraction): Promise<void> {
-  const [prefix, action] = interaction.customId.split(':');
-  if (prefix !== 'lfc') {
+  const action = decodeBatchSelectId(interaction.customId);
+  if (!action) {
     return;
   }
   const ids = interaction.values.map(Number);
@@ -185,11 +199,11 @@ export async function handleBatchSelect(interaction: StringSelectMenuInteraction
 
 /** Handle a listing action button (fulfill/delete). */
 export async function handleListingButton(interaction: ButtonInteraction): Promise<void> {
-  const [prefix, action, idPart] = interaction.customId.split(':');
-  if (prefix !== 'lfc') {
+  const decoded = decodeListingActionId(interaction.customId);
+  if (!decoded) {
     return;
   }
-  const id = Number(idPart);
+  const { action, id } = decoded;
   const listing = getListingById(id);
   if (!listing) {
     await interaction.reply({ content: 'Listing not found.', ephemeral: true });
@@ -202,14 +216,10 @@ export async function handleListingButton(interaction: ButtonInteraction): Promi
   if (action === 'fulfill') {
     fulfillListing(id);
     await interaction.reply({ content: `Listing #${id} marked as fulfilled.`, ephemeral: true });
-    return;
-  }
-  if (action === 'delete') {
+  } else {
     softDeleteListing(id);
     await interaction.reply({ content: `Listing #${id} deleted.`, ephemeral: true });
-    return;
   }
-  await interaction.reply({ content: 'That action is not supported.', ephemeral: true });
 }
 
 export const myListingsCommand: GuildCommand = {

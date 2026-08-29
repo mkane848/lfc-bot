@@ -10,8 +10,8 @@ import { createListingsBatch, type CreateListingResult } from '../../services/li
 import { resolveCard } from '../../services/scryfall.js';
 import type { GuildCommand, ListingCreateInput } from '../../types/index.js';
 import { parseBatchAccepts, parseWantBatchLine } from '../../utils/batch.js';
+import { WANT_MULTI_MODAL_ID } from '../../utils/customId.js';
 
-const MODAL_CUSTOM_ID = 'lfc:wantmultimodal';
 const CARD_SLOTS = 3;
 
 async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
@@ -47,7 +47,7 @@ function buildWantMultiModal(): ModalBuilder {
       .setMaxLength(12),
   );
   return new ModalBuilder()
-    .setCustomId(MODAL_CUSTOM_ID)
+    .setCustomId(WANT_MULTI_MODAL_ID)
     .setTitle('Post multiple cards you want')
     .addComponents(...cardRows, acceptsRow);
 }
