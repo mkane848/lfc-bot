@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { Interaction } from 'discord.js';
 import { commandMap } from '../commands/index.js';
 import { handleBatchSelect, handleListingButton } from '../commands/user/mylistings.js';
@@ -5,8 +6,17 @@ import { handleEditModal, handleEditNextButton } from '../commands/user/edit.js'
 import { handleHaveMultiModal } from '../commands/user/have-multi.js';
 import { handleWantMultiModal } from '../commands/user/want-multi.js';
 import { getLogger } from '../utils/logger.js';
+import { sendCriticalAlert } from '../services/alerts.js';
 
 export async function handleInteractionCreate(interaction: Interaction): Promise<void> {
+  const traceId = randomUUID();
+  const log = getLogger().child({
+    traceId,
+    userId: interaction.user.id,
+    guildId: interaction.guildId ?? undefined,
+  });
+  log.debug('Handling interaction');
+
   try {
     if (interaction.isAutocomplete()) {
       const command = commandMap.get(interaction.commandName);
@@ -54,7 +64,12 @@ export async function handleInteractionCreate(interaction: Interaction): Promise
     }
     await command.execute(interaction);
   } catch (err) {
-    getLogger().error({ err }, 'Unhandled interaction error');
+    const commandName = interaction.isChatInputCommand() ? interaction.commandName : undefined;
+    log.error({ err, commandName }, 'Unhandled interaction error');
+    sendCriticalAlert(
+      `Unhandled interaction error${commandName ? ` in /${commandName}` : ''}`,
+      err,
+    );
     await replySafe(interaction, 'Something went wrong. Please try again.');
   }
 }

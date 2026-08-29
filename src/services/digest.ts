@@ -5,6 +5,7 @@ import { DIGEST_SECTION_CAP } from '../utils/constants.js';
 import type { DigestTrigger } from '../types/index.js';
 import { digestLine } from '../utils/embeds.js';
 import { prepareDigestListings, setServerWatermark } from './digest-state.js';
+import { sendCriticalAlert } from './alerts.js';
 
 const now = () => Date.now();
 
@@ -81,6 +82,7 @@ export async function runDigest(
     // No destination succeeded; record the failure and leave the watermark
     // unchanged so the same listings are retried next time.
     logDigest(server.id, trigger, collected, { channel: false, dm: false });
+    sendCriticalAlert(`Digest delivery failed for server ${server.id}`);
     return { sent: false, channelOk, dmOk, listingCount: collected.length };
   }
 
