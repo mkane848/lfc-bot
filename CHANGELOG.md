@@ -21,6 +21,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A third `/mylistings` dropdown to edit several listings in sequence, reusing
   the existing `/edit` form for each one so every listing's changes stay
   independent.
+- A `GET /health` endpoint (Discord-gateway readiness and a SQLite liveness
+  check), backed by a Docker `HEALTHCHECK` so `docker compose ps` reports
+  `healthy`/`unhealthy` directly.
+- Dependabot (npm and GitHub Actions, weekly) and an `npm audit` CI step.
+- Per-interaction correlation IDs: a `traceId` is generated for every Discord
+  interaction and attached to its log lines, so one user's action can be
+  traced end-to-end through the logs.
+- Optional Discord webhook critical-error alerts (`DISCORD_ALERT_WEBHOOK_URL`)
+  for fatal startup errors, Discord client errors, unhandled interaction
+  errors, and total digest-delivery failures — no-ops if unset.
+- Admin audit logging: every `/admin` subcommand invocation is recorded
+  (admin, action, arguments, timestamp), viewable via the new
+  `/admin history` subcommand.
+- A public GitHub Pages site (`docs/index.md`, plus a legal page and Privacy
+  Policy / Terms of Service for Discord app verification), deployed
+  automatically on push to `main`.
+- `scripts/auto-update.sh` for unattended cron-based deployment updates on a
+  VM (fetches, rebuilds only if there are changes, verifies the container
+  started, logs its actions) — inactive until scheduled with cron.
 
 ### Fixed
 
@@ -28,7 +47,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   parsing bug meant the handler always returned before loading the listing.
   Submitting the edit form appeared to do nothing (Discord would show "This
   interaction failed"). Fixed as part of adding the batch-edit flow above,
-  which touches the same code path.
+  which touches the same code path. The encode/decode logic for every
+  interaction customId was subsequently extracted into tested pure functions
+  (`src/utils/customId.ts`) to catch this class of bug going forward.
+
+### Security
+
+- Upgraded `drizzle-orm` 0.36 → 0.45.2, fixing a high-severity SQL injection
+  advisory ([GHSA-gpj5-g38j-94v9](https://github.com/advisories/GHSA-gpj5-g38j-94v9))
+  in how query identifiers were escaped. Upgraded `node-cron` 3 → 4.6.0 in the
+  same pass, removing a vulnerable transitive dependency.
 
 ## [1.3.1] - 2026-08-28
 
@@ -136,7 +164,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CI workflow running lint, format check, type-check, and tests on every push
   to `main` and every pull request.
 
-[Unreleased]: https://github.com/mkane848/lfc-bot/compare/v1.3.1...HEAD
+[Unreleased]: https://github.com/mkane848/lfc-bot/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/mkane848/lfc-bot/compare/v1.3.1...v1.4.0
 [1.3.1]: https://github.com/mkane848/lfc-bot/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/mkane848/lfc-bot/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/mkane848/lfc-bot/compare/v1.1.0...v1.2.0
