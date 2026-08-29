@@ -6,6 +6,7 @@ import type { DigestTrigger } from '../types/index.js';
 import { digestLine } from '../utils/embeds.js';
 import { prepareDigestListings, setServerWatermark } from './digest-state.js';
 import { sendCriticalAlert } from './alerts.js';
+import { retryWithBackoff } from '../utils/retry.js';
 
 const now = () => Date.now();
 
@@ -104,7 +105,11 @@ async function deliverToChannel(
     if (!channel || !channel.isTextBased() || !channel.isSendable()) {
       return false;
     }
-    await channel.send(message);
+    await retryWithBackoff(() => channel.send(message), {
+      attempts: 3,
+      baseDelayMs: 1000,
+      maxDelayMs: 8000,
+    });
     return true;
   } catch {
     return false;
@@ -120,7 +125,11 @@ async function deliverToDm(client: Client, server: ServerRow, message: string): 
     if (!user) {
       return false;
     }
-    await user.send(message);
+    await retryWithBackoff(() => user.send(message), {
+      attempts: 3,
+      baseDelayMs: 1000,
+      maxDelayMs: 8000,
+    });
     return true;
   } catch {
     return false;

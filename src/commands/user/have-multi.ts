@@ -11,6 +11,7 @@ import { resolveCard } from '../../services/scryfall.js';
 import type { GuildCommand, ListingCreateInput } from '../../types/index.js';
 import { parseBatchAccepts, parseHaveBatchLine } from '../../utils/batch.js';
 import { HAVE_MULTI_MODAL_ID } from '../../utils/customId.js';
+import { replyError, replyPublicText } from '../../utils/replies.js';
 
 const CARD_SLOTS = 3;
 
@@ -67,15 +68,13 @@ export async function handleHaveMultiModal(interaction: ModalSubmitInteraction):
     });
     return;
   }
+  await interaction.deferReply({ ephemeral: true });
 
   let accepts;
   try {
     accepts = parseBatchAccepts(interaction.fields.getTextInputValue('accepts'));
   } catch (err) {
-    await interaction.reply({
-      content: err instanceof Error ? err.message : 'Invalid accepts value.',
-      ephemeral: true,
-    });
+    await replyError(interaction, err instanceof Error ? err.message : 'Invalid accepts value.');
     return;
   }
 
@@ -122,11 +121,10 @@ export async function handleHaveMultiModal(interaction: ModalSubmitInteraction):
   }
 
   if (readyInputs.length === 0) {
-    await interaction.reply({
-      content:
-        failures.length > 0 ? failures.map((f) => f.message).join('\n') : 'No cards were entered.',
-      ephemeral: true,
-    });
+    await replyError(
+      interaction,
+      failures.length > 0 ? failures.map((f) => f.message).join('\n') : 'No cards were entered.',
+    );
     return;
   }
 
@@ -134,13 +132,13 @@ export async function handleHaveMultiModal(interaction: ModalSubmitInteraction):
   try {
     results = createListingsBatch(readyInputs);
   } catch (err) {
-    await interaction.reply({
-      content: [
+    await replyError(
+      interaction,
+      [
         ...failures.map((f) => f.message),
         err instanceof Error ? err.message : 'Could not post this batch.',
       ].join('\n'),
-      ephemeral: true,
-    });
+    );
     return;
   }
 
@@ -158,10 +156,7 @@ export async function handleHaveMultiModal(interaction: ModalSubmitInteraction):
   });
   outcomes.sort((a, b) => a.slot - b.slot);
 
-  await interaction.reply({
-    content: outcomes.map((o) => o.message).join('\n'),
-    ephemeral: false,
-  });
+  await replyPublicText(interaction, outcomes.map((o) => o.message).join('\n'));
 }
 
 export const haveMultiCommand: GuildCommand = {
