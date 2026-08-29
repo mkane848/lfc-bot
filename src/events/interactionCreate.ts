@@ -1,7 +1,9 @@
 import type { Interaction } from 'discord.js';
 import { commandMap } from '../commands/index.js';
-import { handleListingButton } from '../commands/user/mylistings.js';
-import { handleEditModal } from '../commands/user/edit.js';
+import { handleBatchSelect, handleListingButton } from '../commands/user/mylistings.js';
+import { handleEditModal, handleEditNextButton } from '../commands/user/edit.js';
+import { handleHaveMultiModal } from '../commands/user/have-multi.js';
+import { handleWantMultiModal } from '../commands/user/want-multi.js';
 import { getLogger } from '../utils/logger.js';
 
 export async function handleInteractionCreate(interaction: Interaction): Promise<void> {
@@ -15,12 +17,29 @@ export async function handleInteractionCreate(interaction: Interaction): Promise
     }
 
     if (interaction.isButton()) {
+      const [, action] = interaction.customId.split(':');
+      if (action === 'editnext') {
+        await handleEditNextButton(interaction);
+        return;
+      }
       await handleListingButton(interaction);
       return;
     }
 
+    if (interaction.isStringSelectMenu()) {
+      await handleBatchSelect(interaction);
+      return;
+    }
+
     if (interaction.isModalSubmit()) {
-      await handleEditModal(interaction);
+      const [, modalType] = interaction.customId.split(':');
+      if (modalType === 'editmodal') {
+        await handleEditModal(interaction);
+      } else if (modalType === 'havemultimodal') {
+        await handleHaveMultiModal(interaction);
+      } else if (modalType === 'wantmultimodal') {
+        await handleWantMultiModal(interaction);
+      }
       return;
     }
 

@@ -1,11 +1,17 @@
 import {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
   ModalBuilder,
   SlashCommandBuilder,
   TextInputBuilder,
   TextInputStyle,
-  ActionRowBuilder,
 } from 'discord.js';
-import type { ChatInputCommandInteraction, ModalSubmitInteraction } from 'discord.js';
+import type {
+  ButtonInteraction,
+  ChatInputCommandInteraction,
+  ModalSubmitInteraction,
+} from 'discord.js';
 import { getListingById, updateListing } from '../../services/listings.js';
 import { resolveCard } from '../../services/scryfall.js';
 import type { GuildCommand } from '../../types/index.js';
@@ -41,14 +47,22 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
   await interaction.showModal(modal);
 }
 
-function buildEditModal(listing: {
-  id: number;
-  condition: string | null;
-  priceCents: number | null;
-  quantity: number;
-  notes: string | null;
-  cardSet: string | null;
-}): ModalBuilder {
+/**
+ * Build the edit modal for a listing. `remainingQueue` carries any additional
+ * listing IDs still to be edited in this batch (see `handleEditNextButton` below);
+ * it rides along in the modal's customId so no server-side session state is needed.
+ */
+export function buildEditModal(
+  listing: {
+    id: number;
+    condition: string | null;
+    priceCents: number | null;
+    quantity: number;
+    notes: string | null;
+    cardSet: string | null;
+  },
+  remainingQueue: number[] = [],
+): ModalBuilder {
   const conditionInput = new TextInputBuilder()
     .setCustomId('condition')
     .setLabel('Condition (nm, lp, mp, hp, dmg)')
@@ -90,8 +104,9 @@ function buildEditModal(listing: {
   const row = (component: TextInputBuilder) =>
     new ActionRowBuilder<TextInputBuilder>().addComponents(component);
 
+  const queueSuffix = remainingQueue.length > 0 ? `:${remainingQueue.join(',')}` : '';
   return new ModalBuilder()
-    .setCustomId(`${MODAL_PREFIX}:${listing.id}`)
+    .setCustomId(`${MODAL_PREFIX}:${listing.id}${queueSuffix}`)
     .setTitle(`Edit listing #${listing.id}`)
     .addComponents(
       row(conditionInput),
@@ -104,11 +119,12 @@ function buildEditModal(listing: {
 
 /** Handle the edit modal submission. */
 export async function handleEditModal(interaction: ModalSubmitInteraction): Promise<void> {
-  const [prefix, idPart] = interaction.customId.split(':');
-  if (prefix !== 'lfc:editmodal') {
+  const [prefix, action, idPart, queuePart] = interaction.customId.split(':');
+  if (prefix !== 'lfc' || action !== 'editmodal') {
     return;
   }
   const id = Number(idPart);
+  const queue = queuePart ? queuePart.split(',').map(Number) : [];
   const listing = getListingById(id);
   if (!listing) {
     await interaction.reply({ content: 'Listing not found.', ephemeral: true });
@@ -169,13 +185,49 @@ export async function handleEditModal(interaction: ModalSubmitInteraction): Prom
         manapoolUrl: resolved.manapoolUrl,
       });
     }
-    await replySuccess(interaction, `Listing #${id} updated.`);
+
+    const [nextId, ...stillRemaining] = queue;
+    if (nextId === undefined) {
+      await replySuccess(interaction, `Listing #${id} updated.`);
+    } else {
+      const continueButton = new ButtonBuilder()
+        .setCustomId(`lfc:editnext:${nextId}:${stillRemaining.join(',')}`)
+        .setLabel(`Edit #${nextId} next`)
+        .setStyle(ButtonStyle.Primary);
+      await interaction.reply({
+        content: `Listing #${id} updated. ${queue.length} more to edit.`,
+        components: [new ActionRowBuilder<ButtonBuilder>().addComponents(continueButton)],
+        ephemeral: true,
+      });
+    }
   } catch (err) {
     await interaction.reply({
       content: err instanceof Error ? err.message : 'Could not update listing.',
       ephemeral: true,
     });
   }
+}
+
+/**
+ * Handle the "Edit #N next" button shown after saving one listing in a batch-edit
+ * queue (see `buildEditModal`'s `remainingQueue`). Opens the next listing's edit
+ * modal directly — a button interaction can show a modal, unlike a modal submit
+ * interaction, which cannot show another modal in response.
+ */
+export async function handleEditNextButton(interaction: ButtonInteraction): Promise<void> {
+  const [, , idPart, queuePart] = interaction.customId.split(':');
+  const id = Number(idPart);
+  const queue = queuePart ? queuePart.split(',').map(Number) : [];
+  const listing = getListingById(id);
+  if (!listing) {
+    await interaction.reply({ content: 'Listing not found.', ephemeral: true });
+    return;
+  }
+  if (listing.userId !== interaction.user.id) {
+    await interaction.reply({ content: 'Only the listing owner can edit it.', ephemeral: true });
+    return;
+  }
+  await interaction.showModal(buildEditModal(listing, queue));
 }
 
 export const editCommand: GuildCommand = {

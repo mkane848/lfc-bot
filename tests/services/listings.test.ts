@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { getDb } from '../../src/db/index.js';
 import { listings, servers, type NewServerRow } from '../../src/db/schema.js';
 import {
+  activeListingsForUser,
   countSearchResults,
   createListing,
+  createListingsBatch,
   fulfillListing,
   searchListings,
   softDeleteListing,
@@ -144,6 +146,152 @@ describe('createListing', () => {
       finish: 'foil',
     });
     expect(result.warning).toBeUndefined();
+  });
+});
+
+describe('createListingsBatch', () => {
+  it("creates every card in one batch without the cards tripping each other's cooldown", () => {
+    seedServer();
+    const results = createListingsBatch([
+      {
+        ...baseInput(),
+        cardName: 'Card A',
+        cardNameNormalized: 'card a',
+        intent: 'have',
+        accepts: 'cash',
+      },
+      {
+        ...baseInput(),
+        cardName: 'Card B',
+        cardNameNormalized: 'card b',
+        intent: 'have',
+        accepts: 'cash',
+      },
+      {
+        ...baseInput(),
+        cardName: 'Card C',
+        cardNameNormalized: 'card c',
+        intent: 'have',
+        accepts: 'cash',
+      },
+    ]);
+    expect(results).toHaveLength(3);
+    expect(new Set(results.map((r) => r.listing.id)).size).toBe(3);
+    expect(results.every((r) => r.listing.status === 'active')).toBe(true);
+  });
+
+  it('still enforces the cooldown once for the batch as a whole', () => {
+    seedServer();
+    createListingsBatch([
+      {
+        ...baseInput(),
+        cardName: 'Card A',
+        cardNameNormalized: 'card a',
+        intent: 'have',
+        accepts: 'cash',
+      },
+    ]);
+    expect(() =>
+      createListingsBatch([
+        {
+          ...baseInput(),
+          cardName: 'Card B',
+          cardNameNormalized: 'card b',
+          intent: 'have',
+          accepts: 'cash',
+        },
+      ]),
+    ).toThrow(/posting too quickly/);
+  });
+
+  it('returns an empty array for an empty batch', () => {
+    seedServer();
+    expect(createListingsBatch([])).toEqual([]);
+  });
+});
+
+describe('activeListingsForUser', () => {
+  it("returns only the user's active listings, newest first", () => {
+    seedServer();
+    const { listing: first } = createListing({
+      ...baseInput(),
+      cardName: 'Card A',
+      cardNameNormalized: 'card a',
+      intent: 'have',
+      accepts: 'cash',
+    });
+    const db = getDb();
+    const later = first.createdAt + 20_000; // past the 10s cooldown
+    db.insert(listings)
+      .values({
+        serverId: '200',
+        userId: 'u1',
+        username: 'alice',
+        intent: 'have',
+        accepts: 'cash',
+        game: 'mtg',
+        cardName: 'Card B',
+        cardNameNormalized: 'card b',
+        cardSet: null,
+        cardImageUrl: null,
+        finish: null,
+        variant: null,
+        collectorNumber: null,
+        manapoolUrl: null,
+        condition: 'nm',
+        priceCents: 1000,
+        quantity: 1,
+        notes: null,
+        status: 'active',
+        expiresAt: later + 30 * 24 * 3600 * 1000,
+        createdAt: later,
+        updatedAt: later,
+      })
+      .run();
+    // A listing from a different user should never show up.
+    db.insert(listings)
+      .values({
+        serverId: '200',
+        userId: 'u2',
+        username: 'bob',
+        intent: 'have',
+        accepts: 'cash',
+        game: 'mtg',
+        cardName: 'Card C',
+        cardNameNormalized: 'card c',
+        cardSet: null,
+        cardImageUrl: null,
+        finish: null,
+        variant: null,
+        collectorNumber: null,
+        manapoolUrl: null,
+        condition: 'nm',
+        priceCents: 1000,
+        quantity: 1,
+        notes: null,
+        status: 'active',
+        expiresAt: later + 30 * 24 * 3600 * 1000,
+        createdAt: later,
+        updatedAt: later,
+      })
+      .run();
+
+    const rows = activeListingsForUser('200', 'u1');
+    expect(rows.map((r) => r.cardName)).toEqual(['Card B', 'Card A']);
+  });
+
+  it('respects the limit parameter', () => {
+    seedServer();
+    createListingsBatch(
+      Array.from({ length: 5 }, (_, i) => ({
+        ...baseInput(),
+        cardName: `Card ${i}`,
+        cardNameNormalized: `card ${i}`,
+        intent: 'have' as const,
+        accepts: 'cash' as const,
+      })),
+    );
+    expect(activeListingsForUser('200', 'u1', 2)).toHaveLength(2);
   });
 });
 
