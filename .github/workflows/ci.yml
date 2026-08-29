@@ -21,10 +21,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # Non-blocking for now: fixing the current findings requires breaking
-      # major-version upgrades (drizzle-orm, drizzle-kit, vitest, node-cron).
-      # Flip to blocking once those are addressed.
-      - name: Audit dependencies
+      # Blocking: production dependencies only. Fails the build on any
+      # high/critical vulnerability that ships in the runtime image.
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+      # Non-blocking: covers dev-only tooling (vitest/vite/esbuild/drizzle-kit
+      # chain), which is stripped from the production image and not worth
+      # gating merges on. Visible in the log for awareness.
+      - name: Audit all dependencies
         run: npm audit --audit-level=high
         continue-on-error: true
 

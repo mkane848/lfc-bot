@@ -70,7 +70,7 @@ export function stopAllJobs(): void {
     cancelJob(id);
   }
   if (maintenanceTask) {
-    maintenanceTask.stop();
+    void maintenanceTask.stop();
     maintenanceTask = null;
   }
 }
@@ -106,7 +106,7 @@ async function runScheduledDigest(client: Client, serverId: string): Promise<voi
 function cancelJob(serverId: string): void {
   const task = jobs.get(serverId);
   if (task) {
-    task.stop();
+    void task.stop();
     jobs.delete(serverId);
   }
 }
