@@ -5,6 +5,12 @@ import { handleBatchSelect, handleListingButton } from '../commands/user/mylisti
 import { handleEditModal, handleEditNextButton } from '../commands/user/edit.js';
 import { handleHaveMultiModal } from '../commands/user/have-multi.js';
 import { handleWantMultiModal } from '../commands/user/want-multi.js';
+import {
+  EDIT_MODAL_KIND,
+  EDIT_NEXT_KIND,
+  HAVE_MULTI_MODAL_ID,
+  WANT_MULTI_MODAL_ID,
+} from '../utils/customId.js';
 import { getLogger } from '../utils/logger.js';
 import { sendCriticalAlert } from '../services/alerts.js';
 
@@ -28,7 +34,7 @@ export async function handleInteractionCreate(interaction: Interaction): Promise
 
     if (interaction.isButton()) {
       const [, action] = interaction.customId.split(':');
-      if (action === 'editnext') {
+      if (action === EDIT_NEXT_KIND) {
         await handleEditNextButton(interaction);
         return;
       }
@@ -43,11 +49,11 @@ export async function handleInteractionCreate(interaction: Interaction): Promise
 
     if (interaction.isModalSubmit()) {
       const [, modalType] = interaction.customId.split(':');
-      if (modalType === 'editmodal') {
+      if (modalType === EDIT_MODAL_KIND) {
         await handleEditModal(interaction);
-      } else if (modalType === 'havemultimodal') {
+      } else if (interaction.customId === HAVE_MULTI_MODAL_ID) {
         await handleHaveMultiModal(interaction);
-      } else if (modalType === 'wantmultimodal') {
+      } else if (interaction.customId === WANT_MULTI_MODAL_ID) {
         await handleWantMultiModal(interaction);
       }
       return;
