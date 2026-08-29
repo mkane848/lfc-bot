@@ -3,6 +3,7 @@ import type { ChatInputCommandInteraction } from 'discord.js';
 import { DIGEST_MODES } from '../../types/index.js';
 import type { AdminSubcommand, GuildCommand } from '../../types/index.js';
 import { requireManageServer } from '../../utils/permissions.js';
+import { recordAdminAction } from '../../services/audit-log.js';
 import { execute as executeConfig } from './config.js';
 import { execute as executeDigest } from './digest.js';
 import { execute as executeSchedule } from './schedule.js';
@@ -12,6 +13,7 @@ import { execute as executeDmTarget } from './dm-target.js';
 import { execute as executeMode } from './mode.js';
 import { execute as executeGames } from './games.js';
 import { execute as executeRemove } from './remove.js';
+import { execute as executeHistory } from './history.js';
 
 const subcommands: Record<string, AdminSubcommand> = {
   config: { name: 'config', execute: executeConfig },
@@ -23,7 +25,14 @@ const subcommands: Record<string, AdminSubcommand> = {
   mode: { name: 'mode', execute: executeMode },
   games: { name: 'games', execute: executeGames },
   remove: { name: 'remove', execute: executeRemove },
+  history: { name: 'history', execute: executeHistory },
 };
+
+/** Flatten a subcommand's options into a plain { name: value } record for the audit log. */
+function summarizeOptions(interaction: ChatInputCommandInteraction): Record<string, unknown> {
+  const options = interaction.options.data[0]?.options ?? [];
+  return Object.fromEntries(options.map((option) => [option.name, option.value]));
+}
 
 async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
   if (!(await requireManageServer(interaction))) {
@@ -34,6 +43,15 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
   if (!handler) {
     await interaction.reply({ content: 'Unknown admin subcommand.', ephemeral: true });
     return;
+  }
+  if (interaction.guildId) {
+    recordAdminAction({
+      serverId: interaction.guildId,
+      adminId: interaction.user.id,
+      adminUsername: interaction.user.username,
+      action: subcommand,
+      details: summarizeOptions(interaction),
+    });
   }
   await handler.execute(interaction);
 }
@@ -119,6 +137,9 @@ function build(): SlashCommandBuilder {
           .setRequired(true)
           .setMinValue(1),
       ),
+  );
+  builder.addSubcommand((sub) =>
+    sub.setName('history').setDescription('Show recent admin command activity'),
   );
   return builder;
 }
