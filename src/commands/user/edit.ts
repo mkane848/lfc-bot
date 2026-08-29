@@ -126,14 +126,15 @@ export async function handleEditModal(interaction: ModalSubmitInteraction): Prom
   if (!decoded) {
     return;
   }
+  await interaction.deferReply({ ephemeral: true });
   const { id, queue } = decoded;
   const listing = getListingById(id);
   if (!listing) {
-    await interaction.reply({ content: 'Listing not found.', ephemeral: true });
+    await interaction.editReply({ content: 'Listing not found.' });
     return;
   }
   if (listing.userId !== interaction.user.id) {
-    await interaction.reply({ content: 'Only the listing owner can edit it.', ephemeral: true });
+    await interaction.editReply({ content: 'Only the listing owner can edit it.' });
     return;
   }
 
@@ -169,9 +170,8 @@ export async function handleEditModal(interaction: ModalSubmitInteraction): Prom
       const variant = listing.variant && isCardVariant(listing.variant) ? listing.variant : null;
       const resolved = await resolveCard(listing.cardName, { cardSet, finish, variant });
       if (!resolved.resolved) {
-        await interaction.reply({
+        await interaction.editReply({
           content: `Could not find "${listing.cardName}" in set ${cardSet ?? '(none)'}. Check the set code and try again.`,
-          ephemeral: true,
         });
         return;
       }
@@ -196,16 +196,14 @@ export async function handleEditModal(interaction: ModalSubmitInteraction): Prom
         .setCustomId(encodeEditNextId(nextId, stillRemaining))
         .setLabel(`Edit #${nextId} next`)
         .setStyle(ButtonStyle.Primary);
-      await interaction.reply({
+      await interaction.editReply({
         content: `Listing #${id} updated. ${queue.length} more to edit.`,
         components: [new ActionRowBuilder<ButtonBuilder>().addComponents(continueButton)],
-        ephemeral: true,
       });
     }
   } catch (err) {
-    await interaction.reply({
+    await interaction.editReply({
       content: err instanceof Error ? err.message : 'Could not update listing.',
-      ephemeral: true,
     });
   }
 }

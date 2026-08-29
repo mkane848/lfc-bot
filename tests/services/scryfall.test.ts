@@ -136,6 +136,43 @@ describe('scryfall service', () => {
     expect(resolved.manapoolUrl).toBeNull();
   });
 
+  it('does not retry a 404 (definitive not-found)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 404 });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const resolved = await resolveCard('Nonexistent Card');
+    expect(resolved.resolved).toBe(false);
+    // One call for the paper-preferring search, one for the fuzzy fallback —
+    // neither of which should be retried since both are clean 404s.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('retries a transient failure once before falling back', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('network blip'))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          data: [
+            {
+              id: 'bolt-id',
+              name: 'Lightning Bolt',
+              set: 'mh3',
+              collector_number: '128',
+              games: ['paper'],
+              image_uris: { normal: 'http://img/bolt.png' },
+            },
+          ],
+        }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const resolved = await resolveCard('Lightning Bolt');
+    expect(resolved.resolved).toBe(true);
+    expect(resolved.cardName).toBe('Lightning Bolt');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it('builds a printing-filtered search query when set/finish/variant/collector number are given', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({

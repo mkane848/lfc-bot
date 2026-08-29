@@ -38,6 +38,7 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
     await replyError(interaction, 'This command can only be used inside a server.');
     return;
   }
+  await interaction.deferReply({ ephemeral: true });
 
   const rawCard = interaction.options.getString('card_name', true);
   const cardName = validateCardName(rawCard);

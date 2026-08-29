@@ -2,12 +2,14 @@ import { PROJECT_NAME, PROJECT_REPOSITORY } from '../utils/constants.js';
 import { buildManapoolUrl } from '../utils/manapool.js';
 import type { CardFinish, CardVariant, ResolvedCard } from '../types/index.js';
 import { normalizeCardName } from '../utils/validation.js';
+import { retryWithBackoff } from '../utils/retry.js';
 import { buildCacheKey, getCachedCard, upsertCachedCard } from './card-cache.js';
 import { lookupManapoolPrinting } from './manapool.js';
 
 const SCRYFALL_BASE = 'https://api.scryfall.com';
 const MIN_REQUEST_INTERVAL_MS = 100;
 const SET_LIST_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const ATTEMPT_TIMEOUT_MS = 5000;
 
 interface ScryfallCard {
   id?: string | null;
@@ -66,9 +68,14 @@ class RateLimiter {
 
 const limiter = new RateLimiter();
 
-async function scryfallFetch<T>(path: string): Promise<T | null> {
+/**
+ * One Scryfall request attempt. A 404 is a definitive "not found" and
+ * resolves to `null` without retrying; any other non-2xx status or thrown
+ * network/timeout error throws so the caller can retry it.
+ */
+async function scryfallFetchOnce<T>(path: string): Promise<T | null> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15_000);
+  const timeout = setTimeout(() => controller.abort(), ATTEMPT_TIMEOUT_MS);
   try {
     const response = await fetch(`${SCRYFALL_BASE}${path}`, {
       headers: {
@@ -76,14 +83,33 @@ async function scryfallFetch<T>(path: string): Promise<T | null> {
       },
       signal: controller.signal,
     });
-    if (!response.ok) {
+    if (response.status === 404) {
       return null;
     }
+    if (!response.ok) {
+      throw new Error(`Scryfall request failed with status ${response.status}`);
+    }
     return (await response.json()) as T;
-  } catch {
-    return null;
   } finally {
     clearTimeout(timeout);
+  }
+}
+
+/**
+ * Fetch from Scryfall, retrying transient failures (timeouts, network errors,
+ * non-404 error responses) once before giving up. The per-attempt timeout is
+ * kept short (5s) because this also backs Discord autocomplete interactions,
+ * which must respond within 3 seconds and can never be deferred.
+ */
+async function scryfallFetch<T>(path: string): Promise<T | null> {
+  try {
+    return await retryWithBackoff(() => scryfallFetchOnce<T>(path), {
+      attempts: 2,
+      baseDelayMs: 300,
+      maxDelayMs: 1500,
+    });
+  } catch {
+    return null;
   }
 }
 
