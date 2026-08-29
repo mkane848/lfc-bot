@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LFCbot - Legal Documentation</title>
+    <style>
+        :root {
+            --color-text: #333;
+            --color-bg: #fff;
+            --color-border: #ddd;
+            --color-link: #0066cc;
+            --color-link-hover: #0052a3;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --color-text: #e0e0e0;
+                --color-bg: #1a1a1a;
+                --color-border: #444;
+                --color-link: #66b3ff;
+                --color-link-hover: #4d9eff;
+            }
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            color: var(--color-text);
+            background: var(--color-bg);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            text-align: center;
+            max-width: 600px;
+        }
+
+        h1 {
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #999;
+            margin-bottom: 40px;
+            font-size: 1.05em;
+        }
+
+        .links {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        a {
+            display: inline-block;
+            padding: 15px 30px;
+            background: var(--color-link);
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 500;
+            font-size: 1.05em;
+            transition: background 0.2s;
+        }
+
+        a:hover {
+            background: var(--color-link-hover);
+        }
+
+        .footer {
+            margin-top: 50px;
+            padding-top: 30px;
+            border-top: 1px solid var(--color-border);
+            color: #999;
+            font-size: 0.9em;
+        }
+
+        .footer a {
+            display: inline;
+            padding: 0;
+            background: none;
+            color: var(--color-link);
+            font-weight: normal;
+            font-size: 1em;
+        }
+
+        .footer a:hover {
+            background: none;
+            border-bottom: 1px solid var(--color-link);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>LFCbot</h1>
+        <p class="subtitle">Legal Documentation</p>
+
+        <div class="links">
+            <a href="privacy-policy.html">Privacy Policy</a>
+            <a href="terms-of-service.html">Terms of Service</a>
+        </div>
+
+        <div class="footer">
+            <p>For more information, visit the <a href="https://github.com/mkane848/lfcbot">GitHub repository</a></p>
+        </div>
+    </div>
+</body>
+</html>
