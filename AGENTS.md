@@ -38,10 +38,11 @@ pushed.
 Copy `.env.example` to `.env`. Required: `DISCORD_TOKEN` and
 `DISCORD_CLIENT_ID`. Optional: `DATABASE_PATH` (default `./data/lfcbot.db`),
 `DISCORD_GUILD_ID` (registers commands to a test guild in development instead
-of globally), `NODE_ENV`, `LOG_LEVEL`, and `MANAPOOL_API_KEY` (a Mana Pool API
-access token, `mpat_...`; enables live "View on Manapool" links and price
-lookups for exact printings, otherwise the bot falls back to a locally-built
-link or none).
+of globally), `NODE_ENV`, `LOG_LEVEL`, `HEALTH_PORT` (default `3000`),
+`MANAPOOL_API_KEY` (a Mana Pool API access token, `mpat_...`; enables live
+"View on Manapool" links and price lookups for exact printings, otherwise the
+bot falls back to a locally-built link or none), and `DISCORD_ALERT_WEBHOOK_URL`
+(Discord webhook URL to receive critical error alerts; leave empty to disable).
 
 Never read, quote, or commit `.env`; it contains the bot token. `.env.example`
 is the documentation surface for environment variables.
@@ -49,14 +50,15 @@ is the documentation surface for environment variables.
 ## Layout
 
 - `src/index.ts` - startup: env validation, migrations, Discord client
-  (`Guilds` intent only), event wiring, graceful shutdown
+  (`Guilds` intent only), event wiring, health server, graceful shutdown
 - `src/commands/user/` - member-facing listing commands
 - `src/commands/admin/` - `/admin` subcommands; require Manage Server
 - `src/events/` - Discord event handlers
 - `src/db/` - Drizzle schema, connection singleton, and generated migrations
 - `src/services/` - Scryfall client, Manapool client, card cache, listings,
-  digests, scheduler
-- `src/utils/` - validation, embeds, permissions, logging, constants
+  digests, scheduler, health checks, and critical alerts
+- `src/utils/` - validation, embeds, permissions, logging, constants, custom
+  IDs, batch operations, and audit logging
 - `tests/` - mirrors `src`; `tests/helpers/db.ts` provides in-memory SQLite
 - `scripts/` - operational helpers, including `backup.sh` for the SQLite volume
 - `docs/` - deployment and hosting documentation
@@ -117,3 +119,12 @@ change pass.
   lookup and is a no-op (no network call) when `MANAPOOL_API_KEY` is unset.
 - When the bot is removed from a guild, that guild's data is removed after a
   30-day retention window.
+- Discord interaction custom IDs are encoded/decoded in `src/utils/customId.ts`
+  using a deterministic, tested format for button and select menu routing.
+- Admin actions (edit, fulfill, delete, remove) are logged to `audit_log` table
+  via `src/services/audit-log.ts` for security and compliance.
+- Critical Discord client errors trigger alerts via `src/services/alerts.ts`;
+  alerts can be configured to send to external services (Slack, etc.) if
+  `ALERT_WEBHOOK_URL` is set.
+- Health checks are available at `/health` (port 3000 by default) for container
+  orchestration; the endpoint reflects Discord client connectivity status.
