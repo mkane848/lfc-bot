@@ -15,6 +15,12 @@ import type {
 import { getListingById, updateListing } from '../../services/listings.js';
 import { resolveCard } from '../../services/scryfall.js';
 import type { GuildCommand } from '../../types/index.js';
+import {
+  decodeEditModalId,
+  decodeEditNextId,
+  encodeEditModalId,
+  encodeEditNextId,
+} from '../../utils/customId.js';
 import { replyError, replySuccess } from '../../utils/replies.js';
 import {
   isCardCondition,
@@ -24,8 +30,6 @@ import {
   parseQuantity,
   validateNotes,
 } from '../../utils/validation.js';
-
-const MODAL_PREFIX = 'lfc:editmodal';
 
 async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
   const id = interaction.options.getInteger('listing_id', true);
@@ -104,9 +108,8 @@ export function buildEditModal(
   const row = (component: TextInputBuilder) =>
     new ActionRowBuilder<TextInputBuilder>().addComponents(component);
 
-  const queueSuffix = remainingQueue.length > 0 ? `:${remainingQueue.join(',')}` : '';
   return new ModalBuilder()
-    .setCustomId(`${MODAL_PREFIX}:${listing.id}${queueSuffix}`)
+    .setCustomId(encodeEditModalId(listing.id, remainingQueue))
     .setTitle(`Edit listing #${listing.id}`)
     .addComponents(
       row(conditionInput),
@@ -119,12 +122,11 @@ export function buildEditModal(
 
 /** Handle the edit modal submission. */
 export async function handleEditModal(interaction: ModalSubmitInteraction): Promise<void> {
-  const [prefix, action, idPart, queuePart] = interaction.customId.split(':');
-  if (prefix !== 'lfc' || action !== 'editmodal') {
+  const decoded = decodeEditModalId(interaction.customId);
+  if (!decoded) {
     return;
   }
-  const id = Number(idPart);
-  const queue = queuePart ? queuePart.split(',').map(Number) : [];
+  const { id, queue } = decoded;
   const listing = getListingById(id);
   if (!listing) {
     await interaction.reply({ content: 'Listing not found.', ephemeral: true });
@@ -191,7 +193,7 @@ export async function handleEditModal(interaction: ModalSubmitInteraction): Prom
       await replySuccess(interaction, `Listing #${id} updated.`);
     } else {
       const continueButton = new ButtonBuilder()
-        .setCustomId(`lfc:editnext:${nextId}:${stillRemaining.join(',')}`)
+        .setCustomId(encodeEditNextId(nextId, stillRemaining))
         .setLabel(`Edit #${nextId} next`)
         .setStyle(ButtonStyle.Primary);
       await interaction.reply({
@@ -215,9 +217,11 @@ export async function handleEditModal(interaction: ModalSubmitInteraction): Prom
  * interaction, which cannot show another modal in response.
  */
 export async function handleEditNextButton(interaction: ButtonInteraction): Promise<void> {
-  const [, , idPart, queuePart] = interaction.customId.split(':');
-  const id = Number(idPart);
-  const queue = queuePart ? queuePart.split(',').map(Number) : [];
+  const decoded = decodeEditNextId(interaction.customId);
+  if (!decoded) {
+    return;
+  }
+  const { id, queue } = decoded;
   const listing = getListingById(id);
   if (!listing) {
     await interaction.reply({ content: 'Listing not found.', ephemeral: true });
