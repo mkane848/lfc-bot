@@ -8,6 +8,8 @@ import { handleInteractionCreate } from './events/interactionCreate.js';
 import { handleGuildCreate } from './events/guildCreate.js';
 import { handleGuildDelete } from './events/guildDelete.js';
 import { stopAllJobs } from './services/scheduler.js';
+import { startHealthServer } from './services/health.js';
+import { sendCriticalAlert } from './services/alerts.js';
 import { getLogger } from './utils/logger.js';
 
 async function main(): Promise<void> {
@@ -26,6 +28,8 @@ async function main(): Promise<void> {
     intents: [GatewayIntentBits.Guilds],
   });
 
+  const healthServer = startHealthServer(client);
+
   client.once(Events.ClientReady, (readyClient) => {
     void deployCommands(readyClient)
       .then(() => handleReady(readyClient))
@@ -39,11 +43,13 @@ async function main(): Promise<void> {
 
   client.on(Events.Error, (error) => {
     logger.error({ err: error }, 'Discord client error');
+    sendCriticalAlert('Discord client error', error);
   });
 
   const shutdown = (signal: string): void => {
     logger.info(`Received ${signal}; shutting down`);
     stopAllJobs();
+    healthServer.close();
     void client.destroy();
     closeDb();
     process.exit(0);
@@ -58,5 +64,6 @@ async function main(): Promise<void> {
 
 void main().catch((err: unknown) => {
   getLogger().error({ err }, 'Fatal startup error');
+  sendCriticalAlert('Fatal startup error', err);
   process.exit(1);
 });

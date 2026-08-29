@@ -21,6 +21,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Non-blocking for now: fixing the current findings requires breaking
+      # major-version upgrades (drizzle-orm, drizzle-kit, vitest, node-cron).
+      # Flip to blocking once those are addressed.
+      - name: Audit dependencies
+        run: npm audit --audit-level=high
+        continue-on-error: true
+
       - name: Lint
         run: npm run lint
 
