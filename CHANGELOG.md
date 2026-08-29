@@ -58,6 +58,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in how query identifiers were escaped. Upgraded `node-cron` 3 → 4.6.0 in the
   same pass, removing a vulnerable transitive dependency.
 
+### Known gap
+
+- The new `/have-multi`, `/want-multi`, and `/mylistings` batch-action
+  dropdowns (delete/fulfill/edit, including the batch-edit "Edit next" button
+  relay) are covered by type-checking, linting, and unit tests, but have not
+  yet been exercised against a live Discord client — modals, select menus,
+  and multi-step button flows are outside what this project's test suite can
+  reach (see the Testing section in `AGENTS.md`/`CONTRIBUTING.md`). Do a
+  manual click-through in a test guild before relying on them in production.
+  This is exactly the kind of gap that let the `/edit` bug above ship
+  unnoticed originally, so treat it as a real outstanding action, not a
+  formality.
+
 ## [1.3.1] - 2026-08-28
 
 ### Fixed
