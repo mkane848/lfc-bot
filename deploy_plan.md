@@ -24,7 +24,7 @@ Both require a credit card for signup only (no charge). Managed "free" PaaS tier
 
 
 
-\- \*\*Add a multi-stage `Dockerfile`\*\* that builds `dist/` in a Node 20 Debian-slim build stage and produces a slim runtime stage running `node dist/index.js`. It must:
+\- \*\*Add a multi-stage `Dockerfile`\*\* that builds `dist/` in a Node 24 Debian-slim build stage and produces a slim runtime stage running `node dist/index.js`. It must:
 
 &#x20; - Support both `linux/amd64` and `linux/arm64` (Oracle Ampere is arm64, Google `e2-micro` is amd64); include `python3`/`make`/`g++` so `better-sqlite3` compiles if a prebuilt binary is missing.
 
@@ -64,7 +64,7 @@ Both require a credit card for signup only (no charge). Managed "free" PaaS tier
 
 \- Deployment is for \*\*per-community instances\*\* (confirmed), so the guide uses global command registration and each operator owns their own token, database, and VM.
 
-\- Node 20 on Debian slim is the default runtime; Docker is the recommended run method, with the raw `npm run build \&\& npm start` path preserved for self-host.
+\- Node 24 on Debian slim is the default runtime (matching the repo's Dockerfile); Docker is the recommended run method, with the raw `npm run build \&\& npm start` path preserved for self-host.
 
 \- Free-tier availability changes over time and could not be re-verified live this turn (network was restricted); the implementer should confirm current Oracle/Google free-tier terms before writing the final guide, but the Dockerfile and docs structure are independent of that.
 
