@@ -67,6 +67,15 @@ is the documentation surface for environment variables.
 - `docs/` - deployment and hosting documentation
 - `Dockerfile`, `docker-compose.yml`, `.dockerignore` - container packaging
 
+## Git Workflow
+
+All new sessions should create a feature branch for their work without being
+explicitly told. Follow the naming convention: `fix/` for bug fixes, `feature/`
+for new features, `docs/` for documentation, `refactor/` for refactoring, or
+other descriptive prefixes as appropriate. This keeps work isolated, enables
+parallel development, and makes PR reviews clearer. Create the branch early,
+commit frequently with clear messages, and push regularly so work is never lost.
+
 ## Conventions
 
 - Relative imports use `.js` specifiers (ESM `NodeNext` resolution).
