@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-08-30
+
+### Added
+
+- GitHub CodeQL code scanning (`javascript-typescript`) on every push to
+  `main`, every pull request, and a weekly schedule. Runs on GitHub's free
+  code-scanning tier since the repo is public.
+- Retry-with-backoff (`src/utils/retry.ts`) for the two delivery paths the
+  1.4.0 review flagged as giving up too easily:
+  - Scryfall lookups now retry once on a network error, timeout, or non-404
+    error response; a `404` is treated as a definitive not-found and is
+    never retried.
+  - Digest delivery (channel/DM send) now retries a transient Discord API
+    failure within the same run instead of waiting for the next scheduled
+    cron tick, which could be a full day away for a daily digest.
+
+### Fixed
+
+- None of `/have`, `/want`, `/have-multi`, `/want-multi`, or `/edit` called
+  `interaction.deferReply()` before resolving a card against Scryfall.
+  Discord requires a reply or defer within 3 seconds, so a slow (not even
+  down) Scryfall response could already cause "This interaction failed" for
+  the user. All five commands now defer immediately, and the shared reply
+  helpers (`src/utils/replies.ts`) send the real response via `editReply`/
+  `followUp` once deferred.
+- `package-lock.json` had an internally inconsistent entry for `tsx`'s
+  nested `esbuild@0.28.2` dependency (several required platform packages
+  were missing), which made `npm ci` — and therefore the Docker build —
+  fail. Regenerated the lockfile to fix it.
+
+### Security
+
+- Upgraded `vitest` 2 → 4, `drizzle-kit` 0.27 → 0.31, and
+  `eslint-config-prettier` 9 → 10 (via Dependabot), resolving the
+  moderate/high/critical advisories in the dev-only `vite`/`esbuild`
+  dependency chain called out as an unaddressed follow-up in 1.4.0. These
+  are dev tooling only and are not present in the production Docker image.
+
 ## [1.4.0] - 2026-08-29
 
 ### Added
@@ -177,7 +215,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CI workflow running lint, format check, type-check, and tests on every push
   to `main` and every pull request.
 
-[Unreleased]: https://github.com/mkane848/lfc-bot/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/mkane848/lfc-bot/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/mkane848/lfc-bot/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/mkane848/lfc-bot/compare/v1.3.1...v1.4.0
 [1.3.1]: https://github.com/mkane848/lfc-bot/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/mkane848/lfc-bot/compare/v1.2.0...v1.3.0

@@ -26,9 +26,12 @@ tests.
 - `npm run db:generate` - generate a Drizzle migration after a schema change
 - `npm run db:check` - check pending migration changes
 
-CI (`.github/workflows/ci.yml`) runs lint, format check, type-check, and tests
-on every push to `main` and every pull request. Run those four checks locally
-before considering work done. A separate release workflow
+CI (`.github/workflows/ci.yml`) runs lint, format check, type-check, tests,
+and an `npm audit` pass (blocking for production dependencies, non-blocking
+for dev-only ones) on every push to `main` and every pull request. Run those
+checks locally before considering work done. `.github/workflows/codeql.yml`
+runs GitHub CodeQL scanning (`javascript-typescript`) on the same triggers
+plus a weekly schedule. A separate release workflow
 (`.github/workflows/release.yml`) builds a multi-architecture Docker image,
 publishes it to GHCR, and creates a GitHub Release whenever a `v*` tag is
 pushed.
@@ -56,9 +59,9 @@ is the documentation surface for environment variables.
 - `src/events/` - Discord event handlers
 - `src/db/` - Drizzle schema, connection singleton, and generated migrations
 - `src/services/` - Scryfall client, Manapool client, card cache, listings,
-  digests, scheduler, health checks, and critical alerts
+  digests, scheduler, health checks, critical alerts, and admin audit logging
 - `src/utils/` - validation, embeds, permissions, logging, constants, custom
-  IDs, batch operations, and audit logging
+  IDs, batch operations, and retry-with-backoff
 - `tests/` - mirrors `src`; `tests/helpers/db.ts` provides in-memory SQLite
 - `scripts/` - operational helpers, including `backup.sh` for the SQLite volume
 - `docs/` - deployment and hosting documentation
@@ -121,10 +124,25 @@ change pass.
   30-day retention window.
 - Discord interaction custom IDs are encoded/decoded in `src/utils/customId.ts`
   using a deterministic, tested format for button and select menu routing.
-- Admin actions (edit, fulfill, delete, remove) are logged to `audit_log` table
-  via `src/services/audit-log.ts` for security and compliance.
-- Critical Discord client errors trigger alerts via `src/services/alerts.ts`;
-  alerts can be configured to send to external services (Slack, etc.) if
-  `ALERT_WEBHOOK_URL` is set.
-- Health checks are available at `/health` (port 3000 by default) for container
-  orchestration; the endpoint reflects Discord client connectivity status.
+- Every `/admin` subcommand invocation (config, digest, schedule, timezone,
+  channel, dm-target, mode, games, remove, history) is recorded to the
+  `admin_audit_log` table via `src/services/audit-log.ts`, logged as invoked
+  (subcommand + arguments) rather than confirmed successful, since the
+  subcommand handlers don't report a success/failure signal back. Viewable
+  via `/admin history`.
+- Fatal startup errors, Discord client errors, unhandled interaction errors,
+  and total digest-delivery failures trigger a Discord webhook alert via
+  `src/services/alerts.ts` when `DISCORD_ALERT_WEBHOOK_URL` is set (a
+  five-minute per-message cooldown prevents a recurring failure from
+  spamming the channel); it's a no-op when unset.
+- Health checks are available at `GET /health` (port 3000 by default,
+  `HEALTH_PORT`) for container orchestration: `200`/`ok` when both the
+  Discord gateway is connected and SQLite responds, `503`/`degraded`
+  otherwise (e.g. during startup before login resolves).
+- Scryfall lookups and digest delivery (channel/DM send) retry transient
+  failures once via `src/utils/retry.ts`'s exponential backoff; a Scryfall
+  `404` is a definitive not-found and is never retried. The interactive
+  commands that resolve a card (`/have`, `/want`, `/have-multi`,
+  `/want-multi`, `/edit`) call `interaction.deferReply()` first so the retry
+  has room to work within Discord's 15-minute deferred-response window
+  instead of the 3-second initial-ACK deadline.
