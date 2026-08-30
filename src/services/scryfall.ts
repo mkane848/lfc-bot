@@ -191,7 +191,7 @@ export async function resolveCard(
   }
 
   const hasPrintingFilter = Boolean(cardSet || finish || variant || collectorNumber);
-  let card: ScryfallCard | null = null;
+  let card: ScryfallCard | null;
   if (hasPrintingFilter) {
     let query = `!"${input}"`;
     if (cardSet) query += ` set:${cardSet.replace(/[^a-zA-Z0-9]/g, '')}`;

@@ -67,7 +67,7 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
     variant = variantInput;
   }
   const collectorNumberInput = interaction.options.getString('collector_number');
-  let collectorNumber: string | null = null;
+  let collectorNumber: string | null;
   try {
     collectorNumber = collectorNumberInput ? validateCollectorNumber(collectorNumberInput) : null;
   } catch (err) {
