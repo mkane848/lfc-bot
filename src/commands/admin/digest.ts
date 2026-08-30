@@ -4,6 +4,10 @@ import { runDigest } from '../../services/digest.js';
 import { ensureConfig, requireGuild } from './context.js';
 import { replyError, replySuccess } from '../../utils/replies.js';
 
+/**
+ * Handle `/admin digest`: run the digest immediately, bypassing the cron
+ * schedule but still gated on `digest_mode !== 'disabled'`.
+ */
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
   const serverId = requireGuild(interaction);
   if (!serverId) {

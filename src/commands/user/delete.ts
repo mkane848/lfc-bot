@@ -4,6 +4,7 @@ import { getListingById, softDeleteListing } from '../../services/listings.js';
 import type { GuildCommand } from '../../types/index.js';
 import { replyError, replySuccess } from '../../utils/replies.js';
 
+/** Handle `/delete`: soft-delete the caller's own listing (owner-only, terminal). */
 async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
   const id = interaction.options.getInteger('listing_id', true);
   if (!interaction.inGuild()) {

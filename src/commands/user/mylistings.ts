@@ -62,6 +62,11 @@ function buildBatchSelectRow(
   return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu);
 }
 
+/**
+ * Handle `/mylistings`: show the caller's own active listings (paginated)
+ * with per-listing fulfill/delete buttons, plus batch-action select menus
+ * covering their most recent active listings.
+ */
 async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
   const guild = interaction.guild;
   if (!guild || !interaction.inGuild()) {

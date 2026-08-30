@@ -3,6 +3,7 @@ import { upsertServerConfig } from '../../services/digest-state.js';
 import { replySuccess } from '../../utils/replies.js';
 import { requireGuild } from './context.js';
 
+/** Handle `/admin dm-target`: set the user who receives digest DMs in `dm`/`both` mode. */
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
   const serverId = requireGuild(interaction);
   if (!serverId) {

@@ -26,6 +26,10 @@ import {
   validateNotes,
 } from '../../utils/validation.js';
 
+/**
+ * Handle `/have`: validate the submitted printing/condition/price fields,
+ * resolve the card via Scryfall, and post one "have" listing.
+ */
 async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
   const guild = interaction.guild;
   if (!guild || !interaction.inGuild()) {

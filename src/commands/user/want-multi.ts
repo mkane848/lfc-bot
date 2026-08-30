@@ -15,6 +15,7 @@ import { replyError, replyPublicText } from '../../utils/replies.js';
 
 const CARD_SLOTS = 3;
 
+/** Handle `/want-multi`: open the batch "want" modal (submission is handled by `handleWantMultiModal`). */
 async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
   if (!interaction.inGuild()) {
     await interaction.reply({

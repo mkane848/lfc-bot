@@ -10,6 +10,10 @@ import { replyError } from '../../utils/replies.js';
 import { SEARCH_PAGE_SIZE } from '../../utils/constants.js';
 import { isAccepts, isListingIntent, validateCardName } from '../../utils/validation.js';
 
+/**
+ * Handle `/search`: filter active listings by card name and optional
+ * intent/accepts, and reply with a paginated public embed.
+ */
 async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
   const guild = interaction.guild;
   if (!guild || !interaction.inGuild()) {

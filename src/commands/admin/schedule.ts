@@ -6,6 +6,11 @@ import { parseScheduleTime } from '../../utils/schedule-parser.js';
 import { replyError, replySuccess } from '../../utils/replies.js';
 import { requireGuild } from './context.js';
 
+/**
+ * Handle `/admin schedule`: set the digest cron expression from either a
+ * natural-language `time` or a raw `cron` string (exactly one is required),
+ * then re-create the server's cron job.
+ */
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
   const serverId = requireGuild(interaction);
   if (!serverId) {

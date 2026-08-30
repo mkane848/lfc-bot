@@ -34,6 +34,11 @@ function summarizeOptions(interaction: ChatInputCommandInteraction): Record<stri
   return Object.fromEntries(options.map((option) => [option.name, option.value]));
 }
 
+/**
+ * Handle `/admin`: gate on Manage Server permission, dispatch to the
+ * matching subcommand handler, and record the invocation to the audit log
+ * before dispatch (independent of whether the handler succeeds).
+ */
 async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
   if (!(await requireManageServer(interaction))) {
     return;

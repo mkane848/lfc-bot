@@ -3,6 +3,7 @@ import type { ChatInputCommandInteraction } from 'discord.js';
 import type { GuildCommand } from '../../types/index.js';
 import { brandColor } from '../../utils/embeds.js';
 
+/** Handle `/help`: reply with a static ephemeral command summary. */
 async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
   const embed = new EmbedBuilder()
     .setColor(brandColor())

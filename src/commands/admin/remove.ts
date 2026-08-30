@@ -3,6 +3,10 @@ import { getListingById, softDeleteListing } from '../../services/listings.js';
 import { replyError, replySuccess } from '../../utils/replies.js';
 import { requireGuild } from './context.js';
 
+/**
+ * Handle `/admin remove`: moderator soft-delete of any listing in this
+ * guild. Scoped to same-server only, not listing ownership.
+ */
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
   const serverId = requireGuild(interaction);
   if (!serverId) {

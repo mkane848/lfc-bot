@@ -32,6 +32,11 @@ import {
   validateNotes,
 } from '../../utils/validation.js';
 
+/**
+ * Handle `/want`: validate the submitted printing/condition/max-price fields,
+ * resolve the card via Scryfall, and post one "want" listing. Unlike `/have`,
+ * `condition` is optional (desired condition, default any).
+ */
 async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
   const guild = interaction.guild;
   if (!guild || !interaction.inGuild()) {
