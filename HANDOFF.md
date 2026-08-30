@@ -186,7 +186,6 @@ Every invocation is written to `admin_audit_log`.
 | `/admin channel` | `channel`* | Sets the digest channel. |
 | `/admin dm-target` | `user`* | Sets the user to receive digest DMs. |
 | `/admin mode` | `mode`* | `disabled`, `channel`, `dm`, or `both`. |
-| `/admin games` | `game`*, `enabled`* | Enables or disables a supported game. Only `mtg` exists today. |
 | `/admin remove` | `listing_id`* | Moderator removal of any listing in the guild (no ownership check, only same-server). |
 | `/admin history` | — | Shows the 10 most recent admin actions for the guild. |
 

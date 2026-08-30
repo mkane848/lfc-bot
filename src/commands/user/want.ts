@@ -46,7 +46,13 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
   await interaction.deferReply({ ephemeral: true });
 
   const rawCard = interaction.options.getString('card_name', true);
-  const cardName = validateCardName(rawCard);
+  let cardName: string;
+  try {
+    cardName = validateCardName(rawCard);
+  } catch (err) {
+    await replyError(interaction, err instanceof Error ? err.message : 'Invalid card name.');
+    return;
+  }
   const cardSet = interaction.options.getString('set');
   const acceptsInput = interaction.options.getString('accepts', true);
   if (!isAccepts(acceptsInput)) {
@@ -87,8 +93,20 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
     return;
   }
   const maxPriceInput = interaction.options.getString('max_price');
-  const maxPrice = maxPriceInput ? parsePriceToCents(maxPriceInput) : null;
-  const notes = validateNotes(interaction.options.getString('notes'));
+  let maxPrice: number | null;
+  try {
+    maxPrice = maxPriceInput ? parsePriceToCents(maxPriceInput) : null;
+  } catch (err) {
+    await replyError(interaction, err instanceof Error ? err.message : 'Invalid max price.');
+    return;
+  }
+  let notes: string | null;
+  try {
+    notes = validateNotes(interaction.options.getString('notes'));
+  } catch (err) {
+    await replyError(interaction, err instanceof Error ? err.message : 'Invalid notes.');
+    return;
+  }
 
   const resolved = await resolveCardForCommand(interaction, cardName, {
     cardSet,

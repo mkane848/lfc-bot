@@ -26,7 +26,7 @@ export const MAX_NOTES_LENGTH = 500;
 export const MAX_QUANTITY = 99;
 export const MIN_QUANTITY = 1;
 export const SEARCH_PAGE_SIZE = 10;
-export const MY_LISTINGS_PAGE_SIZE = 2;
+export const MY_LISTINGS_PAGE_SIZE = 5;
 export const DIGEST_SECTION_CAP = 25;
 
 export const CONDITION_LABELS: Record<(typeof CARD_CONDITIONS)[number], string> = {

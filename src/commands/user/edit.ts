@@ -148,9 +148,8 @@ export async function handleEditModal(interaction: ModalSubmitInteraction): Prom
   try {
     const condition = conditionRaw.trim() !== '' ? conditionRaw.trim() : null;
     if (condition && !isCardCondition(condition)) {
-      await interaction.reply({
+      await interaction.editReply({
         content: 'Invalid condition. Use nm, lp, mp, hp, or dmg.',
-        ephemeral: true,
       });
       return;
     }

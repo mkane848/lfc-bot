@@ -158,6 +158,17 @@ describe('runDigest delivery retry', () => {
     expect(getServerConfig('500')!.lastDigestAt).toBeGreaterThan(0);
   });
 
+  it('suppresses mention parsing so a display name like "everyone" cannot mass-ping the channel', async () => {
+    getDb().insert(servers).values(serverRow).run();
+    addListing();
+    const send = vi.fn().mockResolvedValue(undefined);
+    const client = fakeClientWithChannelSend(send);
+
+    await runDigest(client, getServerConfig('500')!, 'scheduled');
+
+    expect(send).toHaveBeenCalledWith(expect.objectContaining({ allowedMentions: { parse: [] } }));
+  });
+
   it('gives up after repeated failures and leaves the watermark unchanged', async () => {
     getDb().insert(servers).values(serverRow).run();
     addListing();

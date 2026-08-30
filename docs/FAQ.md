@@ -70,6 +70,36 @@ only shows `active` listings. The listing may have expired, been fulfilled,
 been deleted, or the card name may be slightly different (check for a set
 code, alternate spelling, or a card with a similar name).
 
+## Trading safely
+
+LFCbot only helps you find and coordinate trades — it doesn't handle
+payment, shipping, or escrow, and it can't verify who you're dealing with
+beyond their Discord account. A few widely-used norms from the MTG trading
+community are worth following:
+
+**Use PayPal Goods & Services for cash trades, not Friends & Family.**
+Goods & Services gives you buyer protection if something goes wrong; Friends
+& Family does not, and a seller asking for F&amp;F on a cash purchase is a
+common red flag.
+
+**Always ship with tracking.** Untracked shipments are the easiest way for a
+trade to turn into a dispute with no way to resolve it. Keep the tracking
+number until the trade is confirmed received.
+
+**Grade honestly, and grade down when unsure.** The condition scale this bot
+uses (`nm`/`lp`/`mp`/`hp`/`dmg`) is the standard one, but it's self-reported
+— if a card is borderline between two grades, list it as the lower one.
+Overgrading is the most common source of trade disputes.
+
+**Who ships first is between the traders**, unless your server has its own
+rule (check with a moderator). It's common for the lower-value side of a
+trade, or a newer/unverified member, to ship first.
+
+**Report suspicious behavior to a moderator.** LFCbot doesn't have a
+reputation or vouch system — trust is built the same way it is in any
+Discord trading community, through your server's own moderation and
+established members.
+
 ## Digests
 
 **I'm not getting daily digest notifications.**

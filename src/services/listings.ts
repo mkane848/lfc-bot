@@ -86,6 +86,7 @@ function enforceCooldown(serverId: string, userId: string, at: number): void {
     .from(listings)
     .where(and(eq(listings.serverId, serverId), eq(listings.userId, userId)))
     .orderBy(desc(listings.createdAt))
+    .limit(1)
     .all()
     .at(0);
   if (last && at - last.createdAt < LISTING_COOLDOWN_MS) {
