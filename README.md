@@ -81,6 +81,8 @@ Admin commands require the **Manage Server** permission.
 |---------|-------------|
 | `/have` | Post a card you have, accepting cash, trade, or both |
 | `/want` | Post a card you want, offering cash, trade, or both |
+| `/have-multi` | Post up to 3 cards you have in one go via a form |
+| `/want-multi` | Post up to 3 cards you want in one go via a form |
 | `/search` | Search active listings for a card |
 | `/mylistings` | Show your active listings with actions |
 | `/edit` | Edit one of your listings via a modal |
@@ -101,6 +103,7 @@ Admin commands require the **Manage Server** permission.
 | `/admin mode` | Set delivery to disabled, channel, dm, or both |
 | `/admin games` | Enable or disable a supported game |
 | `/admin remove` | Remove any listing for moderation |
+| `/admin history` | Show recent admin command activity |
 
 ## Self-Hosting
 
