@@ -11,6 +11,7 @@ Welcome to LFCbot! This is a free, multi-server Discord bot for card trading lis
 ## Features
 
 - Post `/have` and `/want` listings with card resolution and autocomplete
+- Post up to 3 cards at once with `/have-multi` and `/want-multi`
 - Search active listings by card with filtered, paginated results
 - Manage your listings with `/mylistings`, `/edit`, `/fulfill`, and `/delete`
 - Per-server admin configuration with daily digests
@@ -26,6 +27,8 @@ Welcome to LFCbot! This is a free, multi-server Discord bot for card trading lis
 
 - [Deployment Guide](./DEPLOYMENT.md)
 - [Manual Tasks](./Manual_Tasks.md)
+- [FAQ](./FAQ.md)
+- [Troubleshooting](./TROUBLESHOOTING.md)
 
 ## Support
 

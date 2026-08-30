@@ -8,7 +8,7 @@ import {
 } from '../types/index.js';
 
 export const PROJECT_NAME = 'LFCbot';
-export const PROJECT_REPOSITORY = 'https://github.com/example/lfcbot';
+export const PROJECT_REPOSITORY = 'https://github.com/mkane848/lfc-bot';
 
 export const DEFAULT_DIGEST_CRON = '0 9 * * *';
 export const DEFAULT_DIGEST_TIMEZONE = 'UTC';
