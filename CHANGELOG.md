@@ -22,6 +22,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Digest delivery (channel/DM send) now retries a transient Discord API
     failure within the same run instead of waiting for the next scheduled
     cron tick, which could be a full day away for a daily digest.
+- `SECURITY.md` documenting how to report a vulnerability privately via
+  GitHub's private security advisories.
+- `docs/FAQ.md` (posting/editing/search/digest questions and MTG
+  trading-safety norms — PayPal Goods & Services, tracked shipping, honest
+  grading) and `docs/TROUBLESHOOTING.md` (self-hosting failure diagnosis),
+  linked from `README.md` and `docs/index.md`.
+- `process.on('unhandledRejection'/'uncaughtException')` handlers in
+  `src/index.ts`, alongside the existing Discord client `Events.Error`
+  handler, so an uncaught throw (e.g. inside the hourly maintenance cron)
+  logs and fires a critical alert before the process exits instead of dying
+  silently.
+- JSDoc on every command handler (`src/commands/user/`, `src/commands/admin/`)
+  and the previously-undocumented exports of `src/utils/validation.ts` and
+  `src/utils/embeds.ts`.
+- A command-handler and service test suite: `tests/commands/**` (one file
+  per command, using a new shared mock-interaction builder,
+  `tests/helpers/interaction.ts`) and `tests/services/listing-expiry.test.ts`
+  / `tests/services/scheduler.test.ts`, which previously had no direct
+  coverage despite running unattended on an hourly cron and touching data
+  destructively. 126 → 221 tests.
+
+### Changed
+
+- `HANDOFF.md` rewritten from a stale pre-1.3 implementation plan (still
+  describing the removed `/sell`/`/buy`/`/trade` commands) into a
+  current-state technical reference matching the live command set, schema,
+  and behavior.
+- `/mylistings` page size raised from 2 to 5 listings per page.
 
 ### Fixed
 
@@ -32,10 +60,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the user. All five commands now defer immediately, and the shared reply
   helpers (`src/utils/replies.ts`) send the real response via `editReply`/
   `followUp` once deferred.
+- That fix didn't get threaded all the way through: `resolveCardForCommand`
+  (used by `/have` and `/want`) and `/edit`'s invalid-condition path still
+  called a bare `interaction.reply()` after the command had already
+  deferred, which throws and surfaced a generic "Something went wrong"
+  instead of the intended, specific error message — on every mistyped card
+  name, the single most common way this bug could trigger. `/have` and
+  `/want` also left card-name, price, and notes validation unguarded (only
+  the collector-number field was wrapped in a try/catch), hitting the same
+  generic-error path on an ordinary input mistake.
 - `package-lock.json` had an internally inconsistent entry for `tsx`'s
   nested `esbuild@0.28.2` dependency (several required platform packages
   were missing), which made `npm ci` — and therefore the Docker build —
   fail. Regenerated the lockfile to fix it.
+- `docs/index.md`'s Discord invite link used an overly broad OAuth
+  permission integer (`274877906944`); corrected to match
+  `docs/DEPLOYMENT.md`'s `84992`.
+- `deploy_plan.md` specified Node 20; corrected to Node 24, matching the
+  Dockerfile's actual base image.
+- `PROJECT_REPOSITORY` (`src/utils/constants.ts`) was still the scaffolding
+  placeholder (`github.com/example/lfcbot`), which fed directly into the
+  Scryfall `User-Agent` header on every outbound request.
+- `enforceCooldown` (`src/services/listings.ts`) fetched a user's entire
+  listing history to read only the newest row's timestamp; added
+  `.limit(1)`.
 
 ### Security
 
@@ -44,6 +92,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   moderate/high/critical advisories in the dev-only `vite`/`esbuild`
   dependency chain called out as an unaddressed follow-up in 1.4.0. These
   are dev tooling only and are not present in the production Docker image.
+- Digest delivery (`src/services/digest.ts`) now sends with
+  `allowedMentions: { parse: [] }`. The digest body embeds a user-controlled
+  Discord display name as plain text (`@${username}`); without this, a
+  member named e.g. `everyone` would produce a literal `@everyone` mention
+  in the delivery channel.
+
+### Removed
+
+- `/admin games` subcommand. `enabledGames` was never read anywhere else
+  (`/have`, `/want`, and `/search` all hardcode `game: 'mtg'`), so the
+  command let an admin "disable" MTG without that doing anything. The
+  handler (`src/commands/admin/games.ts`) is kept but unregistered, to
+  re-enable once a second game is actually supported.
 
 ## [1.4.0] - 2026-08-29
 

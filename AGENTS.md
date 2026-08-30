@@ -63,6 +63,8 @@ is the documentation surface for environment variables.
 - `src/utils/` - validation, embeds, permissions, logging, constants, custom
   IDs, batch operations, and retry-with-backoff
 - `tests/` - mirrors `src`; `tests/helpers/db.ts` provides in-memory SQLite
+  and `tests/helpers/interaction.ts` provides shared mock Discord
+  interactions for command tests
 - `scripts/` - operational helpers, including `backup.sh` for the SQLite volume
 - `docs/` - deployment and hosting documentation
 - `Dockerfile`, `docker-compose.yml`, `.dockerignore` - container packaging
@@ -111,9 +113,14 @@ See `src/db/migrations/0001_have_want_printing_fields.sql` and
 ## Testing
 
 Service tests mock the Scryfall client, database tests run against in-memory
-SQLite via `setupTestDb()`, and command tests mock Discord interactions. Add or
-update tests alongside behavior changes; do not weaken assertions to make a
-change pass.
+SQLite via `setupTestDb()`, and command tests mock Discord interactions via
+the shared builders in `tests/helpers/interaction.ts`
+(`fakeChatInputInteraction`, `fakeModalSubmitInteraction`,
+`fakeButtonInteraction`, `fakeSelectMenuInteraction`) rather than hand-rolling
+mocks per test. A module-level `vi.mock(...)` (e.g. mocking `resolveCard`)
+is not auto-reset between tests in this repo's Vitest config — call
+`.mockReset()` in `beforeEach` yourself. Add or update tests alongside
+behavior changes; do not weaken assertions to make a change pass.
 
 ## Behavior Notes
 
@@ -154,4 +161,26 @@ change pass.
   commands that resolve a card (`/have`, `/want`, `/have-multi`,
   `/want-multi`, `/edit`) call `interaction.deferReply()` first so the retry
   has room to work within Discord's 15-minute deferred-response window
-  instead of the 3-second initial-ACK deadline.
+  instead of the 3-second initial-ACK deadline. Every reply after that point
+  must use `interaction.editReply()`/`followUp()`, never a bare `.reply()` —
+  calling `.reply()` on an already-deferred interaction throws, which is
+  exactly the bug class `resolveCardForCommand` and `/edit`'s invalid-condition
+  path shipped with once already (see `src/utils/replies.ts` for the
+  deferred-aware pattern to copy).
+- `src/index.ts` registers `process.on('unhandledRejection'/'uncaughtException')`
+  handlers alongside the Discord client's own `Events.Error` handler, so an
+  uncaught throw anywhere (e.g. inside a cron callback in
+  `src/services/scheduler.ts`) still logs and fires a critical alert before
+  the process exits, instead of dying silently and relying only on Docker's
+  `restart: unless-stopped`.
+- Digest delivery (`src/services/digest.ts`) sends with
+  `allowedMentions: { parse: [] }` because the message body embeds a
+  user-controlled Discord display name (`@${username}`); without it, a
+  member named e.g. `everyone` would produce a literal `@everyone` in the
+  channel. Any other outbound message that interpolates a listing's
+  `username` as plain text (not inside an embed) needs the same guard.
+- `/admin games` exists in `src/commands/admin/games.ts` but is intentionally
+  **not** registered in `src/commands/admin/admin.ts` — `enabledGames` isn't
+  read anywhere else (`/have`, `/want`, `/search` all hardcode `game: 'mtg'`),
+  so the subcommand would let an admin "disable" MTG without it doing
+  anything. Re-register it only once `enabledGames` is actually enforced.
