@@ -190,6 +190,10 @@ Pin a specific release tag (for example `:1.1.0`) for reproducible rollbacks,
 or use `:latest` for the newest build. GHCR packages are private by default;
 make the package public (or sign in) before friends pull it.
 
+To automatically pull and deploy new releases, set up the
+`scripts/auto-update-prebuilt.sh` cron job as described in
+[Automatic updates with prebuilt images](Manual_Tasks.md#automatic-updates-with-prebuilt-images).
+
 ## Backups
 
 The VM disk is persistent but not backed up automatically. Back up the SQLite
