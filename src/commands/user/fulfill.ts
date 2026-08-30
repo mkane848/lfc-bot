@@ -4,6 +4,7 @@ import { fulfillListing, getListingById } from '../../services/listings.js';
 import type { GuildCommand } from '../../types/index.js';
 import { replyError, replySuccess } from '../../utils/replies.js';
 
+/** Handle `/fulfill`: mark the caller's own listing as fulfilled (owner-only, terminal). */
 async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
   const id = interaction.options.getInteger('listing_id', true);
   if (!interaction.inGuild()) {

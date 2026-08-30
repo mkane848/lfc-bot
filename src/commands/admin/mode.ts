@@ -6,6 +6,11 @@ import { isDigestMode } from '../../utils/validation.js';
 import { replyError, replySuccess } from '../../utils/replies.js';
 import { requireGuild } from './context.js';
 
+/**
+ * Handle `/admin mode`: set the digest delivery mode and start/stop the
+ * server's cron job accordingly (`disabled` cancels it, any other value
+ * re-creates it).
+ */
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
   const serverId = requireGuild(interaction);
   if (!serverId) {

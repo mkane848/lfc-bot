@@ -31,6 +31,7 @@ import {
   validateNotes,
 } from '../../utils/validation.js';
 
+/** Handle `/edit`: look up the listing, verify ownership, and show the edit modal. */
 async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
   const id = interaction.options.getInteger('listing_id', true);
   if (!interaction.inGuild()) {

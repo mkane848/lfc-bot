@@ -5,6 +5,7 @@ import { ensureConfig, requireGuild } from './context.js';
 import { brandColor } from '../../utils/embeds.js';
 import { DIGEST_MODE_LABELS } from '../../utils/constants.js';
 
+/** Handle `/admin config`: show the guild's current digest configuration (read-only). */
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
   const serverId = requireGuild(interaction);
   if (!serverId) {

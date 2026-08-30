@@ -4,6 +4,7 @@ import { GAME_LABELS, SUPPORTED_GAMES } from '../../utils/constants.js';
 import { ensureConfig, requireGuild } from './context.js';
 import { replyError, replySuccess } from '../../utils/replies.js';
 
+/** Handle `/admin games`: add or remove a game from the guild's `enabled_games` list. */
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
   const serverId = requireGuild(interaction);
   if (!serverId) {

@@ -13,6 +13,7 @@ function isValidTimezone(value: string): boolean {
   }
 }
 
+/** Handle `/admin timezone`: validate and set the guild's IANA digest timezone. */
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
   const serverId = requireGuild(interaction);
   if (!serverId) {

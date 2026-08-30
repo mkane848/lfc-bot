@@ -4,6 +4,7 @@ import { listRecentAdminActions } from '../../services/audit-log.js';
 import { brandColor } from '../../utils/embeds.js';
 import { requireGuild } from './context.js';
 
+/** Handle `/admin history`: show the 10 most recent `/admin` actions recorded for this guild. */
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
   const serverId = requireGuild(interaction);
   if (!serverId) {

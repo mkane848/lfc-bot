@@ -3,6 +3,7 @@ import { upsertServerConfig } from '../../services/digest-state.js';
 import { replySuccess } from '../../utils/replies.js';
 import { requireGuild } from './context.js';
 
+/** Handle `/admin channel`: set the channel used for `channel`/`both` mode digest posts. */
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
   const serverId = requireGuild(interaction);
   if (!serverId) {
