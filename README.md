@@ -112,7 +112,13 @@ the database on boot.
 
 For containerized or free-cloud deployment, including a shared bot your friends
 can invite and per-community VM setup, see
-[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). If something isn't working, check
+[docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
+
+## FAQ
+
+Common questions about posting, editing, search, and digests are answered in
+[docs/FAQ.md](docs/FAQ.md).
 
 ## Security and Privacy
 
