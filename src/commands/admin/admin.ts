@@ -71,9 +71,18 @@ function build(): SlashCommandBuilder {
   builder.addSubcommand((sub) =>
     sub
       .setName('schedule')
-      .setDescription('Set the five-field digest cron expression')
+      .setDescription('Set when the digest fires (use time or cron, not both)')
       .addStringOption((option) =>
-        option.setName('cron').setDescription('Five-field cron, e.g. 0 9 * * *').setRequired(true),
+        option
+          .setName('time')
+          .setDescription('Natural language schedule, e.g. "every day at 9am"')
+          .setRequired(false),
+      )
+      .addStringOption((option) =>
+        option
+          .setName('cron')
+          .setDescription('Five-field cron, e.g. 0 9 * * * (advanced)')
+          .setRequired(false),
       ),
   );
   builder.addSubcommand((sub) =>
