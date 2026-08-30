@@ -13,6 +13,15 @@ function jsonResponse(body: unknown, ok = true) {
   return { ok, json: () => Promise.resolve(body) };
 }
 
+function isManapoolUrl(url: string): boolean {
+  try {
+    const { hostname } = new URL(url);
+    return hostname === 'manapool.com' || hostname.endsWith('.manapool.com');
+  } catch {
+    return false;
+  }
+}
+
 describe('scryfall service', () => {
   it('returns autocomplete suggestions', async () => {
     vi.stubGlobal(
@@ -122,9 +131,7 @@ describe('scryfall service', () => {
     const resolved = await resolveCard('Some Arena Card');
     expect(resolved.resolved).toBe(true);
     expect(resolved.manapoolUrl).toBeNull();
-    expect(fetchMock.mock.calls.some((call) => String(call[0]).includes('manapool.com'))).toBe(
-      false,
-    );
+    expect(fetchMock.mock.calls.some((call) => isManapoolUrl(String(call[0])))).toBe(false);
   });
 
   it('falls back to an unresolved entry when Scryfall is unavailable', async () => {
@@ -210,7 +217,7 @@ describe('scryfall service', () => {
     vi.stubEnv('MANAPOOL_API_KEY', 'mpat_test');
     const manapoolCalls: string[] = [];
     const fetchMock = vi.fn((url: string) => {
-      if (url.includes('manapool.com')) {
+      if (isManapoolUrl(url)) {
         manapoolCalls.push(url);
         return Promise.resolve(
           jsonResponse({
@@ -244,7 +251,7 @@ describe('scryfall service', () => {
   it('falls back to a local Manapool URL when the live lookup fails', async () => {
     vi.stubEnv('MANAPOOL_API_KEY', 'mpat_test');
     const fetchMock = vi.fn((url: string) => {
-      if (url.includes('manapool.com')) {
+      if (isManapoolUrl(url)) {
         return Promise.resolve(jsonResponse({}, false));
       }
       return Promise.resolve(
