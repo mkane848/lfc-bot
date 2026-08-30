@@ -152,3 +152,52 @@ automatically at startup.
 
 To switch to the prebuilt GHCR image instead of building from source, see the
 "Run from the prebuilt image" section in `DEPLOYMENT.md`.
+
+## Automatic updates with prebuilt images
+
+If you are running the bot from the prebuilt GHCR image (`ghcr.io/mkane848/lfc-bot`),
+you can set up automatic updates using `scripts/auto-update-prebuilt.sh`:
+
+1. Make the script executable:
+
+   ```sh
+   chmod +x scripts/auto-update-prebuilt.sh
+   ```
+
+2. Test it manually to make sure it works:
+
+   ```sh
+   ./scripts/auto-update-prebuilt.sh
+   ```
+
+   If the bot is already running the latest image, the script will log
+   "No updates available" and exit cleanly. If a new image is available,
+   it will pull, restart, and verify the bot came online.
+
+3. Schedule it with cron. For example, daily at 05:00 (after the 04:30 backup):
+
+   ```sh
+   crontab -e
+   ```
+
+   Add this line, then save and exit:
+
+   ```cron
+   0 5 * * * cd ~/lfc-bot && ./scripts/auto-update-prebuilt.sh >> /var/log/lfcbot-auto-update-prebuilt.log 2>&1
+   ```
+
+4. Confirm the job is registered:
+
+   ```sh
+   crontab -l
+   ```
+
+The script will:
+- Pull the latest image from GHCR
+- Check if the image has changed (by comparing digest)
+- Restart the container only if a new image is detected
+- Log all actions to `logs/auto-update-prebuilt.log` and the cron log file
+- Verify the bot came online cleanly
+
+The SQLite database and per-server config live in the `lfcbot-data` named
+volume, so restarting the container does not touch them.
