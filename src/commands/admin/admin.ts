@@ -11,7 +11,6 @@ import { execute as executeTimezone } from './timezone.js';
 import { execute as executeChannel } from './channel.js';
 import { execute as executeDmTarget } from './dm-target.js';
 import { execute as executeMode } from './mode.js';
-import { execute as executeGames } from './games.js';
 import { execute as executeRemove } from './remove.js';
 import { execute as executeHistory } from './history.js';
 
@@ -23,7 +22,6 @@ const subcommands: Record<string, AdminSubcommand> = {
   channel: { name: 'channel', execute: executeChannel },
   'dm-target': { name: 'dm-target', execute: executeDmTarget },
   mode: { name: 'mode', execute: executeMode },
-  games: { name: 'games', execute: executeGames },
   remove: { name: 'remove', execute: executeRemove },
   history: { name: 'history', execute: executeHistory },
 };
@@ -127,17 +125,6 @@ function build(): SlashCommandBuilder {
           .setDescription('Delivery mode')
           .setRequired(true)
           .addChoices(...DIGEST_MODES.map((m) => ({ name: m, value: m }))),
-      ),
-  );
-  builder.addSubcommand((sub) =>
-    sub
-      .setName('games')
-      .setDescription('Enable or disable a supported game')
-      .addStringOption((option) =>
-        option.setName('game').setDescription('Game identifier').setRequired(true),
-      )
-      .addBooleanOption((option) =>
-        option.setName('enabled').setDescription('Enable or disable').setRequired(true),
       ),
   );
   builder.addSubcommand((sub) =>

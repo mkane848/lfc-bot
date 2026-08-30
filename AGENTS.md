@@ -134,7 +134,7 @@ change pass.
 - Discord interaction custom IDs are encoded/decoded in `src/utils/customId.ts`
   using a deterministic, tested format for button and select menu routing.
 - Every `/admin` subcommand invocation (config, digest, schedule, timezone,
-  channel, dm-target, mode, games, remove, history) is recorded to the
+  channel, dm-target, mode, remove, history) is recorded to the
   `admin_audit_log` table via `src/services/audit-log.ts`, logged as invoked
   (subcommand + arguments) rather than confirmed successful, since the
   subcommand handlers don't report a success/failure signal back. Viewable

@@ -46,6 +46,16 @@ async function main(): Promise<void> {
     sendCriticalAlert('Discord client error', error);
   });
 
+  process.on('unhandledRejection', (reason) => {
+    logger.error({ err: reason }, 'Unhandled promise rejection');
+    sendCriticalAlert('Unhandled promise rejection', reason);
+  });
+  process.on('uncaughtException', (error) => {
+    logger.error({ err: error }, 'Uncaught exception');
+    sendCriticalAlert('Uncaught exception', error);
+    process.exit(1);
+  });
+
   const shutdown = (signal: string): void => {
     logger.info(`Received ${signal}; shutting down`);
     stopAllJobs();

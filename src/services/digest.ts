@@ -105,11 +105,14 @@ async function deliverToChannel(
     if (!channel || !channel.isTextBased() || !channel.isSendable()) {
       return false;
     }
-    await retryWithBackoff(() => channel.send(message), {
-      attempts: 3,
-      baseDelayMs: 1000,
-      maxDelayMs: 8000,
-    });
+    await retryWithBackoff(
+      () => channel.send({ content: message, allowedMentions: { parse: [] } }),
+      {
+        attempts: 3,
+        baseDelayMs: 1000,
+        maxDelayMs: 8000,
+      },
+    );
     return true;
   } catch {
     return false;
@@ -125,7 +128,7 @@ async function deliverToDm(client: Client, server: ServerRow, message: string): 
     if (!user) {
       return false;
     }
-    await retryWithBackoff(() => user.send(message), {
+    await retryWithBackoff(() => user.send({ content: message, allowedMentions: { parse: [] } }), {
       attempts: 3,
       baseDelayMs: 1000,
       maxDelayMs: 8000,

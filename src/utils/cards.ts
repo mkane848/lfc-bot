@@ -2,6 +2,7 @@ import type { AutocompleteInteraction, ChatInputCommandInteraction } from 'disco
 import { autocompleteCards, autocompleteSets, resolveCard } from '../services/scryfall.js';
 import type { ResolveCardOptions } from '../services/scryfall.js';
 import type { ResolvedCard } from '../types/index.js';
+import { replyError } from './replies.js';
 import { normalizeCardName } from './validation.js';
 
 /** Shared autocomplete handler for card name inputs. */
@@ -28,11 +29,10 @@ export async function resolveCardForCommand(
 ): Promise<ResolvedCard | null> {
   const resolved = await resolveCard(cardName, options);
   if (!resolved.resolved) {
-    await interaction.reply({
-      content:
-        'I could not resolve that card name. Try selecting a suggestion from the autocomplete, or use a more specific name.',
-      ephemeral: true,
-    });
+    await replyError(
+      interaction,
+      'I could not resolve that card name. Try selecting a suggestion from the autocomplete, or use a more specific name.',
+    );
     return null;
   }
   return resolved;

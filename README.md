@@ -101,7 +101,6 @@ Admin commands require the **Manage Server** permission.
 | `/admin channel` | Set the digest channel |
 | `/admin dm-target` | Set the user to receive digest DMs |
 | `/admin mode` | Set delivery to disabled, channel, dm, or both |
-| `/admin games` | Enable or disable a supported game |
 | `/admin remove` | Remove any listing for moderation |
 | `/admin history` | Show recent admin command activity |
 
@@ -134,6 +133,7 @@ Common questions about posting, editing, search, and digests are answered in
 - When the bot is removed from a guild, that guild's data is removed after a
   30-day retention window.
 - No unsolicited DMs are sent outside of configured digests.
+- Found a vulnerability? See [SECURITY.md](SECURITY.md) for how to report it privately.
 
 ## Development
 
