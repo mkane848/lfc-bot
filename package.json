@@ -1,6 +1,6 @@
 {
   "name": "lfcbot",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "A Discord card trading bot for small game stores and friend groups.",
   "license": "MIT",
   "type": "module",
