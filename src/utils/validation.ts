@@ -17,32 +17,44 @@ import {
 const COLLECTOR_NUMBER_PATTERN = /^[A-Za-z0-9★-]+$/;
 const MAX_COLLECTOR_NUMBER_LENGTH = 20;
 
+/** Thrown by every `validate*`/`parse*` helper here on user-facing invalid input. */
 export class ValidationError extends Error {}
 
+/** Type guard for a raw string against the `nm`/`lp`/`mp`/`hp`/`dmg` condition enum. */
 export function isCardCondition(value: string): value is (typeof CARD_CONDITIONS)[number] {
   return (CARD_CONDITIONS as readonly string[]).includes(value);
 }
 
+/** Type guard for a raw string against the `have`/`want` intent enum. */
 export function isListingIntent(value: string): value is (typeof LISTING_INTENTS)[number] {
   return (LISTING_INTENTS as readonly string[]).includes(value);
 }
 
+/** Type guard for a raw string against the `cash`/`trade`/`both` accepts enum. */
 export function isAccepts(value: string): value is (typeof ACCEPTS_VALUES)[number] {
   return (ACCEPTS_VALUES as readonly string[]).includes(value);
 }
 
+/** Type guard for a raw string against the `nonfoil`/`foil`/`etched` finish enum. */
 export function isCardFinish(value: string): value is (typeof CARD_FINISHES)[number] {
   return (CARD_FINISHES as readonly string[]).includes(value);
 }
 
+/** Type guard for a raw string against the printing-variant enum (extended/showcase/etc.). */
 export function isCardVariant(value: string): value is (typeof CARD_VARIANTS)[number] {
   return (CARD_VARIANTS as readonly string[]).includes(value);
 }
 
+/** Type guard for a raw string against the `disabled`/`channel`/`dm`/`both` digest mode enum. */
 export function isDigestMode(value: string): value is (typeof DIGEST_MODES)[number] {
   return (DIGEST_MODES as readonly string[]).includes(value);
 }
 
+/**
+ * Parse a dollar-amount string (e.g. "2.50") into whole cents, rounding to
+ * avoid floating point drift. Throws `ValidationError` for a missing, non-numeric,
+ * negative, or out-of-range ($0.00–$100,000.00) value.
+ */
 export function parsePriceToCents(input: string): number {
   const trimmed = input.trim();
   if (trimmed.length === 0) {
@@ -60,6 +72,7 @@ export function parsePriceToCents(input: string): number {
   return cents;
 }
 
+/** Parse a whole-number quantity string, throwing `ValidationError` outside 1–99. */
 export function parseQuantity(input: string): number {
   const value = Number(input);
   if (!Number.isInteger(value)) {
@@ -71,6 +84,11 @@ export function parseQuantity(input: string): number {
   return value;
 }
 
+/**
+ * Trim and validate a notes field. Returns null for empty/missing input rather
+ * than throwing, since notes are optional; throws `ValidationError` only when
+ * present and over the length limit.
+ */
 export function validateNotes(input: string | undefined | null): string | null {
   if (input === undefined || input === null || input.trim().length === 0) {
     return null;
@@ -82,6 +100,11 @@ export function validateNotes(input: string | undefined | null): string | null {
   return trimmed;
 }
 
+/**
+ * Trim and validate a collector number (letters, digits, ★, or - only, max 20
+ * characters). Unlike `validateNotes`, this field is required when called —
+ * an empty string throws rather than returning null.
+ */
 export function validateCollectorNumber(input: string): string {
   const trimmed = input.trim();
   if (trimmed.length === 0) {
@@ -93,6 +116,7 @@ export function validateCollectorNumber(input: string): string {
   return trimmed;
 }
 
+/** Trim and validate a card name (required, max 100 characters). */
 export function validateCardName(input: string): string {
   const trimmed = input.trim();
   if (trimmed.length === 0) {

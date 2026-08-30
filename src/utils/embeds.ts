@@ -12,10 +12,12 @@ import type { ListingRow } from '../db/schema.js';
 
 const BRAND_COLOR: ColorResolvable = 0x8f1d2c; // Liverpool red
 
+/** The bot's brand color used on every embed. */
 export function brandColor(): ColorResolvable {
   return BRAND_COLOR;
 }
 
+/** Format cents as a USD currency string, or an empty string when unset. */
 export function formatPrice(priceCents: number | null | undefined): string {
   if (priceCents === null || priceCents === undefined) {
     return '';
@@ -26,6 +28,7 @@ export function formatPrice(priceCents: number | null | undefined): string {
   });
 }
 
+/** Build an embed title line: `{Intent} · {Accepts} — {Card Name} (SET)`. */
 export function formatListingTitle(listing: {
   intent: string;
   accepts: string;
@@ -50,6 +53,11 @@ function listingManapoolUrl(listing: ListingRow): string | null {
   );
 }
 
+/**
+ * Build the full embed for a single listing (used by `/have`, `/want`, and
+ * their batch/edit success replies). `showUser` adds a "Posted by" line,
+ * used where the poster isn't otherwise implied by context.
+ */
 export function listingEmbed(
   listing: ListingRow,
   options: { showUser?: boolean } = {},
@@ -117,6 +125,10 @@ export function digestLine(listing: ListingRow): string {
   return `- ${listing.cardName}${set}${condition}${price} — @${listing.username}${link}`;
 }
 
+/**
+ * Build the card-cache key from a card name plus its printing details.
+ * `services/card-cache.ts`'s `buildCacheKey` is a thin wrapper around this.
+ */
 export function cardKey(
   cardName: string,
   cardSet?: string | null,
