@@ -4,7 +4,7 @@ Welcome to LFCbot! This is a free, multi-server Discord bot for card trading lis
 
 ## Quick Links
 
-- **[Discord Bot Invite](https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&permissions=274877906944&scope=bot%20applications.commands)**
+- **[Discord Bot Invite](https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&permissions=84992&scope=bot%20applications.commands)**
 - **[GitHub Repository](https://github.com/mkane848/lfc-bot)**
 - **[Contributing Guidelines](https://github.com/mkane848/lfc-bot/blob/main/CONTRIBUTING.md)**
 
