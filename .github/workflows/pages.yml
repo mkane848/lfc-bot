@@ -14,7 +14,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4.1.7
+      - uses: actions/checkout@v7.0.1
       - name: Upload pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
