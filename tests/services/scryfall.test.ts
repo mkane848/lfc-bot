@@ -1,8 +1,18 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { autocompleteCards, autocompleteSets, resolveCard } from '../../src/services/scryfall.js';
 import { setupTestDb } from '../helpers/db.js';
 
 setupTestDb();
+
+beforeEach(() => {
+  // `resolveCard` also calls the Manapool lookup, which makes a real extra
+  // fetch whenever MANAPOOL_API_KEY is set. Without this, fetch-call-count
+  // assertions below pass on CI (no key) and fail on any contributor machine
+  // with a key in their .env -- a test outcome that depends on ambient
+  // environment it does not control. The two tests that exercise the live
+  // lookup stub the key themselves, overriding this.
+  vi.stubEnv('MANAPOOL_API_KEY', '');
+});
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -23,6 +33,19 @@ function isManapoolUrl(url: string): boolean {
 }
 
 describe('scryfall service', () => {
+  // Scryfall requires both headers and may block requests missing either.
+  it('sends the required User-Agent and Accept headers', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ data: [] }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await autocompleteCards('bolt');
+
+    const init = fetchMock.mock.calls[0]?.[1] as { headers: Record<string, string> };
+    expect(init.headers.Accept).toBeTruthy();
+    // name/version, not a bare URL.
+    expect(init.headers['User-Agent']).toMatch(/^LFCbot\/\d+\.\d+\.\d+/);
+  });
+
   it('returns autocomplete suggestions', async () => {
     vi.stubGlobal(
       'fetch',
