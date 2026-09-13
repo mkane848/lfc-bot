@@ -14,6 +14,7 @@ import type {
 } from 'discord.js';
 import { getListingById, updateListing } from '../../services/listings.js';
 import { resolveCard } from '../../services/scryfall.js';
+import { resolveSealedProduct } from '../../services/sealed.js';
 import type { GuildCommand } from '../../types/index.js';
 import {
   decodeEditModalId,
@@ -60,6 +61,7 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
 export function buildEditModal(
   listing: {
     id: number;
+    kind: string;
     condition: string | null;
     priceCents: number | null;
     quantity: number;
@@ -68,13 +70,7 @@ export function buildEditModal(
   },
   remainingQueue: number[] = [],
 ): ModalBuilder {
-  const conditionInput = new TextInputBuilder()
-    .setCustomId('condition')
-    .setLabel('Condition (nm, lp, mp, hp, dmg)')
-    .setStyle(TextInputStyle.Short)
-    .setValue(listing.condition ?? '')
-    .setRequired(false)
-    .setMaxLength(3);
+  const isSealed = listing.kind === 'sealed';
 
   const priceInput = new TextInputBuilder()
     .setCustomId('price')
@@ -109,16 +105,27 @@ export function buildEditModal(
   const row = (component: TextInputBuilder) =>
     new ActionRowBuilder<TextInputBuilder>().addComponents(component);
 
+  const rows: Array<ActionRowBuilder<TextInputBuilder>> = [];
+  // Sealed product is NM by definition and has no `condition` column, so the
+  // sealed modal omits the row entirely rather than showing a field whose value
+  // would be silently discarded. It also keeps the modal inside Discord's
+  // five-row cap, which the card modal is already sitting exactly on.
+  if (!isSealed) {
+    const conditionInput = new TextInputBuilder()
+      .setCustomId('condition')
+      .setLabel('Condition (nm, lp, mp, hp, dmg)')
+      .setStyle(TextInputStyle.Short)
+      .setValue(listing.condition ?? '')
+      .setRequired(false)
+      .setMaxLength(3);
+    rows.push(row(conditionInput));
+  }
+  rows.push(row(priceInput), row(quantityInput), row(setInput), row(notesInput));
+
   return new ModalBuilder()
     .setCustomId(encodeEditModalId(listing.id, remainingQueue))
     .setTitle(`Edit listing #${listing.id}`)
-    .addComponents(
-      row(conditionInput),
-      row(priceInput),
-      row(quantityInput),
-      row(setInput),
-      row(notesInput),
-    );
+    .addComponents(...rows);
 }
 
 /** Handle the edit modal submission. */
@@ -139,13 +146,21 @@ export async function handleEditModal(interaction: ModalSubmitInteraction): Prom
     return;
   }
 
-  const conditionRaw = interaction.fields.getTextInputValue('condition');
-  const priceRaw = interaction.fields.getTextInputValue('price');
-  const quantityRaw = interaction.fields.getTextInputValue('quantity');
-  const setRaw = interaction.fields.getTextInputValue('set');
-  const notesRaw = interaction.fields.getTextInputValue('notes');
+  const isSealed = listing.kind === 'sealed';
 
   try {
+    // `getTextInputValue` THROWS when the field is absent from the submission,
+    // and `buildEditModal` builds no condition row for a sealed listing — so
+    // this read has to stay behind the `kind` check, not merely have its result
+    // ignored downstream. The reads also sit inside the try so that any future
+    // shape mismatch surfaces as an edited reply rather than escaping to
+    // `interactionCreate`'s generic "Something went wrong." handler.
+    const conditionRaw = isSealed ? '' : interaction.fields.getTextInputValue('condition');
+    const priceRaw = interaction.fields.getTextInputValue('price');
+    const quantityRaw = interaction.fields.getTextInputValue('quantity');
+    const setRaw = interaction.fields.getTextInputValue('set');
+    const notesRaw = interaction.fields.getTextInputValue('notes');
+
     const condition = conditionRaw.trim() !== '' ? conditionRaw.trim() : null;
     if (condition && !isCardCondition(condition)) {
       await interaction.editReply({
@@ -160,11 +175,31 @@ export async function handleEditModal(interaction: ModalSubmitInteraction): Prom
 
     const baseFields = { condition: condition ?? null, priceCents, quantity, notes };
 
-    // Changing the set changes the printing, so re-resolve to keep the
-    // collector number, card image, and Manapool link consistent with it
-    // instead of leaving them pointing at the old printing.
+    // Changing the set changes which printing (card) or which product (sealed)
+    // this listing refers to, so re-resolve to keep the derived metadata and
+    // the Manapool link consistent with it instead of leaving them pointing at
+    // the old set. An unchanged set takes the cheap path with no lookup.
     if (cardSet === listing.cardSet) {
       updateListing(id, { ...baseFields, cardSet });
+    } else if (isSealed) {
+      const resolved = await resolveSealedProduct(listing.cardName, { setCode: cardSet });
+      // Asymmetry with the card branch below, and deliberate: an unresolved
+      // product does NOT abort. The sealed catalog is not exhaustive (new
+      // releases, store-only drops, custom lots), so creation accepts a
+      // free-text product — the raw name with null metadata. An edit must not
+      // be stricter than the create path that allowed the row in the first
+      // place, so a miss simply writes that same free-text result, clearing the
+      // stale uuid/category/subtype/link that belonged to the previous set.
+      updateListing(id, {
+        ...baseFields,
+        cardSet: resolved.setCode ?? cardSet,
+        cardName: resolved.productName,
+        cardNameNormalized: resolved.productNameNormalized,
+        manapoolUrl: resolved.manapoolUrl,
+        sealedUuid: resolved.uuid,
+        sealedCategory: resolved.category,
+        sealedSubtype: resolved.subtype,
+      });
     } else {
       const finish = listing.finish && isCardFinish(listing.finish) ? listing.finish : null;
       const variant = listing.variant && isCardVariant(listing.variant) ? listing.variant : null;
