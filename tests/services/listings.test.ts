@@ -147,6 +147,75 @@ describe('createListing', () => {
     });
     expect(result.warning).toBeUndefined();
   });
+
+  it('does not warn across differing kind for an otherwise identical row', () => {
+    seedServer();
+    const db = getDb();
+    const past = Date.now() - 60_000; // past the 10s cooldown, inside the 24h window
+    db.insert(listings)
+      .values({
+        serverId: '200',
+        userId: 'u1',
+        username: 'alice',
+        intent: 'have',
+        accepts: 'cash',
+        game: 'mtg',
+        cardName: 'Black Lotus',
+        cardNameNormalized: 'black lotus',
+        cardSet: null,
+        cardImageUrl: null,
+        finish: null,
+        variant: null,
+        collectorNumber: null,
+        manapoolUrl: null,
+        condition: 'nm',
+        priceCents: 1000,
+        kind: 'sealed',
+        sealedUuid: 'uuid-1',
+        sealedCategory: 'booster_box',
+        sealedSubtype: null,
+        quantity: 1,
+        notes: null,
+        status: 'active',
+        expiresAt: past + 30 * 24 * 3600 * 1000,
+        createdAt: past,
+        updatedAt: past,
+      })
+      .run();
+
+    // Same server/user/card/intent/accepts/printing details as the row above, but
+    // `kind` defaults to 'card' here, so it must not be treated as a duplicate.
+    const result = createListing({ ...baseInput(), intent: 'have', accepts: 'cash' });
+    expect(result.warning).toBeUndefined();
+  });
+});
+
+describe('sealed listing columns', () => {
+  it('round-trips kind and the sealed columns through insertion', () => {
+    seedServer();
+    const { listing } = createListing({
+      ...baseInput(),
+      intent: 'have',
+      accepts: 'cash',
+      kind: 'sealed',
+      sealedUuid: 'uuid-123',
+      sealedCategory: 'booster_box',
+      sealedSubtype: 'default',
+    });
+    expect(listing.kind).toBe('sealed');
+    expect(listing.sealedUuid).toBe('uuid-123');
+    expect(listing.sealedCategory).toBe('booster_box');
+    expect(listing.sealedSubtype).toBe('default');
+  });
+
+  it('defaults kind to "card" and leaves the sealed columns null when unset', () => {
+    seedServer();
+    const { listing } = createListing({ ...baseInput(), intent: 'have', accepts: 'cash' });
+    expect(listing.kind).toBe('card');
+    expect(listing.sealedUuid).toBeNull();
+    expect(listing.sealedCategory).toBeNull();
+    expect(listing.sealedSubtype).toBeNull();
+  });
 });
 
 describe('createListingsBatch', () => {
@@ -393,5 +462,55 @@ describe('updateListing', () => {
     expect(updated?.cardSet).toBeNull();
     expect(updated?.collectorNumber).toBeNull();
     expect(updated?.manapoolUrl).toBeNull();
+  });
+
+  // Regression guard: the sealed columns must be in updateListing's
+  // `if (fields.x !== undefined)` chain, not just in its parameter type.
+  // Typing them without threading them through compiles fine and silently
+  // drops every sealed column when /edit re-resolves a changed set.
+  it('persists the sealed columns when re-resolving a sealed listing', () => {
+    seedServer();
+    const { listing } = createListing({
+      ...baseInput(),
+      intent: 'have',
+      accepts: 'cash',
+      kind: 'sealed',
+      cardName: 'Bloomburrow Bundle',
+      cardNameNormalized: 'bloomburrow bundle',
+      cardSet: 'BLB',
+      sealedUuid: 'uuid-old',
+      sealedCategory: 'bundle',
+      sealedSubtype: 'default',
+    });
+    const updated = updateListing(listing.id, {
+      sealedUuid: 'uuid-new',
+      sealedCategory: 'booster_box',
+      sealedSubtype: 'collector',
+    });
+    expect(updated?.sealedUuid).toBe('uuid-new');
+    expect(updated?.sealedCategory).toBe('booster_box');
+    expect(updated?.sealedSubtype).toBe('collector');
+    expect(updated?.kind).toBe('sealed');
+  });
+
+  it('can clear the sealed columns when a product falls out of the catalog', () => {
+    seedServer();
+    const { listing } = createListing({
+      ...baseInput(),
+      intent: 'have',
+      accepts: 'cash',
+      kind: 'sealed',
+      sealedUuid: 'uuid-old',
+      sealedCategory: 'bundle',
+      sealedSubtype: 'default',
+    });
+    const updated = updateListing(listing.id, {
+      sealedUuid: null,
+      sealedCategory: null,
+      sealedSubtype: null,
+    });
+    expect(updated?.sealedUuid).toBeNull();
+    expect(updated?.sealedCategory).toBeNull();
+    expect(updated?.sealedSubtype).toBeNull();
   });
 });

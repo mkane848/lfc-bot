@@ -130,4 +130,47 @@ describe('/search', () => {
 
     expect(i.reply).toHaveBeenCalledWith(expect.objectContaining({ embeds: expect.any(Array) }));
   });
+
+  // Sealed listings are ordinary rows in `listings` keyed on the same
+  // normalized-name column, so search needs no sealed-specific query path.
+  // This asserts that property rather than any new code.
+  it('finds a sealed listing by its normalized product name', async () => {
+    seedListing({
+      kind: 'sealed',
+      cardName: 'Bloomburrow Bundle',
+      cardNameNormalized: 'bloomburrow bundle',
+      cardSet: 'BLB',
+      condition: null,
+      sealedUuid: 'ec99d990-704c-5ad3-ae7f-f1dbc5fd5ceb',
+      sealedCategory: 'bundle',
+      sealedSubtype: 'default',
+    });
+    const i = interaction({ card_name: 'Bloomburrow Bundle' });
+
+    await searchCommand.execute(i);
+
+    expect(i.reply).toHaveBeenCalledWith(expect.objectContaining({ embeds: expect.any(Array) }));
+  });
+
+  it('renders a sealed listing without a dangling separator when condition is null', async () => {
+    seedListing({
+      kind: 'sealed',
+      cardName: 'Bloomburrow Bundle',
+      cardNameNormalized: 'bloomburrow bundle',
+      condition: null,
+      priceCents: null,
+      sealedCategory: 'bundle',
+      sealedSubtype: 'default',
+    });
+    const i = interaction({ card_name: 'Bloomburrow Bundle' });
+
+    await searchCommand.execute(i);
+
+    const payload = i.reply.mock.calls[0]?.[0] as { embeds: Array<{ data: unknown }> };
+    const embed = payload.embeds[0]?.data as { fields?: Array<{ value: string }> };
+    const line = embed.fields?.[0]?.value ?? '';
+    expect(line).toContain('Bundle');
+    expect(line).not.toMatch(/^\s*·/);
+    expect(line).not.toMatch(/·\s*·/);
+  });
 });

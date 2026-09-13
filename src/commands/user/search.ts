@@ -3,7 +3,7 @@ import type { ChatInputCommandInteraction } from 'discord.js';
 import { countSearchResults, searchListings } from '../../services/listings.js';
 import type { Accepts, GuildCommand, ListingIntent } from '../../types/index.js';
 import { ACCEPTS_VALUES, LISTING_INTENTS } from '../../types/index.js';
-import { ACCEPTS_LABELS, INTENT_LABELS } from '../../utils/constants.js';
+import { ACCEPTS_LABELS, formatSealedType, INTENT_LABELS } from '../../utils/constants.js';
 import { brandColor, formatPrice } from '../../utils/embeds.js';
 import { handleCardAutocomplete, searchKey } from '../../utils/cards.js';
 import { replyError } from '../../utils/replies.js';
@@ -57,6 +57,10 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
   for (const listing of results) {
     const parts: string[] = [];
     if (listing.condition) parts.push(listing.condition.toUpperCase());
+    if (listing.kind === 'sealed') {
+      const label = formatSealedType(listing.sealedCategory ?? '');
+      if (label) parts.push(label);
+    }
     if (listing.priceCents !== null && listing.priceCents !== undefined) {
       parts.push(formatPrice(listing.priceCents));
     }
