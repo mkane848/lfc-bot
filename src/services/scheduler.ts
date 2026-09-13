@@ -8,10 +8,12 @@ import {
 import { runDigest } from './digest.js';
 import { expireListings, purgeMarkedServers } from './listing-expiry.js';
 import { pruneExpiredCardCache } from './card-cache.js';
+import { syncSealedCatalog } from './sealed.js';
 import { GUILD_RETENTION_MS } from '../utils/constants.js';
 
 const jobs = new Map<string, ScheduledTask>();
 let maintenanceTask: ScheduledTask | null = null;
+let sealedTask: ScheduledTask | null = null;
 
 /**
  * Schedule digest jobs for every server with an active delivery mode. Called
@@ -64,6 +66,31 @@ export function startMaintenance(): void {
   );
 }
 
+/**
+ * Start the daily sealed-catalog sync job.
+ *
+ * Runs at 16:00 UTC rather than the more obvious 14:00: MTGJSON's build goes
+ * live around 09:00 ET, and 14:00 UTC is 09:00 EST in winter — right on that
+ * boundary. 16:00 UTC is 11:00 EST / 12:00 EDT, safely clear of the build
+ * year-round regardless of DST.
+ */
+export function startSealedCatalogSync(): void {
+  if (sealedTask) {
+    return;
+  }
+  sealedTask = cron.schedule(
+    '0 16 * * *',
+    () => {
+      // `syncSealedCatalog` catches and logs its own failures, but guard the
+      // rejection here too: an unhandled one would reach the process-level
+      // handler in `src/index.ts` and fire a critical alert for what is only
+      // a skipped catalog refresh.
+      void syncSealedCatalog().catch(() => undefined);
+    },
+    { timezone: 'UTC' },
+  );
+}
+
 /** Cancel all cron jobs. Called during graceful shutdown. */
 export function stopAllJobs(): void {
   for (const id of [...jobs.keys()]) {
@@ -72,6 +99,10 @@ export function stopAllJobs(): void {
   if (maintenanceTask) {
     void maintenanceTask.stop();
     maintenanceTask = null;
+  }
+  if (sealedTask) {
+    void sealedTask.stop();
+    sealedTask = null;
   }
 }
 
