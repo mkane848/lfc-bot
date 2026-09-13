@@ -1,3 +1,31 @@
+> **Historical design document — superseded in two places.**
+>
+> This was the build spec for sealed product support, which shipped in
+> [PR #67](https://github.com/mkane848/lfc-bot/pull/67). It is kept for the reasoning behind
+> the design, not as a description of the code. Two decisions taken during implementation
+> override what follows:
+>
+> 1. **No price is stored.** §5.1, §5.2, §6.1, §7, §9 and §11 describe reading Mana Pool's
+>    `low_price` and freezing it onto each listing as a `market_price_cents` column and a
+>    `Market` embed field. None of that shipped. The bot stores Mana Pool's canonical product
+>    URL and no pricing data at all — their Terms of Use are restrictive about storing their
+>    content, and a price frozen at post time is wrong for most of a 30-day listing's life.
+>    The column does not exist. This also removed the risk §12 named as the most likely bug in
+>    the change: with no price parsed, there is no parser to get wrong.
+>
+> 2. **The catalog sync is conditional.** §5.2 fetches `SetList.json` on every run. It now
+>    reads MTGJSON's 113-byte `Meta.json` first and stops there when the build version is
+>    unchanged, and sends `If-None-Match` otherwise. Measured against the live service: 11.6 MB
+>    on a cold sync, 113 bytes on an unchanged re-run. This required the `sealed_catalog_meta`
+>    table, which appears nowhere below.
+>
+> Smaller corrections: the catalog holds ~4,100 products, not the 4,210 quoted in §3.1 (it
+> moves constantly — no test asserts a count); and §7's `edit.ts` guidance misses that
+> `buildEditModal` takes a structural type with no `kind`, and that the modal field reads sat
+> outside their `try`, where a missing `condition` field would throw past the handler.
+
+---
+
 # Sealed Product Support — Final Implementation Plan
 
 Status: **ready to implement** — this is the build spec, hand it to an implementing agent.
