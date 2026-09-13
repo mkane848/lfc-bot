@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { lookupManapoolPrinting } from '../../src/services/manapool.js';
+import {
+  lookupManapoolPrinting,
+  lookupManapoolSealedProduct,
+} from '../../src/services/manapool.js';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -63,5 +66,104 @@ describe('lookupManapoolPrinting', () => {
     vi.stubEnv('MANAPOOL_API_KEY', 'mpat_test123');
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network error')));
     await expect(lookupManapoolPrinting('scryfall-id-1')).resolves.toBeNull();
+  });
+});
+
+describe('lookupManapoolSealedProduct', () => {
+  it('returns null without calling fetch when no API key is configured', async () => {
+    vi.stubEnv('MANAPOOL_API_KEY', '');
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await lookupManapoolSealedProduct('mtgjson-uuid-1');
+    expect(result).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('returns null without calling fetch when the uuid is empty', async () => {
+    vi.stubEnv('MANAPOOL_API_KEY', 'mpat_test123');
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(lookupManapoolSealedProduct('')).resolves.toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('sends the access token header and mtgjson_uuids query, returning the url', async () => {
+    vi.stubEnv('MANAPOOL_API_KEY', 'mpat_test123');
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          data: [{ url: 'https://manapool.com/sealed/blb/bundle' }],
+        }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await lookupManapoolSealedProduct('mtgjson-uuid-1');
+    expect(result).toBe('https://manapool.com/sealed/blb/bundle');
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain('/products/sealed?mtgjson_uuids=mtgjson-uuid-1');
+    expect((init.headers as Record<string, string>)['X-ManaPool-Access-Token']).toBe(
+      'mpat_test123',
+    );
+    // The sealed endpoint is never asked for prices, and the response's price
+    // fields must never reach a caller.
+    expect(url).not.toContain('price');
+  });
+
+  it('returns only the url and never a price, even when the payload carries them', async () => {
+    vi.stubEnv('MANAPOOL_API_KEY', 'mpat_test123');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            data: [
+              {
+                url: 'https://manapool.com/sealed/blb/bundle',
+                low_price: 20346,
+                price_market: 15000,
+                price_cents: 19999,
+                recent_sales: [{ price: 24498, quantity: 1 }],
+              },
+            ],
+          }),
+      }),
+    );
+
+    // Regression guard for the "no price, ever" override: the return type is a
+    // bare string, so no price can ride along even when the API sends one.
+    const result = await lookupManapoolSealedProduct('mtgjson-uuid-1');
+    expect(result).toBe('https://manapool.com/sealed/blb/bundle');
+    expect(typeof result).toBe('string');
+    expect(JSON.stringify(result)).not.toMatch(/price/i);
+    expect(JSON.stringify(result)).not.toContain('20346');
+  });
+
+  it('returns null on a non-OK response', async () => {
+    vi.stubEnv('MANAPOOL_API_KEY', 'mpat_test123');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: false, json: () => Promise.resolve({}) }),
+    );
+    await expect(lookupManapoolSealedProduct('mtgjson-uuid-1')).resolves.toBeNull();
+  });
+
+  it('returns null on an empty data array, the real not-found path', async () => {
+    vi.stubEnv('MANAPOOL_API_KEY', 'mpat_test123');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ data: [] }) }),
+    );
+    await expect(lookupManapoolSealedProduct('mtgjson-uuid-1')).resolves.toBeNull();
+  });
+
+  it('returns null when fetch throws', async () => {
+    vi.stubEnv('MANAPOOL_API_KEY', 'mpat_test123');
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network error')));
+    await expect(lookupManapoolSealedProduct('mtgjson-uuid-1')).resolves.toBeNull();
   });
 });
