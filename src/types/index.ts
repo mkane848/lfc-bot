@@ -13,6 +13,7 @@ export type CardVariant = 'extended' | 'showcase' | 'borderless' | 'retro' | 'fu
 export type ListingStatus = 'active' | 'fulfilled' | 'expired' | 'deleted';
 export type CardCondition = 'nm' | 'lp' | 'mp' | 'hp' | 'dmg';
 export type DigestMode = 'disabled' | 'channel' | 'dm' | 'both';
+export type ListingKind = 'card' | 'sealed';
 export type DigestTrigger = 'scheduled' | 'manual';
 
 export const LISTING_INTENTS: readonly ListingIntent[] = ['have', 'want'];
@@ -27,6 +28,7 @@ export const CARD_VARIANTS: readonly CardVariant[] = [
 ];
 export const CARD_CONDITIONS: readonly CardCondition[] = ['nm', 'lp', 'mp', 'hp', 'dmg'];
 export const DIGEST_MODES: readonly DigestMode[] = ['disabled', 'channel', 'dm', 'both'];
+export const LISTING_KINDS: readonly ListingKind[] = ['card', 'sealed'];
 
 export interface ResolvedCard {
   scryfallId?: string | null;
@@ -37,6 +39,22 @@ export interface ResolvedCard {
   collectorNumber?: string | null;
   manapoolUrl?: string | null;
   manapoolPriceCents?: number | null;
+  resolved: boolean;
+}
+
+/**
+ * A sealed product looked up in `sealed_cache`. On a catalog miss every field
+ * but `productName`/`productNameNormalized` is null and `resolved` is false —
+ * the commands still post that as a free-text listing.
+ */
+export interface ResolvedSealedProduct {
+  productName: string;
+  productNameNormalized: string;
+  setCode: string | null;
+  uuid: string | null;
+  category: string | null;
+  subtype: string | null;
+  manapoolUrl: string | null;
   resolved: boolean;
 }
 
@@ -59,6 +77,10 @@ export interface ListingCreateInput {
   quantity?: number;
   notes?: string | null;
   game?: string;
+  kind?: ListingKind;
+  sealedUuid?: string | null;
+  sealedCategory?: string | null;
+  sealedSubtype?: string | null;
 }
 
 /** A top-level slash command. */

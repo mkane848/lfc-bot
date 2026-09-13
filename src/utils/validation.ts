@@ -12,6 +12,7 @@ import {
   CARD_VARIANTS,
   DIGEST_MODES,
   LISTING_INTENTS,
+  LISTING_KINDS,
 } from '../types/index.js';
 
 const COLLECTOR_NUMBER_PATTERN = /^[A-Za-z0-9★-]+$/;
@@ -48,6 +49,11 @@ export function isCardVariant(value: string): value is (typeof CARD_VARIANTS)[nu
 /** Type guard for a raw string against the `disabled`/`channel`/`dm`/`both` digest mode enum. */
 export function isDigestMode(value: string): value is (typeof DIGEST_MODES)[number] {
   return (DIGEST_MODES as readonly string[]).includes(value);
+}
+
+/** Type guard for a raw string against the `card`/`sealed` listing kind enum. */
+export function isListingKind(value: string): value is (typeof LISTING_KINDS)[number] {
+  return (LISTING_KINDS as readonly string[]).includes(value);
 }
 
 /**
