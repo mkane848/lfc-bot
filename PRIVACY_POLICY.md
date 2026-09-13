@@ -37,6 +37,8 @@ We use your Discord user ID as the primary identifier for your listings. Your di
 - **Encryption**: Data is not encrypted at rest; only use the bot with information you're comfortable sharing with other server members
 - **Access**: Only the bot application has access to the database. No third parties have access to your data except as required by law
 - **Scryfall Integration**: Card searches are passed to Scryfall's public API; see [Scryfall's privacy policy](https://scryfall.com/docs/api) for their data handling
+- **MTGJSON Integration**: The sealed-product catalog behind `/have-sealed` and `/want-sealed` is downloaded from [MTGJSON](https://mtgjson.com) on a recurring schedule and matched entirely against our own local database — no user information is ever sent to MTGJSON
+- **Mana Pool Integration**: When a listing resolves to a specific card printing or sealed product, the bot requests that product's canonical link from [Mana Pool's](https://manapool.com) API using only the printing or product identifier — no user information is sent
 
 ## 4. Data Retention
 
@@ -59,7 +61,10 @@ To request deletion of all your data or to exercise privacy rights, contact the 
 We do **not** sell, trade, or share your data with third parties. Your data may be shared only:
 - With Discord (as required to deliver the bot's functionality)
 - With Scryfall (when resolving card information)
+- With Mana Pool (a product identifier only, when linking a listing to its page on manapool.com)
 - If required by law or legal process
+
+MTGJSON's sealed-product catalog is downloaded on a recurring schedule and never receives any of your data — it is a one-way data source, not a service we send information to.
 
 ## 7. Children's Privacy
 
@@ -70,6 +75,8 @@ LFCbot is not intended for users under 13 years old. We do not knowingly collect
 LFCbot integrates with:
 - **Discord API**: For bot functionality (see [Discord Privacy Policy](https://discord.com/privacy))
 - **Scryfall API**: For Magic: The Gathering card data (see [Scryfall Privacy Policy](https://scryfall.com/docs/api))
+- **MTGJSON**: For the sealed-product catalog behind `/have-sealed` and `/want-sealed`, downloaded on a recurring schedule and used under the MIT License (https://mtgjson.com)
+- **Mana Pool API**: For product links on card and sealed listings (https://manapool.com)
 
 ## 9. Changes to This Policy
 

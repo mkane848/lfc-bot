@@ -76,6 +76,9 @@ To report violations of these Terms or illegal activity:
 
 - **Bot Source Code**: Licensed under the MIT License. See [LICENSE](LICENSE) for details.
 - **Card Data**: Magic: The Gathering card information is provided by Scryfall. All card names, images, and data are the property of Wizards of the Coast.
+- **Sealed Product Data**: Sealed product catalog information (booster boxes, bundles, and similar products) is provided by [MTGJSON](https://mtgjson.com), used under the MIT License, which requires its copyright notice (Copyright © 2018 – Present, Zach Halpern) to accompany redistribution.
+- **Product Links**: Listings link out to [Mana Pool](https://manapool.com) for the exact card printing or sealed product being offered.
+- **Fan Content**: LFCbot is unofficial Fan Content permitted under Wizards of the Coast's [Fan Content Policy](https://company.wizards.com/en/legal/fancontentpolicy) and is not approved or endorsed by Wizards.
 - **Discord**: Discord is a trademark of Discord Inc. This Bot is not affiliated with or endorsed by Discord.
 
 ## 9. Modifications to the Service

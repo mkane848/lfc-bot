@@ -12,6 +12,9 @@ Welcome to LFCbot! This is a free, multi-server Discord bot for card trading lis
 
 - Post `/have` and `/want` listings with card resolution and autocomplete
 - Post up to 3 cards at once with `/have-multi` and `/want-multi`
+- Post `/have-sealed` and `/want-sealed` listings for sealed product (booster
+  boxes, bundles, prerelease kits, Commander decks), with autocomplete backed
+  by the local MTGJSON catalog
 - Search active listings by card with filtered, paginated results
 - Manage your listings with `/mylistings`, `/edit`, `/fulfill`, and `/delete`
 - Per-server admin configuration with daily digests
