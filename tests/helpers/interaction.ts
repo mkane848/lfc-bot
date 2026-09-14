@@ -1,5 +1,6 @@
 import { vi } from 'vitest';
 import type {
+  AutocompleteInteraction,
   ButtonInteraction,
   ChatInputCommandInteraction,
   ModalSubmitInteraction,
@@ -7,7 +8,7 @@ import type {
 } from 'discord.js';
 
 /**
- * Shared mock-building helpers for command/modal/button/select-menu
+ * Shared mock-building helpers for command/modal/button/select-menu/autocomplete
  * interactions, so each command test doesn't hand-roll its own discord.js
  * mocks. These are plain objects cast to the real discord.js types — only
  * the members each command handler actually touches are implemented.
@@ -215,4 +216,34 @@ export function fakeSelectMenuInteraction(init: FakeSelectMenuInit): FakeSelectM
     showModal: vi.fn().mockResolvedValue(undefined),
   };
   return interaction as unknown as FakeSelectMenuInteraction;
+}
+
+export interface FakeAutocompleteInit {
+  /** The option currently being typed, as `options.getFocused(true)` reports it. */
+  focused: { name: string; value: string };
+  /** Other already-chosen options, read via `options.getString(name)`. */
+  strings?: Record<string, string | null>;
+  guildId?: string | null;
+  userId?: string;
+  username?: string;
+}
+
+export type FakeAutocompleteInteraction = AutocompleteInteraction & {
+  respond: ReturnType<typeof vi.fn>;
+};
+
+/** Build a mock `AutocompleteInteraction` for a command's autocomplete handler. */
+export function fakeAutocompleteInteraction(
+  init: FakeAutocompleteInit,
+): FakeAutocompleteInteraction {
+  const guildId = init.guildId === undefined ? 'guild-1' : init.guildId;
+  const interaction = {
+    guildId,
+    guild: guildId ? { id: guildId } : null,
+    inGuild: vi.fn(() => guildId !== null),
+    user: { id: init.userId ?? 'user-1', username: init.username ?? 'alice' },
+    options: buildOptions({ focused: init.focused, strings: init.strings }),
+    respond: vi.fn().mockResolvedValue(undefined),
+  };
+  return interaction as unknown as FakeAutocompleteInteraction;
 }
