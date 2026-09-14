@@ -51,9 +51,12 @@ export async function handleInteractionCreate(interaction: Interaction): Promise
       const [, modalType] = interaction.customId.split(':');
       if (modalType === EDIT_MODAL_KIND) {
         await handleEditModal(interaction);
-      } else if (interaction.customId === HAVE_MULTI_MODAL_ID) {
+      } else if (interaction.customId.startsWith(HAVE_MULTI_MODAL_ID)) {
+        // Prefix, not equality: the batch modal ids carry a trailing listing
+        // kind (`...:card` / `...:sealed`). A bare id from a modal opened
+        // before that segment existed still matches and decodes as `card`.
         await handleHaveMultiModal(interaction);
-      } else if (interaction.customId === WANT_MULTI_MODAL_ID) {
+      } else if (interaction.customId.startsWith(WANT_MULTI_MODAL_ID)) {
         await handleWantMultiModal(interaction);
       }
       return;

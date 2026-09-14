@@ -21,6 +21,17 @@ export interface ParsedWantLine {
   maxPriceCents: number | null;
 }
 
+export interface ParsedHaveSealedLine {
+  productName: string;
+  priceCents: number | null;
+  quantity: number;
+}
+
+export interface ParsedWantSealedLine {
+  productName: string;
+  maxPriceCents: number | null;
+}
+
 function splitLine(raw: string): string[] {
   return raw.split('|').map((part) => part.trim());
 }
@@ -76,6 +87,42 @@ export function parseWantBatchLine(raw: string): ParsedWantLine {
   const maxPriceCents =
     maxPricePart && maxPricePart !== '' ? parsePriceToCents(maxPricePart) : null;
   return { cardName, condition, maxPriceCents };
+}
+
+/**
+ * Parse one sealed `/have-multi` line: `Product Name | price | quantity`.
+ * There is no condition field — sealed product is NM by definition — so this is
+ * the card format minus that column. Price and quantity are optional, and
+ * quantity defaults to 1 when omitted.
+ */
+export function parseHaveSealedBatchLine(raw: string): ParsedHaveSealedLine {
+  const parts = splitLine(raw);
+  if (parts.length < 1 || parts.length > 3) {
+    throw new ValidationError(
+      'Use the format: Product Name | price | quantity (price and quantity are optional).',
+    );
+  }
+  const [namePart, pricePart, quantityPart] = parts;
+  const productName = validateCardName(namePart ?? '');
+  const priceCents = pricePart && pricePart !== '' ? parsePriceToCents(pricePart) : null;
+  const quantity = quantityPart && quantityPart !== '' ? parseQuantity(quantityPart) : 1;
+  return { productName, priceCents, quantity };
+}
+
+/**
+ * Parse one sealed `/want-multi` line: `Product Name | max_price`.
+ * Mirrors `parseWantBatchLine` minus the condition column.
+ */
+export function parseWantSealedBatchLine(raw: string): ParsedWantSealedLine {
+  const parts = splitLine(raw);
+  if (parts.length < 1 || parts.length > 2) {
+    throw new ValidationError('Use the format: Product Name | max_price (max_price is optional).');
+  }
+  const [namePart, maxPricePart] = parts;
+  const productName = validateCardName(namePart ?? '');
+  const maxPriceCents =
+    maxPricePart && maxPricePart !== '' ? parsePriceToCents(maxPricePart) : null;
+  return { productName, maxPriceCents };
 }
 
 /** Parse the shared "accepts" field used by both batch-create modals. */

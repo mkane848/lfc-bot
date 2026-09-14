@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Sealed product support in the batch commands: `/have-multi` and
+  `/want-multi` gain an optional `type` option (`Cards` or `Sealed product`,
+  defaulting to cards), and the modal adapts its labels and line format to
+  match. A sealed line drops the condition column — `Product Name | price |
+  qty` for `/have-multi`, `Product Name | max_price` for `/want-multi`. Unlike
+  the card path, a line naming a product that is not in the catalog still
+  posts, with the raw name and no link, matching `/have-sealed`.
+  A `type` option is workable here where it was not on `/have` and `/want`,
+  because the batch commands take no required options for it to sit behind
+  (`src/commands/user/have-multi.ts`, `want-multi.ts`,
+  `src/utils/batch.ts`, `src/utils/customId.ts`).
 - `/have-sealed` and `/want-sealed` commands for posting sealed product —
   booster boxes, bundles, prerelease kits, and Commander decks — mirroring
   `/have` and `/want` minus the single-card machinery. Neither command has a
