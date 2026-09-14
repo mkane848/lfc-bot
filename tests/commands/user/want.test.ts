@@ -3,17 +3,27 @@ import { getDb } from '../../../src/db/index.js';
 import { servers, type NewServerRow } from '../../../src/db/schema.js';
 import { wantCommand } from '../../../src/commands/user/want.js';
 import * as scryfall from '../../../src/services/scryfall.js';
-import { fakeChatInputInteraction } from '../../helpers/interaction.js';
+import {
+  fakeAutocompleteInteraction,
+  fakeChatInputInteraction,
+} from '../../helpers/interaction.js';
 import { setupTestDb } from '../../helpers/db.js';
 
 setupTestDb();
 
 vi.mock('../../../src/services/scryfall.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../src/services/scryfall.js')>();
-  return { ...actual, resolveCard: vi.fn() };
+  return {
+    ...actual,
+    resolveCard: vi.fn(),
+    autocompleteCards: vi.fn(),
+    autocompleteSets: vi.fn(),
+  };
 });
 
 const resolveCard = vi.mocked(scryfall.resolveCard);
+const autocompleteCards = vi.mocked(scryfall.autocompleteCards);
+const autocompleteSets = vi.mocked(scryfall.autocompleteSets);
 
 const serverRow: NewServerRow = {
   id: 'guild-1',
@@ -31,6 +41,10 @@ const serverRow: NewServerRow = {
 
 beforeEach(() => {
   getDb().insert(servers).values(serverRow).run();
+  autocompleteCards.mockReset();
+  autocompleteCards.mockResolvedValue([]);
+  autocompleteSets.mockReset();
+  autocompleteSets.mockResolvedValue([]);
   resolveCard.mockReset();
   resolveCard.mockResolvedValue({
     scryfallId: 'lotus-id',
@@ -115,5 +129,44 @@ describe('/want', () => {
     expect(i.editReply).toHaveBeenCalledWith(
       expect.objectContaining({ content: expect.stringContaining('too long') }),
     );
+  });
+});
+
+describe('/want autocomplete', () => {
+  it('suggests set codes when the set option is focused', async () => {
+    autocompleteSets.mockResolvedValue([{ name: 'Modern Horizons 3 (MH3)', value: 'MH3' }]);
+    const i = fakeAutocompleteInteraction({
+      focused: { name: 'set', value: 'mh3' },
+      strings: { card_name: 'Black Lotus' },
+    });
+
+    await wantCommand.autocomplete?.(i);
+
+    expect(autocompleteSets).toHaveBeenCalledWith('mh3');
+    expect(autocompleteCards).not.toHaveBeenCalled();
+    expect(i.respond).toHaveBeenCalledWith([{ name: 'Modern Horizons 3 (MH3)', value: 'MH3' }]);
+  });
+
+  it('suggests card names when the card_name option is focused', async () => {
+    autocompleteCards.mockResolvedValue(['Black Lotus', 'Black Vice']);
+    const i = fakeAutocompleteInteraction({ focused: { name: 'card_name', value: 'black' } });
+
+    await wantCommand.autocomplete?.(i);
+
+    expect(autocompleteCards).toHaveBeenCalledWith('black');
+    expect(autocompleteSets).not.toHaveBeenCalled();
+    expect(i.respond).toHaveBeenCalledWith([
+      { name: 'Black Lotus', value: 'Black Lotus' },
+      { name: 'Black Vice', value: 'Black Vice' },
+    ]);
+  });
+
+  it('caps card suggestions at the 25 choices Discord accepts', async () => {
+    autocompleteCards.mockResolvedValue(Array.from({ length: 30 }, (_, n) => `Card ${n}`));
+    const i = fakeAutocompleteInteraction({ focused: { name: 'card_name', value: 'card' } });
+
+    await wantCommand.autocomplete?.(i);
+
+    expect(i.respond.mock.calls[0][0]).toHaveLength(25);
   });
 });

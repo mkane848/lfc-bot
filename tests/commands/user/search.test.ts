@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getDb } from '../../../src/db/index.js';
 import {
   listings,
@@ -7,10 +7,21 @@ import {
   type NewServerRow,
 } from '../../../src/db/schema.js';
 import { searchCommand } from '../../../src/commands/user/search.js';
-import { fakeChatInputInteraction } from '../../helpers/interaction.js';
+import * as scryfall from '../../../src/services/scryfall.js';
+import {
+  fakeAutocompleteInteraction,
+  fakeChatInputInteraction,
+} from '../../helpers/interaction.js';
 import { setupTestDb } from '../../helpers/db.js';
 
 setupTestDb();
+
+vi.mock('../../../src/services/scryfall.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../src/services/scryfall.js')>();
+  return { ...actual, autocompleteCards: vi.fn() };
+});
+
+const autocompleteCards = vi.mocked(scryfall.autocompleteCards);
 
 const serverRow: NewServerRow = {
   id: 'guild-1',
@@ -129,5 +140,22 @@ describe('/search', () => {
     await searchCommand.execute(i);
 
     expect(i.reply).toHaveBeenCalledWith(expect.objectContaining({ embeds: expect.any(Array) }));
+  });
+});
+
+describe('/search autocomplete', () => {
+  beforeEach(() => {
+    autocompleteCards.mockReset();
+    autocompleteCards.mockResolvedValue([]);
+  });
+
+  it('suggests card names for the focused card_name option', async () => {
+    autocompleteCards.mockResolvedValue(['Black Lotus']);
+    const i = fakeAutocompleteInteraction({ focused: { name: 'card_name', value: 'black' } });
+
+    await searchCommand.autocomplete?.(i);
+
+    expect(autocompleteCards).toHaveBeenCalledWith('black');
+    expect(i.respond).toHaveBeenCalledWith([{ name: 'Black Lotus', value: 'Black Lotus' }]);
   });
 });

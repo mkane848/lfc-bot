@@ -116,9 +116,10 @@ Service tests mock the Scryfall client, database tests run against in-memory
 SQLite via `setupTestDb()`, and command tests mock Discord interactions via
 the shared builders in `tests/helpers/interaction.ts`
 (`fakeChatInputInteraction`, `fakeModalSubmitInteraction`,
-`fakeButtonInteraction`, `fakeSelectMenuInteraction`) rather than hand-rolling
-mocks per test. A module-level `vi.mock(...)` (e.g. mocking `resolveCard`)
-is not auto-reset between tests in this repo's Vitest config — call
+`fakeButtonInteraction`, `fakeSelectMenuInteraction`,
+`fakeAutocompleteInteraction`) rather than hand-rolling mocks per test. A
+module-level `vi.mock(...)` (e.g. mocking `resolveCard`) is not auto-reset
+between tests in this repo's Vitest config — call
 `.mockReset()` in `beforeEach` yourself. Add or update tests alongside
 behavior changes; do not weaken assertions to make a change pass.
 
