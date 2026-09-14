@@ -7,6 +7,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `/have-sealed` and `/want-sealed` commands for posting sealed product —
+  booster boxes, bundles, prerelease kits, and Commander decks — mirroring
+  `/have` and `/want` minus the single-card machinery. Neither command has a
+  `condition`, `finish`, `variant`, or `collector_number` option, since none
+  of them mean anything for a sealed box; `/want-sealed` takes `max_price`
+  instead of `price` and omits `quantity`, matching `/want`.
+- Sealed listings live in the existing `listings` table rather than a
+  separate one: a new `kind` column (`card`/`sealed`, `NOT NULL DEFAULT
+  'card'`) plus nullable `sealed_uuid`, `sealed_category`, and
+  `sealed_subtype` columns (`src/db/migrations/0004_sealed_product_support.sql`).
+  Search, digests, expiry/TTL, the posting cooldown, `/fulfill`, and
+  `/delete` therefore work for sealed rows with no code changes.
+- A new `sealed_cache` table holding the full MTGJSON sealed-product catalog
+  (roughly 4,000 products) and a single-row `sealed_catalog_meta` table
+  tracking the last-seen MTGJSON build version, so the daily sync
+  (`src/services/sealed.ts`) can skip re-downloading an ~11.6 MB payload that
+  hasn't changed. The sync runs at 16:00 UTC (`src/services/scheduler.ts`),
+  clear of MTGJSON's ~09:00 ET build regardless of DST, plus a
+  fire-and-forget warm-up at boot (`src/events/ready.ts`) when the catalog is
+  stale.
+- Autocomplete for sealed product names and set codes is served entirely
+  from the local `sealed_cache` table (`autocompleteSealedProducts`,
+  `autocompleteSealedSets` in `src/services/sealed.ts`), making no external
+  request per keystroke; the set option only offers codes that actually have
+  sealed product.
+- `resolveSealedProduct` looks up a Mana Pool product link for a matched
+  catalog entry (`lookupManapoolSealedProduct`, `src/services/manapool.ts`).
+  Only the canonical product URL is stored — no marketplace pricing is read
+  or retained. A catalog miss still creates the listing with the raw
+  typed name and no link, the opposite of the card path (which rejects an
+  unresolved name), since a new release or store-exclusive drop may not be
+  in the catalog yet.
+- `/edit` support for sealed listings (`src/commands/user/edit.ts`): the
+  modal omits the condition row for a sealed listing (sealed product is NM
+  by definition), and changing the set re-resolves against the sealed
+  catalog instead of Scryfall.
+- Attribution for the two new upstream data sources: MTGJSON (sealed catalog
+  data, MIT License) and Mana Pool (product links) credited in `README.md`,
+  `TERMS_OF_SERVICE.md`, and `PRIVACY_POLICY.md`, alongside the existing
+  Scryfall mentions. `README.md` also gains the Wizards of the Coast Fan
+  Content Policy disclaimer, which was missing entirely despite the bot
+  displaying Magic: The Gathering card and product data.
+
+### Fixed
+
+- Scryfall requires both a `User-Agent` and an `Accept` header and may block
+  requests missing either; `src/services/scryfall.ts` sent only
+  `User-Agent`, and its value was `LFCbot/<repo url>` — a bare URL where
+  Scryfall documents a `name/version`. Now sends both headers, with
+  `User-Agent` as `LFCbot/<version> (+<repo url>)`, the version read from
+  `package.json` at runtime so it can't drift on release. Predates the
+  sealed-product work and affects every card lookup, autocomplete request,
+  and `/search`.
+
 ## [1.5.0] - 2026-08-30
 
 ### Added

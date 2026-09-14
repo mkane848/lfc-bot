@@ -3,6 +3,7 @@ import {
   ACCEPTS_LABELS,
   CONDITION_LABELS,
   FINISH_LABELS,
+  formatSealedType,
   INTENT_LABELS,
   VARIANT_LABELS,
 } from './constants.js';
@@ -93,6 +94,14 @@ export function listingEmbed(
   }
   if (listing.collectorNumber) {
     fields.push({ name: 'Collector #', value: listing.collectorNumber, inline: true });
+  }
+  if (listing.kind === 'sealed') {
+    const category = formatSealedType(listing.sealedCategory ?? '');
+    const subtype = formatSealedType(listing.sealedSubtype ?? '');
+    const product = [category, subtype].filter(Boolean).join(' — ');
+    if (product) {
+      fields.push({ name: 'Product', value: product, inline: true });
+    }
   }
   if (listing.notes) {
     fields.push({ name: 'Notes', value: listing.notes, inline: false });

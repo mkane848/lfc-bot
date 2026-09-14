@@ -1,3 +1,4 @@
+import { createRequire } from 'node:module';
 import { PROJECT_NAME, PROJECT_REPOSITORY } from '../utils/constants.js';
 import { buildManapoolUrl } from '../utils/manapool.js';
 import type { CardFinish, CardVariant, ResolvedCard } from '../types/index.js';
@@ -8,6 +9,27 @@ import { lookupManapoolPrinting } from './manapool.js';
 
 const SCRYFALL_BASE = 'https://api.scryfall.com';
 const MIN_REQUEST_INTERVAL_MS = 100;
+
+/**
+ * Read the package version for the outbound User-Agent. Scryfall asks that the
+ * header carry the application's name and version, so it is read from
+ * `package.json` rather than hardcoded, where it would silently drift on every
+ * release. `createRequire` resolves relative to this module, which lands on the
+ * project root under `tsx`, Vitest, and the compiled `dist/` layout alike (the
+ * Dockerfile copies `package.json` next to `dist/`). A static import is not an
+ * option: `package.json` sits outside `rootDir`, so importing it would break
+ * the build.
+ */
+function readPackageVersion(): string {
+  try {
+    const pkg = createRequire(import.meta.url)('../../package.json') as { version?: string };
+    return pkg.version ?? 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
+const PROJECT_VERSION = readPackageVersion();
 const SET_LIST_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 const ATTEMPT_TIMEOUT_MS = 5000;
 
@@ -78,8 +100,14 @@ async function scryfallFetchOnce<T>(path: string): Promise<T | null> {
   const timeout = setTimeout(() => controller.abort(), ATTEMPT_TIMEOUT_MS);
   try {
     const response = await fetch(`${SCRYFALL_BASE}${path}`, {
+      // Scryfall requires BOTH of these and may block requests that omit
+      // either. The User-Agent must identify the application by name and
+      // version -- a bare URL does not satisfy that -- and the Accept header
+      // must be present even if it only states a generic preference.
+      // See https://scryfall.com/docs/api (Required Headers).
       headers: {
-        'User-Agent': `${PROJECT_NAME}/${PROJECT_REPOSITORY}`,
+        'User-Agent': `${PROJECT_NAME}/${PROJECT_VERSION} (+${PROJECT_REPOSITORY})`,
+        Accept: 'application/json;q=0.9,*/*;q=0.8',
       },
       signal: controller.signal,
     });

@@ -29,6 +29,13 @@
       "when": 1788037612641,
       "tag": "0003_equal_eddie_brock",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1789328217641,
+      "tag": "0004_sealed_product_support",
+      "breakpoints": true
     }
   ]
 }

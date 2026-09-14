@@ -36,6 +36,10 @@ function insertListingRow(input: ListingCreateInput, created: number): ListingRo
     manapoolUrl: input.manapoolUrl ?? null,
     condition: input.condition ?? null,
     priceCents: input.priceCents ?? null,
+    kind: input.kind ?? 'card',
+    sealedUuid: input.sealedUuid ?? null,
+    sealedCategory: input.sealedCategory ?? null,
+    sealedSubtype: input.sealedSubtype ?? null,
     quantity: input.quantity ?? 1,
     notes: input.notes ?? null,
     status: 'active',
@@ -111,6 +115,7 @@ function duplicateWarning(input: ListingCreateInput, at: number): string | undef
         eq(listings.cardNameNormalized, input.cardNameNormalized),
         eq(listings.intent, input.intent),
         eq(listings.accepts, input.accepts),
+        eq(listings.kind, input.kind ?? 'card'),
         sql`${listings.finish} IS ${input.finish ?? null}`,
         sql`${listings.variant} IS ${input.variant ?? null}`,
         sql`${listings.collectorNumber} IS ${input.collectorNumber ?? null}`,
@@ -254,6 +259,9 @@ export function updateListing(
     cardImageUrl?: string | null;
     collectorNumber?: string | null;
     manapoolUrl?: string | null;
+    sealedUuid?: string | null;
+    sealedCategory?: string | null;
+    sealedSubtype?: string | null;
   },
 ): ListingRow | undefined {
   const db = getDb();
@@ -269,6 +277,9 @@ export function updateListing(
   if (fields.cardImageUrl !== undefined) update.cardImageUrl = fields.cardImageUrl;
   if (fields.collectorNumber !== undefined) update.collectorNumber = fields.collectorNumber;
   if (fields.manapoolUrl !== undefined) update.manapoolUrl = fields.manapoolUrl;
+  if (fields.sealedUuid !== undefined) update.sealedUuid = fields.sealedUuid;
+  if (fields.sealedCategory !== undefined) update.sealedCategory = fields.sealedCategory;
+  if (fields.sealedSubtype !== undefined) update.sealedSubtype = fields.sealedSubtype;
   db.update(listings).set(update).where(eq(listings.id, id)).run();
   return getListingById(id);
 }

@@ -20,7 +20,7 @@ import {
 } from '../../services/listings.js';
 import type { ListingRow } from '../../db/schema.js';
 import type { GuildCommand } from '../../types/index.js';
-import { ACCEPTS_LABELS, INTENT_LABELS } from '../../utils/constants.js';
+import { ACCEPTS_LABELS, formatSealedType, INTENT_LABELS } from '../../utils/constants.js';
 import {
   decodeBatchSelectId,
   decodeListingActionId,
@@ -49,6 +49,10 @@ function buildBatchSelectRow(
       rows.map((listing) => {
         const parts: string[] = [];
         if (listing.condition) parts.push(listing.condition.toUpperCase());
+        if (listing.kind === 'sealed') {
+          const label = formatSealedType(listing.sealedCategory ?? '');
+          if (label) parts.push(label);
+        }
         if (listing.priceCents !== null && listing.priceCents !== undefined) {
           parts.push(formatPrice(listing.priceCents));
         }
@@ -91,6 +95,10 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
   for (const listing of rows) {
     const parts: string[] = [];
     if (listing.condition) parts.push(listing.condition.toUpperCase());
+    if (listing.kind === 'sealed') {
+      const label = formatSealedType(listing.sealedCategory ?? '');
+      if (label) parts.push(label);
+    }
     if (listing.priceCents !== null && listing.priceCents !== undefined) {
       parts.push(formatPrice(listing.priceCents));
     }
