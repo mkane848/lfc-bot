@@ -8,9 +8,18 @@ import {
 import type { ChatInputCommandInteraction, ModalSubmitInteraction } from 'discord.js';
 import { createListingsBatch, type CreateListingResult } from '../../services/listings.js';
 import { resolveCard } from '../../services/scryfall.js';
-import type { GuildCommand, ListingCreateInput } from '../../types/index.js';
-import { parseBatchAccepts, parseWantBatchLine } from '../../utils/batch.js';
-import { WANT_MULTI_MODAL_ID } from '../../utils/customId.js';
+import { resolveSealedProduct } from '../../services/sealed.js';
+import type { GuildCommand, ListingCreateInput, ListingKind } from '../../types/index.js';
+import {
+  parseBatchAccepts,
+  parseWantBatchLine,
+  parseWantSealedBatchLine,
+} from '../../utils/batch.js';
+import {
+  decodeMultiModalKind,
+  encodeMultiModalId,
+  WANT_MULTI_MODAL_ID,
+} from '../../utils/customId.js';
 import { replyError, replyPublicText } from '../../utils/replies.js';
 
 const CARD_SLOTS = 3;
@@ -24,18 +33,26 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
     });
     return;
   }
-  await interaction.showModal(buildWantMultiModal());
+  const kind: ListingKind = interaction.options.getString('type') === 'sealed' ? 'sealed' : 'card';
+  await interaction.showModal(buildWantMultiModal(kind));
 }
 
-function buildWantMultiModal(): ModalBuilder {
+function buildWantMultiModal(kind: ListingKind): ModalBuilder {
+  const sealed = kind === 'sealed';
+  const noun = sealed ? 'Product' : 'Card';
+  const format = sealed ? 'name | max_price' : 'name | condition | max_price';
+  const example = sealed ? 'Bloomburrow Bundle | 100.00' : 'Solitude | nm | 15.00';
+
   const cardRows = Array.from({ length: CARD_SLOTS }, (_, index) => {
     const slot = index + 1;
     return new ActionRowBuilder<TextInputBuilder>().addComponents(
       new TextInputBuilder()
+        // The field id stays `card{n}` for both kinds so the submit handler
+        // reads one set of names; only the label and format differ.
         .setCustomId(`card${slot}`)
-        .setLabel(`Card ${slot} (name | condition | max_price)`)
+        .setLabel(`${noun} ${slot} (${format})`)
         .setStyle(TextInputStyle.Short)
-        .setPlaceholder('Solitude | nm | 15.00')
+        .setPlaceholder(example)
         .setRequired(false)
         .setMaxLength(200),
     );
@@ -49,8 +66,8 @@ function buildWantMultiModal(): ModalBuilder {
       .setMaxLength(12),
   );
   return new ModalBuilder()
-    .setCustomId(WANT_MULTI_MODAL_ID)
-    .setTitle('Post multiple cards you want')
+    .setCustomId(encodeMultiModalId(WANT_MULTI_MODAL_ID, kind))
+    .setTitle(sealed ? 'Post multiple sealed products you want' : 'Post multiple cards you want')
     .addComponents(...cardRows, acceptsRow);
 }
 
@@ -71,6 +88,9 @@ export async function handleWantMultiModal(interaction: ModalSubmitInteraction):
   }
   await interaction.deferReply({ ephemeral: true });
 
+  const kind = decodeMultiModalKind(interaction.customId);
+  const noun = kind === 'sealed' ? 'Product' : 'Card';
+
   let accepts;
   try {
     accepts = parseBatchAccepts(interaction.fields.getTextInputValue('accepts'));
@@ -89,10 +109,39 @@ export async function handleWantMultiModal(interaction: ModalSubmitInteraction):
       continue;
     }
     try {
+      if (kind === 'sealed') {
+        const parsed = parseWantSealedBatchLine(raw);
+        // No resolution guard here, unlike the card branch below: a catalog
+        // miss returns a free-text result and still posts, matching
+        // `/want-sealed`.
+        const resolved = await resolveSealedProduct(parsed.productName);
+        readyInputs.push({
+          serverId: guild.id,
+          userId: interaction.user.id,
+          username: interaction.user.displayName,
+          intent: 'want',
+          accepts,
+          kind: 'sealed',
+          cardName: resolved.productName,
+          cardNameNormalized: resolved.productNameNormalized,
+          cardSet: resolved.setCode,
+          manapoolUrl: resolved.manapoolUrl,
+          sealedUuid: resolved.uuid,
+          sealedCategory: resolved.category,
+          sealedSubtype: resolved.subtype,
+          priceCents: parsed.maxPriceCents,
+          game: 'mtg',
+        });
+        readySlots.push(slot);
+        continue;
+      }
       const parsed = parseWantBatchLine(raw);
       const resolved = await resolveCard(parsed.cardName, {});
       if (!resolved.resolved) {
-        failures.push({ slot, message: `Card ${slot}: could not resolve "${parsed.cardName}".` });
+        failures.push({
+          slot,
+          message: `${noun} ${slot}: could not resolve "${parsed.cardName}".`,
+        });
         continue;
       }
       readyInputs.push({
@@ -115,7 +164,7 @@ export async function handleWantMultiModal(interaction: ModalSubmitInteraction):
     } catch (err) {
       failures.push({
         slot,
-        message: `Card ${slot}: ${err instanceof Error ? err.message : 'invalid input.'}`,
+        message: `${noun} ${slot}: ${err instanceof Error ? err.message : 'invalid input.'}`,
       });
     }
   }
@@ -123,7 +172,9 @@ export async function handleWantMultiModal(interaction: ModalSubmitInteraction):
   if (readyInputs.length === 0) {
     await replyError(
       interaction,
-      failures.length > 0 ? failures.map((f) => f.message).join('\n') : 'No cards were entered.',
+      failures.length > 0
+        ? failures.map((f) => f.message).join('\n')
+        : `No ${kind === 'sealed' ? 'products' : 'cards'} were entered.`,
     );
     return;
   }
@@ -148,7 +199,7 @@ export async function handleWantMultiModal(interaction: ModalSubmitInteraction):
     if (slot === undefined) {
       return;
     }
-    let message = `Card ${slot}: posted #${result.listing.id} — ${result.listing.cardName}.`;
+    let message = `${noun} ${slot}: posted #${result.listing.id} — ${result.listing.cardName}.`;
     if (result.warning) {
       message += ` (${result.warning})`;
     }
@@ -163,6 +214,12 @@ export const wantMultiCommand: GuildCommand = {
   name: 'want-multi',
   data: new SlashCommandBuilder()
     .setName('want-multi')
-    .setDescription('Post up to 3 cards you want to buy or trade for in one go'),
+    .setDescription('Post up to 3 cards or sealed products you want in one go')
+    .addStringOption((option) =>
+      option
+        .setName('type')
+        .setDescription('What you are posting (default: cards)')
+        .addChoices({ name: 'Cards', value: 'card' }, { name: 'Sealed product', value: 'sealed' }),
+    ),
   execute,
 };

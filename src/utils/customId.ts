@@ -6,6 +6,8 @@
  * count for the same customId).
  */
 
+import type { ListingKind } from '../types/index.js';
+
 const PREFIX = 'lfc';
 
 // --- Listing action buttons: lfc:fulfill:{id} / lfc:delete:{id} ---
@@ -101,7 +103,26 @@ export function decodeBatchSelectId(customId: string): BatchSelectAction | null 
     : null;
 }
 
-// --- Batch-create modals: fixed ids, no dynamic segment ---
+// --- Batch-create modals: a fixed base id plus the listing kind ---
 
 export const HAVE_MULTI_MODAL_ID = `${PREFIX}:havemultimodal`;
 export const WANT_MULTI_MODAL_ID = `${PREFIX}:wantmultimodal`;
+
+/**
+ * Append the listing kind to a batch-create modal id. The submit handler has no
+ * other way to know which format the lines were entered in, since a modal
+ * submission carries nothing but its custom id and field values.
+ */
+export function encodeMultiModalId(baseId: string, kind: ListingKind): string {
+  return `${baseId}:${kind}`;
+}
+
+/**
+ * Read the listing kind back off a batch-create modal id, defaulting to `card`.
+ * The default matters for a modal opened before this encoding existed and
+ * submitted after a deploy: its id has no kind segment, and `card` is what it
+ * meant.
+ */
+export function decodeMultiModalKind(customId: string): ListingKind {
+  return customId.split(':')[2] === 'sealed' ? 'sealed' : 'card';
+}

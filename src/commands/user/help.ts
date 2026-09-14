@@ -20,7 +20,7 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
     {
       name: 'Post multiple cards at once',
       value:
-        '`/have-multi` and `/want-multi` open a form for up to 3 cards in one go, one line each: `Card Name | condition | price | qty`',
+        '`/have-multi` and `/want-multi` open a form for up to 3 in one go, one line each: `Card Name | condition | price | qty`. Set `type` to Sealed product for boxes and bundles, where each line is `Product Name | price | qty` (no condition)',
       inline: false,
     },
     {

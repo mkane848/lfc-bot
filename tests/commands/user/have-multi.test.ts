@@ -3,7 +3,9 @@ import { getDb } from '../../../src/db/index.js';
 import { servers, type NewServerRow } from '../../../src/db/schema.js';
 import { haveMultiCommand, handleHaveMultiModal } from '../../../src/commands/user/have-multi.js';
 import * as scryfall from '../../../src/services/scryfall.js';
-import { HAVE_MULTI_MODAL_ID } from '../../../src/utils/customId.js';
+import * as sealed from '../../../src/services/sealed.js';
+import { listings } from '../../../src/db/schema.js';
+import { encodeMultiModalId, HAVE_MULTI_MODAL_ID } from '../../../src/utils/customId.js';
 import { fakeChatInputInteraction, fakeModalSubmitInteraction } from '../../helpers/interaction.js';
 import { setupTestDb } from '../../helpers/db.js';
 
@@ -14,7 +16,28 @@ vi.mock('../../../src/services/scryfall.js', async (importOriginal) => {
   return { ...actual, resolveCard: vi.fn() };
 });
 
+vi.mock('../../../src/services/sealed.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../src/services/sealed.js')>();
+  return { ...actual, resolveSealedProduct: vi.fn() };
+});
+
 const resolveCard = vi.mocked(scryfall.resolveCard);
+const resolveSealedProduct = vi.mocked(sealed.resolveSealedProduct);
+
+const SEALED_MODAL_ID = encodeMultiModalId(HAVE_MULTI_MODAL_ID, 'sealed');
+
+function resolvedProduct(name: string, hit = true) {
+  return {
+    productName: name,
+    productNameNormalized: name.toLowerCase(),
+    setCode: hit ? 'BLB' : null,
+    uuid: hit ? `${name}-uuid` : null,
+    category: hit ? 'bundle' : null,
+    subtype: hit ? 'default' : null,
+    manapoolUrl: hit ? 'https://manapool.com/sealed/blb/bundle' : null,
+    resolved: hit,
+  };
+}
 
 function followUpContent(i: ReturnType<typeof fakeModalSubmitInteraction>): string {
   const call = i.followUp.mock.calls[0]?.[0] as { content: string };
@@ -52,6 +75,7 @@ function resolved(name: string, ok = true) {
 beforeEach(() => {
   getDb().insert(servers).values(serverRow).run();
   resolveCard.mockReset();
+  resolveSealedProduct.mockReset();
 });
 
 describe('/have-multi execute', () => {
@@ -141,6 +165,115 @@ describe('handleHaveMultiModal', () => {
 
     expect(i.editReply).toHaveBeenCalledWith(
       expect.objectContaining({ content: expect.stringContaining('No cards were entered') }),
+    );
+  });
+});
+
+describe('/have-multi sealed', () => {
+  it('opens the sealed modal when type=sealed, and the card modal otherwise', async () => {
+    const sealedInteraction = fakeChatInputInteraction({
+      options: { strings: { type: 'sealed' } },
+    });
+    await haveMultiCommand.execute(sealedInteraction);
+    const sealedModal = sealedInteraction.showModal.mock.calls[0]?.[0] as {
+      data: { custom_id: string; title: string };
+    };
+    expect(sealedModal.data.custom_id).toBe(SEALED_MODAL_ID);
+    expect(sealedModal.data.title).toContain('sealed');
+
+    const cardInteraction = fakeChatInputInteraction({});
+    await haveMultiCommand.execute(cardInteraction);
+    const cardModal = cardInteraction.showModal.mock.calls[0]?.[0] as {
+      data: { custom_id: string };
+    };
+    expect(cardModal.data.custom_id).toBe(encodeMultiModalId(HAVE_MULTI_MODAL_ID, 'card'));
+  });
+
+  it('posts sealed listings with the sealed columns and no condition', async () => {
+    resolveSealedProduct.mockImplementation((name: string) =>
+      Promise.resolve(resolvedProduct(name)),
+    );
+    const i = fakeModalSubmitInteraction({
+      customId: SEALED_MODAL_ID,
+      fields: {
+        card1: 'Bloomburrow Bundle | 89.99 | 2',
+        card2: '',
+        card3: '',
+        accepts: 'both',
+      },
+    });
+
+    await handleHaveMultiModal(i);
+
+    expect(followUpContent(i)).toContain('Product 1: posted');
+    const row = getDb().select().from(listings).all()[0];
+    expect(row?.kind).toBe('sealed');
+    expect(row?.sealedUuid).toBe('Bloomburrow Bundle-uuid');
+    expect(row?.sealedCategory).toBe('bundle');
+    expect(row?.cardSet).toBe('BLB');
+    expect(row?.priceCents).toBe(8999);
+    expect(row?.quantity).toBe(2);
+    expect(row?.condition).toBeNull();
+    expect(row?.collectorNumber).toBeNull();
+  });
+
+  // The card path rejects an unresolved name; the sealed path must not.
+  it('still posts a product that is not in the catalog', async () => {
+    resolveSealedProduct.mockImplementation((name: string) =>
+      Promise.resolve(resolvedProduct(name, false)),
+    );
+    const i = fakeModalSubmitInteraction({
+      customId: SEALED_MODAL_ID,
+      fields: { card1: 'Some Brand New Bundle | 50.00', card2: '', card3: '', accepts: 'cash' },
+    });
+
+    await handleHaveMultiModal(i);
+
+    const message = followUpContent(i);
+    expect(message).toContain('Product 1: posted');
+    expect(message).not.toContain('could not resolve');
+    const row = getDb().select().from(listings).all()[0];
+    expect(row?.kind).toBe('sealed');
+    expect(row?.manapoolUrl).toBeNull();
+  });
+
+  it('never calls the card resolver on a sealed submission', async () => {
+    resolveSealedProduct.mockImplementation((name: string) =>
+      Promise.resolve(resolvedProduct(name)),
+    );
+    const i = fakeModalSubmitInteraction({
+      customId: SEALED_MODAL_ID,
+      fields: { card1: 'Bloomburrow Bundle', card2: '', card3: '', accepts: 'cash' },
+    });
+
+    await handleHaveMultiModal(i);
+
+    expect(resolveCard).not.toHaveBeenCalled();
+  });
+
+  it('reports a malformed sealed line with product wording', async () => {
+    const i = fakeModalSubmitInteraction({
+      customId: SEALED_MODAL_ID,
+      fields: { card1: 'A | 1 | 2 | 3 | 4', card2: '', card3: '', accepts: 'cash' },
+    });
+
+    await handleHaveMultiModal(i);
+
+    expect(i.editReply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('Product 1:') }),
+    );
+  });
+
+  it('says "No products were entered" for an empty sealed submission', async () => {
+    const i = fakeModalSubmitInteraction({
+      customId: SEALED_MODAL_ID,
+      fields: { card1: '', card2: '', card3: '', accepts: 'cash' },
+    });
+
+    await handleHaveMultiModal(i);
+
+    expect(i.editReply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('No products were entered') }),
     );
   });
 });

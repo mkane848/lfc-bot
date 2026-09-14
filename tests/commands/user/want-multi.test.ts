@@ -3,7 +3,9 @@ import { getDb } from '../../../src/db/index.js';
 import { servers, type NewServerRow } from '../../../src/db/schema.js';
 import { wantMultiCommand, handleWantMultiModal } from '../../../src/commands/user/want-multi.js';
 import * as scryfall from '../../../src/services/scryfall.js';
-import { WANT_MULTI_MODAL_ID } from '../../../src/utils/customId.js';
+import * as sealed from '../../../src/services/sealed.js';
+import { listings } from '../../../src/db/schema.js';
+import { encodeMultiModalId, WANT_MULTI_MODAL_ID } from '../../../src/utils/customId.js';
 import { fakeChatInputInteraction, fakeModalSubmitInteraction } from '../../helpers/interaction.js';
 import { setupTestDb } from '../../helpers/db.js';
 
@@ -14,7 +16,28 @@ vi.mock('../../../src/services/scryfall.js', async (importOriginal) => {
   return { ...actual, resolveCard: vi.fn() };
 });
 
+vi.mock('../../../src/services/sealed.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../src/services/sealed.js')>();
+  return { ...actual, resolveSealedProduct: vi.fn() };
+});
+
 const resolveCard = vi.mocked(scryfall.resolveCard);
+const resolveSealedProduct = vi.mocked(sealed.resolveSealedProduct);
+
+const SEALED_MODAL_ID = encodeMultiModalId(WANT_MULTI_MODAL_ID, 'sealed');
+
+function resolvedProduct(name: string, hit = true) {
+  return {
+    productName: name,
+    productNameNormalized: name.toLowerCase(),
+    setCode: hit ? 'BLB' : null,
+    uuid: hit ? `${name}-uuid` : null,
+    category: hit ? 'bundle' : null,
+    subtype: hit ? 'default' : null,
+    manapoolUrl: hit ? 'https://manapool.com/sealed/blb/bundle' : null,
+    resolved: hit,
+  };
+}
 
 function followUpContent(i: ReturnType<typeof fakeModalSubmitInteraction>): string {
   const call = i.followUp.mock.calls[0]?.[0] as { content: string };
@@ -52,6 +75,7 @@ function resolved(name: string, ok = true) {
 beforeEach(() => {
   getDb().insert(servers).values(serverRow).run();
   resolveCard.mockReset();
+  resolveSealedProduct.mockReset();
 });
 
 describe('/want-multi execute', () => {
@@ -139,5 +163,67 @@ describe('handleWantMultiModal', () => {
     expect(i.editReply).toHaveBeenCalledWith(
       expect.objectContaining({ content: expect.stringContaining('No cards were entered') }),
     );
+  });
+});
+
+describe('/want-multi sealed', () => {
+  it('opens the sealed modal when type=sealed', async () => {
+    const i = fakeChatInputInteraction({ options: { strings: { type: 'sealed' } } });
+    await wantMultiCommand.execute(i);
+
+    const modal = i.showModal.mock.calls[0]?.[0] as { data: { custom_id: string; title: string } };
+    expect(modal.data.custom_id).toBe(SEALED_MODAL_ID);
+    expect(modal.data.title).toContain('sealed');
+  });
+
+  it('posts a sealed want with max_price in price_cents and no quantity column', async () => {
+    resolveSealedProduct.mockImplementation((name: string) =>
+      Promise.resolve(resolvedProduct(name)),
+    );
+    const i = fakeModalSubmitInteraction({
+      customId: SEALED_MODAL_ID,
+      fields: { card1: 'Bloomburrow Bundle | 100.00', card2: '', card3: '', accepts: 'cash' },
+    });
+
+    await handleWantMultiModal(i);
+
+    expect(followUpContent(i)).toContain('Product 1: posted');
+    const row = getDb().select().from(listings).all()[0];
+    expect(row?.kind).toBe('sealed');
+    expect(row?.intent).toBe('want');
+    expect(row?.priceCents).toBe(10000);
+    expect(row?.quantity).toBe(1);
+    expect(row?.condition).toBeNull();
+    expect(row?.sealedCategory).toBe('bundle');
+  });
+
+  it('still posts a product that is not in the catalog', async () => {
+    resolveSealedProduct.mockImplementation((name: string) =>
+      Promise.resolve(resolvedProduct(name, false)),
+    );
+    const i = fakeModalSubmitInteraction({
+      customId: SEALED_MODAL_ID,
+      fields: { card1: 'Some Brand New Bundle', card2: '', card3: '', accepts: 'cash' },
+    });
+
+    await handleWantMultiModal(i);
+
+    const message = followUpContent(i);
+    expect(message).toContain('Product 1: posted');
+    expect(message).not.toContain('could not resolve');
+  });
+
+  it('never calls the card resolver on a sealed submission', async () => {
+    resolveSealedProduct.mockImplementation((name: string) =>
+      Promise.resolve(resolvedProduct(name)),
+    );
+    const i = fakeModalSubmitInteraction({
+      customId: SEALED_MODAL_ID,
+      fields: { card1: 'Bloomburrow Bundle', card2: '', card3: '', accepts: 'cash' },
+    });
+
+    await handleWantMultiModal(i);
+
+    expect(resolveCard).not.toHaveBeenCalled();
   });
 });
