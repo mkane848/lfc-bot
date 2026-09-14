@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   parseBatchAccepts,
   parseHaveBatchLine,
+  parseHaveSealedBatchLine,
   parseWantBatchLine,
+  parseWantSealedBatchLine,
 } from '../../src/utils/batch.js';
 
 describe('parseHaveBatchLine', () => {
@@ -98,5 +100,53 @@ describe('parseBatchAccepts', () => {
 
   it('rejects an invalid value', () => {
     expect(() => parseBatchAccepts('crypto')).toThrow(/Invalid accepts value/);
+  });
+});
+
+describe('parseHaveSealedBatchLine', () => {
+  it('parses a full line', () => {
+    expect(parseHaveSealedBatchLine('Bloomburrow Bundle | 89.99 | 2')).toEqual({
+      productName: 'Bloomburrow Bundle',
+      priceCents: 8999,
+      quantity: 2,
+    });
+  });
+
+  it('parses a name-only line, defaulting quantity to 1 and price to null', () => {
+    expect(parseHaveSealedBatchLine('Bloomburrow Bundle')).toEqual({
+      productName: 'Bloomburrow Bundle',
+      priceCents: null,
+      quantity: 1,
+    });
+  });
+
+  it('rejects more columns than the sealed format has', () => {
+    expect(() => parseHaveSealedBatchLine('A | 1.00 | 2 | 3')).toThrow(/Product Name \| price/);
+  });
+
+  // Sealed has no condition column, so a card-shaped line lands a condition
+  // where the price belongs. The price error is the correct complaint.
+  it('rejects a card-shaped line that includes a condition', () => {
+    expect(() => parseHaveSealedBatchLine('Bloomburrow Bundle | nm | 89.99')).toThrow(/Price/);
+  });
+});
+
+describe('parseWantSealedBatchLine', () => {
+  it('parses a full line', () => {
+    expect(parseWantSealedBatchLine('Bloomburrow Bundle | 100.00')).toEqual({
+      productName: 'Bloomburrow Bundle',
+      maxPriceCents: 10000,
+    });
+  });
+
+  it('parses a name-only line', () => {
+    expect(parseWantSealedBatchLine('Bloomburrow Bundle')).toEqual({
+      productName: 'Bloomburrow Bundle',
+      maxPriceCents: null,
+    });
+  });
+
+  it('rejects more columns than the sealed format has', () => {
+    expect(() => parseWantSealedBatchLine('A | 1.00 | 2')).toThrow(/Product Name \| max_price/);
   });
 });

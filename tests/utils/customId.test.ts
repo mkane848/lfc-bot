@@ -8,6 +8,10 @@ import {
   encodeEditModalId,
   encodeEditNextId,
   encodeListingActionId,
+  decodeMultiModalKind,
+  encodeMultiModalId,
+  HAVE_MULTI_MODAL_ID,
+  WANT_MULTI_MODAL_ID,
 } from '../../src/utils/customId.js';
 
 describe('listing action id (fulfill/delete buttons)', () => {
@@ -91,5 +95,26 @@ describe('batch select id', () => {
 
   it('rejects a wrong prefix', () => {
     expect(decodeBatchSelectId('other:batchdelete')).toBeNull();
+  });
+});
+
+describe('batch-create modal ids', () => {
+  it('round-trips the listing kind for both batch modals', () => {
+    expect(decodeMultiModalKind(encodeMultiModalId(HAVE_MULTI_MODAL_ID, 'sealed'))).toBe('sealed');
+    expect(decodeMultiModalKind(encodeMultiModalId(HAVE_MULTI_MODAL_ID, 'card'))).toBe('card');
+    expect(decodeMultiModalKind(encodeMultiModalId(WANT_MULTI_MODAL_ID, 'sealed'))).toBe('sealed');
+  });
+
+  it('keeps the base id as a prefix so routing still matches', () => {
+    expect(encodeMultiModalId(HAVE_MULTI_MODAL_ID, 'sealed').startsWith(HAVE_MULTI_MODAL_ID)).toBe(
+      true,
+    );
+  });
+
+  // A modal opened before the kind segment existed and submitted after a
+  // deploy has a bare id, and `card` is what it meant.
+  it('defaults a kind-less id to card', () => {
+    expect(decodeMultiModalKind(HAVE_MULTI_MODAL_ID)).toBe('card');
+    expect(decodeMultiModalKind('lfc:havemultimodal:nonsense')).toBe('card');
   });
 });
