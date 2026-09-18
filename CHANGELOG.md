@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.6.0] - 2026-09-18
 
 ### Added
 
@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `/want-multi` gain an optional `type` option (`Cards` or `Sealed product`,
   defaulting to cards), and the modal adapts its labels and line format to
   match. A sealed line drops the condition column — `Product Name | price |
-  qty` for `/have-multi`, `Product Name | max_price` for `/want-multi`. Unlike
+qty` for `/have-multi`, `Product Name | max_price` for `/want-multi`. Unlike
   the card path, a line naming a product that is not in the catalog still
   posts, with the raw name and no link, matching `/have-sealed`.
   A `type` option is workable here where it was not on `/have` and `/want`,
@@ -28,7 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   instead of `price` and omits `quantity`, matching `/want`.
 - Sealed listings live in the existing `listings` table rather than a
   separate one: a new `kind` column (`card`/`sealed`, `NOT NULL DEFAULT
-  'card'`) plus nullable `sealed_uuid`, `sealed_category`, and
+'card'`) plus nullable `sealed_uuid`, `sealed_category`, and
   `sealed_subtype` columns (`src/db/migrations/0004_sealed_product_support.sql`).
   Search, digests, expiry/TTL, the posting cooldown, `/fulfill`, and
   `/delete` therefore work for sealed rows with no code changes.
@@ -343,7 +343,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CI workflow running lint, format check, type-check, and tests on every push
   to `main` and every pull request.
 
-[Unreleased]: https://github.com/mkane848/lfc-bot/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/mkane848/lfc-bot/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/mkane848/lfc-bot/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/mkane848/lfc-bot/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/mkane848/lfc-bot/compare/v1.3.1...v1.4.0
 [1.3.1]: https://github.com/mkane848/lfc-bot/compare/v1.3.0...v1.3.1
