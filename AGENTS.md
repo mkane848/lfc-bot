@@ -33,8 +33,14 @@ checks locally before considering work done. `.github/workflows/codeql.yml`
 runs GitHub CodeQL scanning (`javascript-typescript`) on the same triggers
 plus a weekly schedule. A separate release workflow
 (`.github/workflows/release.yml`) builds a multi-architecture Docker image,
-publishes it to GHCR, and creates a GitHub Release whenever a `v*` tag is
-pushed.
+publishes it to GHCR, and creates a GitHub Release for a `v*` tag. Tags are
+created automatically: after CI passes on `main`,
+`.github/workflows/tag-release.yml` tags the commit with the `package.json`
+version if that tag doesn't exist yet and calls the release workflow directly,
+because a tag pushed with the workflow token doesn't trigger other workflows.
+To cut a release, merge a PR that bumps the version with
+`npm version X.Y.Z --no-git-tag-version` and adds its `CHANGELOG.md` section
+(see `CONTRIBUTING.md`).
 
 ## Environment
 

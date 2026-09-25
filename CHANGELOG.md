@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.1] - 2026-09-25
+
+### Added
+
+- Releases are tagged automatically. After CI passes on `main`,
+  `.github/workflows/tag-release.yml` tags the commit with the `package.json`
+  version if that tag doesn't exist yet, then runs the release workflow to
+  publish the image and the GitHub Release. The release workflow can now be
+  called by another workflow as well as run on a pushed tag; the direct call
+  is needed because a tag pushed with the workflow token doesn't trigger other
+  workflows. Cutting a release is now a merged PR that bumps the version and
+  adds its changelog section (`CONTRIBUTING.md` has the steps).
+
 ### Fixed
 
 - `scripts/auto-update-prebuilt.sh` never deployed the image it pulled. It
@@ -400,7 +413,8 @@ qty` for `/have-multi`, `Product Name | max_price` for `/want-multi`. Unlike
 - CI workflow running lint, format check, type-check, and tests on every push
   to `main` and every pull request.
 
-[Unreleased]: https://github.com/mkane848/lfc-bot/compare/v1.6.0...HEAD
+[Unreleased]: https://github.com/mkane848/lfc-bot/compare/v1.6.1...HEAD
+[1.6.1]: https://github.com/mkane848/lfc-bot/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/mkane848/lfc-bot/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/mkane848/lfc-bot/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/mkane848/lfc-bot/compare/v1.3.1...v1.4.0
