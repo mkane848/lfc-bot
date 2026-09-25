@@ -7,6 +7,7 @@ import {
   createListing,
   createListingsBatch,
   fulfillListing,
+  getListingById,
   searchListings,
   softDeleteListing,
   updateListing,
@@ -400,6 +401,76 @@ describe('search and status transitions', () => {
     expect(searchListings('200', 'black lotus', undefined, 'both', 1)).toHaveLength(0);
     expect(searchListings('200', 'black lotus', undefined, 'cash', 1)).toHaveLength(1);
     expect(searchListings('200', 'black lotus', undefined, 'trade', 1)).toHaveLength(0);
+  });
+});
+
+describe('listing status transitions (setStatus guard)', () => {
+  function seedListingWithStatus(status: 'active' | 'fulfilled' | 'deleted' | 'expired'): number {
+    seedServer();
+    const db = getDb();
+    const past = Date.now() - 60_000;
+    const { id } = db
+      .insert(listings)
+      .values({
+        ...baseInput(),
+        intent: 'have',
+        accepts: 'cash',
+        status,
+        expiresAt: past + 30 * 24 * 3600 * 1000,
+        createdAt: past,
+        updatedAt: past,
+      })
+      .returning({ id: listings.id })
+      .get();
+    return id;
+  }
+
+  it('allows an active listing to be fulfilled', () => {
+    const id = seedListingWithStatus('active');
+    const row = fulfillListing(id);
+    expect(row?.status).toBe('fulfilled');
+  });
+
+  it('allows an active listing to be deleted', () => {
+    const id = seedListingWithStatus('active');
+    const row = softDeleteListing(id);
+    expect(row?.status).toBe('deleted');
+  });
+
+  it('allows a fulfilled listing to be deleted (cleanup path)', () => {
+    const id = seedListingWithStatus('fulfilled');
+    const row = softDeleteListing(id);
+    expect(row?.status).toBe('deleted');
+  });
+
+  it('throws when fulfilling an already-fulfilled listing and leaves it fulfilled', () => {
+    const id = seedListingWithStatus('fulfilled');
+    expect(() => fulfillListing(id)).toThrow(/cannot .* from .*fulfilled/);
+    expect(getListingById(id)?.status).toBe('fulfilled');
+  });
+
+  it('throws when deleting an already-deleted listing and leaves it deleted', () => {
+    const id = seedListingWithStatus('deleted');
+    expect(() => softDeleteListing(id)).toThrow(/cannot .* from .*deleted/);
+    expect(getListingById(id)?.status).toBe('deleted');
+  });
+
+  it('throws when fulfilling a deleted listing (deleted is terminal)', () => {
+    const id = seedListingWithStatus('deleted');
+    expect(() => fulfillListing(id)).toThrow(/cannot .* from .*deleted/);
+    expect(getListingById(id)?.status).toBe('deleted');
+  });
+
+  it('throws when fulfilling an expired listing and leaves it expired', () => {
+    const id = seedListingWithStatus('expired');
+    expect(() => fulfillListing(id)).toThrow(/cannot .* from .*expired/);
+    expect(getListingById(id)?.status).toBe('expired');
+  });
+
+  it('throws when deleting an expired listing and leaves it expired', () => {
+    const id = seedListingWithStatus('expired');
+    expect(() => softDeleteListing(id)).toThrow(/cannot .* from .*expired/);
+    expect(getListingById(id)?.status).toBe('expired');
   });
 });
 
