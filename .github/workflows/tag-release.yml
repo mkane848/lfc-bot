@@ -1,0 +1,77 @@
+name: Tag release
+
+# Cutting a release is a merged pull request that bumps the version in
+# package.json (`npm version X.Y.Z --no-git-tag-version`) and moves the
+# changelog's Unreleased entries under that version. Once CI passes on main,
+# this tags the commit `vX.Y.Z` if that tag doesn't exist yet, then runs the
+# release workflow to publish the image and the GitHub Release. Every other
+# CI run on main finds the tag already there and does nothing.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+# Serialize runs so two quick pushes can't both try to create the same tag.
+concurrency:
+  group: tag-release
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    name: Tag a new package.json version
+    # Only a green CI run for a push to main: never a pull request's run, and
+    # never a commit whose CI failed.
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Create the tag if this version has none
+        id: tag
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          tag="v$version"
+
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null; then
+            echo "$tag already exists; nothing to release."
+            exit 0
+          fi
+
+          # release.yml always moves :latest, so only plain releases are
+          # tagged here. Tag a pre-release by hand instead.
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::notice::$version is not a plain X.Y.Z release; not tagging it."
+            exit 0
+          fi
+
+          if ! grep -qF "## [$version]" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no '## [$version]' section. Add one before releasing $tag."
+            exit 1
+          fi
+
+          git tag "$tag" "$HEAD_SHA"
+          git push origin "refs/tags/$tag"
+          echo "Tagged $HEAD_SHA as $tag."
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+  release:
+    needs: tag
+    if: needs.tag.outputs.tag != ''
+    permissions:
+      contents: write
+      packages: write
+    uses: ./.github/workflows/release.yml
+    with:
+      tag: ${{ needs.tag.outputs.tag }}

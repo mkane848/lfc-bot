@@ -49,6 +49,22 @@ request changes behavior, add an entry under the `Unreleased` section using the
 appropriate type: `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, or
 `Security`. Releases are tagged as `vMAJOR.MINOR.PATCH`.
 
+## Releases
+
+A release is an ordinary pull request. In it:
+
+1. Bump the version: `npm version X.Y.Z --no-git-tag-version` (this updates
+   `package.json` and `package-lock.json` together).
+2. In `CHANGELOG.md`, move the `Unreleased` entries under a new
+   `## [X.Y.Z] - YYYY-MM-DD` heading and update the comparison links at the
+   bottom.
+
+Once it merges and CI passes on `main`, `.github/workflows/tag-release.yml`
+tags the merge commit `vX.Y.Z` and runs the release workflow, which publishes
+the Docker image (`:vX.Y.Z` and `:latest`) and the GitHub Release. Don't push
+the tag yourself. Only plain `X.Y.Z` versions are tagged automatically, and
+the workflow fails if `CHANGELOG.md` has no section for the new version.
+
 ## Pull Requests
 
 - Open a PR against `main`.
