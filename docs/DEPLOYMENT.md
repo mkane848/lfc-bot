@@ -173,26 +173,72 @@ Then follow the Docker install and clone steps from
 ## Run from the prebuilt image
 
 The release workflow publishes a multi-architecture image (amd64 and arm64) to
-`ghcr.io/mkane848/lfc-bot`. You can run it directly instead of building from
-source, which is faster and needs no build toolchain:
+`ghcr.io/mkane848/lfc-bot`. You can run it instead of building from source,
+which is faster and needs no build toolchain. Clone the repository and create
+`.env` as in [Option A](#4-clone-and-configure), then add this line to `.env`:
 
-```sh
-docker login ghcr.io -u YOUR_GITHUB_USERNAME
-docker pull ghcr.io/mkane848/lfc-bot:latest
-docker run -d --name lfcbot \
-  --env-file .env \
-  -v lfcbot-data:/app/data \
-  --restart unless-stopped \
-  ghcr.io/mkane848/lfc-bot:latest
+```dotenv
+COMPOSE_FILE=docker-compose.yml:docker-compose.prebuilt.yml
 ```
 
-Pin a specific release tag (for example `:1.1.0`) for reproducible rollbacks,
-or use `:latest` for the newest build. GHCR packages are private by default;
-make the package public (or sign in) before friends pull it.
+That layers `docker-compose.prebuilt.yml` over the default compose file,
+replacing the local build with the GHCR image. Every `docker compose` command
+run from the repository directory then uses the prebuilt image, including the
+ones in the auto-update script. Start the bot:
+
+```sh
+docker compose pull
+docker compose up -d
+```
+
+The container and the `lfcbot-data` volume are the same ones the
+build-from-source setup uses, so switching an existing install over keeps its
+data.
+
+`:latest` tracks the newest release. To pin one for a reproducible rollback,
+set `LFCBOT_IMAGE` in `.env` to a release tag, then run `docker compose up -d`.
+Release tags carry a `v` prefix:
+
+```dotenv
+LFCBOT_IMAGE=ghcr.io/mkane848/lfc-bot:v1.6.0
+```
+
+GHCR packages are private by default; make the package public (or sign in with
+`docker login ghcr.io`) before friends pull it.
 
 To automatically pull and deploy new releases, set up the
 `scripts/auto-update-prebuilt.sh` cron job as described in
 [Automatic updates with prebuilt images](Manual_Tasks.md#automatic-updates-with-prebuilt-images).
+
+### Moving from `docker run`
+
+Earlier versions of this guide started the image with
+`docker run --name lfcbot` and a volume named `lfcbot-data`. Compose doesn't
+manage that container, so the auto-update script refuses to run while it
+exists; otherwise two copies of the bot would share one token. After adding the
+`COMPOSE_FILE` line above, move the data into the compose volume:
+
+```sh
+docker stop lfcbot
+docker compose create bot
+docker run --rm -v lfcbot-data:/from -v lfc-bot_lfcbot-data:/to \
+  alpine:3.20 cp -a /from/. /to/
+docker rm lfcbot
+docker compose up -d
+```
+
+Compose prefixes the volume with the project name, which is the repository
+directory's name: `lfc-bot_lfcbot-data` for a clone in `lfc-bot`. Run
+`docker volume ls` to check it. The old `lfcbot-data` volume is left in place
+as a fallback.
+
+`scripts/backup.sh` snapshots the volume named `lfcbot-data` by default, which
+after the move is that stale fallback. Point it at the compose volume, including
+in its cron line:
+
+```sh
+VOLUME=lfc-bot_lfcbot-data ./scripts/backup.sh
+```
 
 ## Backups
 

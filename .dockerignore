@@ -18,5 +18,6 @@ tests
 Dockerfile
 .dockerignore
 docker-compose.yml
+docker-compose.prebuilt.yml
 deploy_plan.md
 HANDOFF.md

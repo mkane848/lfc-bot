@@ -1,0 +1,16 @@
+# Run the prebuilt GHCR image instead of building from source.
+#
+# Layer this over docker-compose.yml by adding this line to .env, so every
+# `docker compose` command run from the repository directory (including the
+# ones in scripts/auto-update-prebuilt.sh) uses it:
+#
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.prebuilt.yml
+#
+# The service, container, and lfcbot-data volume stay the same as the
+# build-from-source setup, so switching between the two keeps your data. Set
+# LFCBOT_IMAGE in .env to pin a release tag (for example
+# ghcr.io/mkane848/lfc-bot:v1.6.0) instead of tracking :latest.
+services:
+  bot:
+    image: ${LFCBOT_IMAGE:-ghcr.io/mkane848/lfc-bot:latest}
+    build: !reset null
