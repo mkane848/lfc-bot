@@ -230,15 +230,8 @@ docker compose up -d
 Compose prefixes the volume with the project name, which is the repository
 directory's name: `lfc-bot_lfcbot-data` for a clone in `lfc-bot`. Run
 `docker volume ls` to check it. The old `lfcbot-data` volume is left in place
-as a fallback.
-
-`scripts/backup.sh` snapshots the volume named `lfcbot-data` by default, which
-after the move is that stale fallback. Point it at the compose volume, including
-in its cron line:
-
-```sh
-VOLUME=lfc-bot_lfcbot-data ./scripts/backup.sh
-```
+as a fallback. `scripts/backup.sh` backs up the volume the bot container
+actually uses, so it follows the move without any change to its cron line.
 
 ## Backups
 
@@ -251,8 +244,11 @@ file regularly using `scripts/backup.sh`:
 
 By default it stops the bot for a consistent snapshot, writes a compressed
 archive to `./backups/`, restarts the bot, and prunes archives older than 14
-days. Point `BACKUP_DIR` at a directory that is itself copied off-box (object
-storage or a second machine) for real durability:
+days. It backs up whichever volume is mounted at `/app/data` in the bot's
+compose container (`lfc-bot_lfcbot-data` for a clone in `lfc-bot`; set
+`VOLUME` to override), and exits with an error rather than keep an archive
+that holds no database file. Point `BACKUP_DIR` at a directory that is itself
+copied off-box (object storage or a second machine) for real durability:
 
 ```sh
 BACKUP_DIR=/mnt/offbox/lfcbot-backups ./scripts/backup.sh
