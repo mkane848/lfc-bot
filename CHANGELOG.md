@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- `scripts/auto-update-prebuilt.sh` never deployed the image it pulled. It
+  pulled `ghcr.io/mkane848/lfc-bot:latest` and then ran `docker compose up -d`,
+  but `docker-compose.yml` runs the locally built `lfcbot:latest`. A bot started
+  with the documented `docker run --name lfcbot` stayed on its old image, and
+  compose could start a second copy of the bot next to it. Its "has the image
+  changed" check read the size column of `docker compose images` rather than a
+  digest, so it also redeployed on every run. A new `docker-compose.prebuilt.yml`
+  override (enabled with `COMPOSE_FILE` in `.env`) now points the compose
+  service at the GHCR image, optionally pinned with `LFCBOT_IMAGE`. The script
+  compares the running container's image ID with the pulled one, recreates the
+  container only when they differ, confirms it switched, and refuses to run
+  while a legacy `lfcbot` container exists. `docs/DEPLOYMENT.md` covers the
+  compose setup and moving an existing `docker run` install over, and now
+  gives pinned tags with their `v` prefix (`:v1.6.0`, not `:1.6.0`).
+
 ## [1.6.0] - 2026-09-18
 
 ### Added

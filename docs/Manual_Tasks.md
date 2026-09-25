@@ -156,7 +156,10 @@ To switch to the prebuilt GHCR image instead of building from source, see the
 ## Automatic updates with prebuilt images
 
 If you are running the bot from the prebuilt GHCR image (`ghcr.io/mkane848/lfc-bot`),
-you can set up automatic updates using `scripts/auto-update-prebuilt.sh`:
+you can set up automatic updates using `scripts/auto-update-prebuilt.sh`. It
+requires the `COMPOSE_FILE` line in `.env` described in
+[Run from the prebuilt image](DEPLOYMENT.md#run-from-the-prebuilt-image), and
+replaces the `scripts/auto-update.sh` job rather than running alongside it:
 
 1. Make the script executable:
 
@@ -172,7 +175,7 @@ you can set up automatic updates using `scripts/auto-update-prebuilt.sh`:
 
    If the bot is already running the latest image, the script will log
    "No updates available" and exit cleanly. If a new image is available,
-   it will pull, restart, and verify the bot came online.
+   it will pull, recreate the container, and verify the bot came online.
 
 3. Schedule it with cron. For example, daily at 05:00 (after the 04:30 backup):
 
@@ -193,9 +196,12 @@ you can set up automatic updates using `scripts/auto-update-prebuilt.sh`:
    ```
 
 The script will:
-- Pull the latest image from GHCR
-- Check if the image has changed (by comparing digest)
-- Restart the container only if a new image is detected
+- Stop with an error if `docker compose` is still set to build from source, or
+  if a container named `lfcbot` from the old `docker run` instructions exists
+  (see [Moving from `docker run`](DEPLOYMENT.md#moving-from-docker-run))
+- Pull the image the bot service uses (`:latest`, or `LFCBOT_IMAGE` if set)
+- Compare it with the image the running container was created from
+- Recreate the container only if the image changed, and confirm it switched
 - Log all actions to `logs/auto-update-prebuilt.log` and the cron log file
 - Verify the bot came online cleanly
 

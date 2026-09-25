@@ -67,7 +67,8 @@ is the documentation surface for environment variables.
   interactions for command tests
 - `scripts/` - operational helpers, including `backup.sh` for the SQLite volume
 - `docs/` - deployment and hosting documentation
-- `Dockerfile`, `docker-compose.yml`, `.dockerignore` - container packaging
+- `Dockerfile`, `docker-compose.yml`, `docker-compose.prebuilt.yml` (GHCR image
+  override), `.dockerignore` - container packaging
 
 ## Git Workflow
 
