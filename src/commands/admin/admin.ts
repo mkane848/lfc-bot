@@ -1,4 +1,4 @@
-import { SlashCommandBuilder } from 'discord.js';
+import { PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 import type { ChatInputCommandInteraction } from 'discord.js';
 import { DIGEST_MODES } from '../../types/index.js';
 import type { AdminSubcommand, GuildCommand } from '../../types/index.js';
@@ -63,7 +63,8 @@ function build(): SlashCommandBuilder {
   const builder = new SlashCommandBuilder()
     .setName('admin')
     .setDescription('Admin configuration for the card trading bot')
-    .setDefaultMemberPermissions(0x8); // Manage Server (1 << 3)
+    // Hides /admin from members without Manage Server; requireManageServer re-checks at run time.
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild);
 
   builder.addSubcommand((sub) =>
     sub.setName('config').setDescription('Show and configure digest settings'),
