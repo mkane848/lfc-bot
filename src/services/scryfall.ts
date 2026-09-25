@@ -32,6 +32,8 @@ function readPackageVersion(): string {
 const PROJECT_VERSION = readPackageVersion();
 const SET_LIST_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 const ATTEMPT_TIMEOUT_MS = 5000;
+/** Upper bound for one autocomplete request; Discord allows 3 seconds in all. */
+const AUTOCOMPLETE_TIMEOUT_MS = 2000;
 
 interface ScryfallCard {
   id?: string | null;
@@ -95,9 +97,12 @@ const limiter = new RateLimiter();
  * resolves to `null` without retrying; any other non-2xx status or thrown
  * network/timeout error throws so the caller can retry it.
  */
-async function scryfallFetchOnce<T>(path: string): Promise<T | null> {
+async function scryfallFetchOnce<T>(
+  path: string,
+  timeoutMs = ATTEMPT_TIMEOUT_MS,
+): Promise<T | null> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), ATTEMPT_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(`${SCRYFALL_BASE}${path}`, {
       // Scryfall requires BOTH of these and may block requests that omit
@@ -125,9 +130,9 @@ async function scryfallFetchOnce<T>(path: string): Promise<T | null> {
 
 /**
  * Fetch from Scryfall, retrying transient failures (timeouts, network errors,
- * non-404 error responses) once before giving up. The per-attempt timeout is
- * kept short (5s) because this also backs Discord autocomplete interactions,
- * which must respond within 3 seconds and can never be deferred.
+ * non-404 error responses) once before giving up. The commands that resolve a
+ * card defer their reply first, so they have time for the retry; autocomplete
+ * can't be deferred and makes its own single attempt (`autocompleteCards`).
  */
 async function scryfallFetch<T>(path: string): Promise<T | null> {
   try {
@@ -144,17 +149,32 @@ async function scryfallFetch<T>(path: string): Promise<T | null> {
 /**
  * Return autocomplete suggestions from Scryfall for a partial card name.
  * Limited to 25 choices to keep Discord embeds compact.
+ *
+ * Discord discards an autocomplete response after 3 seconds, so this makes one
+ * short attempt with no retry, bounded by `deadline` (epoch ms) when given. A
+ * request whose deadline passes while it waits in the rate-limit queue is
+ * skipped, so a burst of stale keystrokes can't delay the card lookups queued
+ * behind it.
  */
-export async function autocompleteCards(query: string): Promise<string[]> {
+export async function autocompleteCards(query: string, deadline = Infinity): Promise<string[]> {
   const q = query.trim();
   if (!q) {
     return [];
   }
-  const data = await limiter.run(() =>
-    scryfallFetch<AutocompleteResponse>(
-      `/cards/autocomplete?q=${encodeURIComponent(q)}&include_extras=true`,
-    ),
-  );
+  const data = await limiter.run(async () => {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) {
+      return null;
+    }
+    try {
+      return await scryfallFetchOnce<AutocompleteResponse>(
+        `/cards/autocomplete?q=${encodeURIComponent(q)}&include_extras=true`,
+        Math.min(AUTOCOMPLETE_TIMEOUT_MS, remaining),
+      );
+    } catch {
+      return null;
+    }
+  });
   return data?.data.slice(0, 25) ?? [];
 }
 

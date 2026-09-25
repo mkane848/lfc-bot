@@ -28,6 +28,12 @@ beforeEach(() => {
 });
 
 describe('/admin', () => {
+  it('is visible by default to members with Manage Server, not only Administrators', () => {
+    expect(adminCommand.data.toJSON().default_member_permissions).toBe(
+      String(PermissionFlagsBits.ManageGuild),
+    );
+  });
+
   it('rejects a member without Manage Server, without dispatching or recording an action', async () => {
     const i = fakeChatInputInteraction({
       rawMemberPermissions: PermissionFlagsBits.SendMessages,

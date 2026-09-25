@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getDb } from '../../../src/db/index.js';
 import { servers, type NewServerRow } from '../../../src/db/schema.js';
 import { haveCommand } from '../../../src/commands/user/have.js';
@@ -169,7 +169,7 @@ describe('/have autocomplete', () => {
 
     await haveCommand.autocomplete?.(i);
 
-    expect(autocompleteCards).toHaveBeenCalledWith('black');
+    expect(autocompleteCards).toHaveBeenCalledWith('black', expect.any(Number));
     expect(autocompleteSets).not.toHaveBeenCalled();
     expect(i.respond).toHaveBeenCalledWith([
       { name: 'Black Lotus', value: 'Black Lotus' },
@@ -184,5 +184,72 @@ describe('/have autocomplete', () => {
     await haveCommand.autocomplete?.(i);
 
     expect(i.respond.mock.calls[0][0]).toHaveLength(25);
+  });
+
+  describe("within Discord's 3-second window", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    /** A lookup that settles `delayMs` from now, on the fake clock. */
+    function settlesAfter<T>(delayMs: number, value: T): Promise<T> {
+      return new Promise((resolve) => setTimeout(() => resolve(value), delayMs));
+    }
+
+    it('gives the Scryfall lookup a deadline before the window closes', async () => {
+      const createdTimestamp = Date.now();
+      const i = fakeAutocompleteInteraction({
+        focused: { name: 'card_name', value: 'bolt' },
+        createdTimestamp,
+      });
+
+      await haveCommand.autocomplete?.(i);
+
+      const deadline = autocompleteCards.mock.calls[0]?.[1];
+      expect(deadline).toBeGreaterThan(createdTimestamp);
+      expect(deadline).toBeLessThan(createdTimestamp + 3000);
+    });
+
+    it('sends no card suggestions when Scryfall answers after the window', async () => {
+      autocompleteCards.mockReturnValue(settlesAfter(5000, ['Lightning Bolt']));
+      const i = fakeAutocompleteInteraction({ focused: { name: 'card_name', value: 'bolt' } });
+
+      const pending = haveCommand.autocomplete?.(i);
+      await vi.advanceTimersByTimeAsync(5000);
+      await pending;
+
+      expect(i.respond).not.toHaveBeenCalled();
+    });
+
+    it('counts the window from when Discord created the interaction', async () => {
+      // Two seconds are already gone on arrival, so a 1-second lookup is too late.
+      autocompleteCards.mockReturnValue(settlesAfter(1000, ['Lightning Bolt']));
+      const i = fakeAutocompleteInteraction({
+        focused: { name: 'card_name', value: 'bolt' },
+        createdTimestamp: Date.now() - 2000,
+      });
+
+      const pending = haveCommand.autocomplete?.(i);
+      await vi.advanceTimersByTimeAsync(1000);
+      await pending;
+
+      expect(i.respond).not.toHaveBeenCalled();
+    });
+
+    it('sends no set suggestions when loading the set list outlasts the window', async () => {
+      autocompleteSets.mockReturnValue(
+        settlesAfter(5000, [{ name: 'Modern Horizons 3 (MH3)', value: 'MH3' }]),
+      );
+      const i = fakeAutocompleteInteraction({ focused: { name: 'set', value: 'mh3' } });
+
+      const pending = haveCommand.autocomplete?.(i);
+      await vi.advanceTimersByTimeAsync(5000);
+      await pending;
+
+      expect(i.respond).not.toHaveBeenCalled();
+    });
   });
 });

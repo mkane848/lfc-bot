@@ -29,6 +29,8 @@ export const MIN_QUANTITY = 1;
 export const SEARCH_PAGE_SIZE = 10;
 export const MY_LISTINGS_PAGE_SIZE = 5;
 export const DIGEST_SECTION_CAP = 25;
+/** Discord rejects a message whose content is longer than this. */
+export const DISCORD_MESSAGE_MAX_LENGTH = 2000;
 /** Discord caps autocomplete choice name and value at 100 characters. */
 export const SEALED_PRODUCT_NAME_MAX = 100;
 

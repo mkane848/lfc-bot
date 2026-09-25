@@ -152,7 +152,10 @@ behavior changes; do not weaken assertions to make a change pass.
   and total digest-delivery failures trigger a Discord webhook alert via
   `src/services/alerts.ts` when `DISCORD_ALERT_WEBHOOK_URL` is set (a
   five-minute per-message cooldown prevents a recurring failure from
-  spamming the channel); it's a no-op when unset.
+  spamming the channel); it's a no-op when unset. Autocomplete failures are
+  the exception: `src/events/interactionCreate.ts` logs them as warnings,
+  since they are usually Discord's 3-second window closing and there is
+  nothing to reply to.
 - Health checks are available at `GET /health` (port 3000 by default,
   `HEALTH_PORT`) for container orchestration: `200`/`ok` when both the
   Discord gateway is connected and SQLite responds, `503`/`degraded`
@@ -168,7 +171,10 @@ behavior changes; do not weaken assertions to make a change pass.
   calling `.reply()` on an already-deferred interaction throws, which is
   exactly the bug class `resolveCardForCommand` and `/edit`'s invalid-condition
   path shipped with once already (see `src/utils/replies.ts` for the
-  deferred-aware pattern to copy).
+  deferred-aware pattern to copy). Autocomplete can't be deferred, so card
+  autocomplete makes one Scryfall attempt with no retry, and the handlers in
+  `src/utils/cards.ts` send suggestions only if they're ready 2.5 seconds
+  after Discord created the interaction.
 - `src/index.ts` registers `process.on('unhandledRejection'/'uncaughtException')`
   handlers alongside the Discord client's own `Events.Error` handler, so an
   uncaught throw anywhere (e.g. inside a cron callback in
@@ -180,7 +186,10 @@ behavior changes; do not weaken assertions to make a change pass.
   user-controlled Discord display name (`@${username}`); without it, a
   member named e.g. `everyone` would produce a literal `@everyone` in the
   channel. Any other outbound message that interpolates a listing's
-  `username` as plain text (not inside an embed) needs the same guard.
+  `username` as plain text (not inside an embed) needs the same guard. The
+  digest is split into messages under Discord's 2,000-character limit
+  (`splitDigestMessage`), and a destination counts as delivered only when
+  every message arrives.
 - `/admin games` exists in `src/commands/admin/games.ts` but is intentionally
   **not** registered in `src/commands/admin/admin.ts` — `enabledGames` isn't
   read anywhere else (`/have`, `/want`, `/search` all hardcode `game: 'mtg'`),

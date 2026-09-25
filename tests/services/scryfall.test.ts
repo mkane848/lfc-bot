@@ -54,6 +54,24 @@ describe('scryfall service', () => {
     await expect(autocompleteCards('black')).resolves.toEqual(['Black Lotus', 'Black Vice']);
   });
 
+  // Discord discards autocomplete answers after 3 seconds, so a retry only
+  // holds up the queue for an answer nobody will see.
+  it('makes a single autocomplete attempt, with no retry', async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new Error('network down'));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(autocompleteCards('bolt')).resolves.toEqual([]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips an autocomplete request whose deadline passed while it was queued', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ data: ['Lightning Bolt'] }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(autocompleteCards('bolt', Date.now() - 1)).resolves.toEqual([]);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('resolves a card through the paper-preferring default search and caches it', async () => {
     vi.stubGlobal(
       'fetch',

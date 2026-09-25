@@ -198,7 +198,7 @@ describe('/search autocomplete', () => {
 
     await searchCommand.autocomplete?.(i);
 
-    expect(autocompleteCards).toHaveBeenCalledWith('black');
+    expect(autocompleteCards).toHaveBeenCalledWith('black', expect.any(Number));
     expect(i.respond).toHaveBeenCalledWith([{ name: 'Black Lotus', value: 'Black Lotus' }]);
   });
 });

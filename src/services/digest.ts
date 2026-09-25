@@ -1,7 +1,7 @@
 import type { Client, TextChannel, User } from 'discord.js';
 import { getDb } from '../db/index.js';
 import { digestLog, type ListingRow, type ServerRow } from '../db/schema.js';
-import { DIGEST_SECTION_CAP } from '../utils/constants.js';
+import { DIGEST_SECTION_CAP, DISCORD_MESSAGE_MAX_LENGTH } from '../utils/constants.js';
 import type { DigestTrigger } from '../types/index.js';
 import { digestLine } from '../utils/embeds.js';
 import { prepareDigestListings, setServerWatermark } from './digest-state.js';
@@ -46,6 +46,44 @@ export function formatDigest(listingsToShow: ListingRow[]): string {
 }
 
 /**
+ * Split a digest into messages that each fit Discord's content limit; a busy
+ * day's digest runs well past it, and Discord rejects an oversized message
+ * outright. Blank-line-separated blocks (the heading and each section) are
+ * kept whole where they fit, so a message starts at a section heading when
+ * possible. A block too long for one message is split between lines.
+ */
+export function splitDigestMessage(text: string, limit = DISCORD_MESSAGE_MAX_LENGTH): string[] {
+  const messages: string[] = [];
+  let current = '';
+  const append = (piece: string, separator: string): void => {
+    if (current && current.length + separator.length + piece.length > limit) {
+      messages.push(current);
+      current = '';
+    }
+    current = current ? `${current}${separator}${piece}` : piece;
+  };
+
+  for (const block of text.split('\n\n')) {
+    if (block.length <= limit) {
+      append(block, '\n\n');
+      continue;
+    }
+    block.split('\n').forEach((line, index) => {
+      const separator = index === 0 ? '\n\n' : '\n';
+      // No real digest line comes close to the limit; hard-split one that
+      // somehow does rather than drop it.
+      for (let start = 0; start < Math.max(line.length, 1); start += limit) {
+        append(line.slice(start, start + limit), start === 0 ? separator : '\n');
+      }
+    });
+  }
+  if (current) {
+    messages.push(current);
+  }
+  return messages;
+}
+
+/**
  * Run a digest for one server. Follows the watermark rules in the spec: only
  * listings created after `last_digest_at` are selected, delivery is by
  * `digest_mode`, and the watermark only advances when at least one destination
@@ -68,15 +106,15 @@ export async function runDigest(
     month: 'long',
     day: 'numeric',
   })}`;
-  const message = `${heading}\n\n${formatDigest(collected)}`;
+  const messages = splitDigestMessage(`${heading}\n\n${formatDigest(collected)}`);
 
   let channelOk = false;
   let dmOk = false;
   if (server.digestMode === 'channel' || server.digestMode === 'both') {
-    channelOk = await deliverToChannel(client, server, message);
+    channelOk = await deliverToChannel(client, server, messages);
   }
   if (server.digestMode === 'dm' || server.digestMode === 'both') {
-    dmOk = await deliverToDm(client, server, message);
+    dmOk = await deliverToDm(client, server, messages);
   }
 
   if (!channelOk && !dmOk) {
@@ -92,10 +130,30 @@ export async function runDigest(
   return { sent: true, channelOk, dmOk, listingCount: collected.length };
 }
 
+/**
+ * Send each digest message in order, retrying each one. Throws if any message
+ * still fails, so a destination only counts as delivered when the whole
+ * digest arrived. After a partial send the watermark may stay put and the
+ * next run repeats the messages that did arrive: a duplicate is preferable
+ * to silently dropping listings.
+ */
+async function sendAll(
+  send: (options: { content: string; allowedMentions: { parse: [] } }) => Promise<unknown>,
+  messages: string[],
+): Promise<void> {
+  for (const content of messages) {
+    await retryWithBackoff(() => send({ content, allowedMentions: { parse: [] } }), {
+      attempts: 3,
+      baseDelayMs: 1000,
+      maxDelayMs: 8000,
+    });
+  }
+}
+
 async function deliverToChannel(
   client: Client,
   server: ServerRow,
-  message: string,
+  messages: string[],
 ): Promise<boolean> {
   if (!server.adminChannelId) {
     return false;
@@ -105,21 +163,18 @@ async function deliverToChannel(
     if (!channel || !channel.isTextBased() || !channel.isSendable()) {
       return false;
     }
-    await retryWithBackoff(
-      () => channel.send({ content: message, allowedMentions: { parse: [] } }),
-      {
-        attempts: 3,
-        baseDelayMs: 1000,
-        maxDelayMs: 8000,
-      },
-    );
+    await sendAll((options) => channel.send(options), messages);
     return true;
   } catch {
     return false;
   }
 }
 
-async function deliverToDm(client: Client, server: ServerRow, message: string): Promise<boolean> {
+async function deliverToDm(
+  client: Client,
+  server: ServerRow,
+  messages: string[],
+): Promise<boolean> {
   if (!server.digestDmUserId) {
     return false;
   }
@@ -128,11 +183,7 @@ async function deliverToDm(client: Client, server: ServerRow, message: string): 
     if (!user) {
       return false;
     }
-    await retryWithBackoff(() => user.send({ content: message, allowedMentions: { parse: [] } }), {
-      attempts: 3,
-      baseDelayMs: 1000,
-      maxDelayMs: 8000,
-    });
+    await sendAll((options) => user.send(options), messages);
     return true;
   } catch {
     return false;

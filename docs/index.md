@@ -4,7 +4,6 @@ Welcome to LFCbot! This is a free, multi-server Discord bot for card trading lis
 
 ## Quick Links
 
-- **[Discord Bot Invite](https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&permissions=84992&scope=bot%20applications.commands)**
 - **[GitHub Repository](https://github.com/mkane848/lfc-bot)**
 - **[Contributing Guidelines](https://github.com/mkane848/lfc-bot/blob/main/CONTRIBUTING.md)**
 
@@ -22,7 +21,9 @@ Welcome to LFCbot! This is a free, multi-server Discord bot for card trading lis
 
 ## Getting Started
 
-1. Invite the bot to your server using the link above
+1. Invite the bot to your server. For your own instance, build the invite link
+   from its application ID as described in
+   [Invite your friends](./DEPLOYMENT.md#6-invite-your-friends)
 2. Use `/help` to see available commands
 3. Start posting with `/have` or `/want` commands
 

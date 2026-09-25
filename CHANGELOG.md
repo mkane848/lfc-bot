@@ -23,6 +23,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   while a legacy `lfcbot` container exists. `docs/DEPLOYMENT.md` covers the
   compose setup and moving an existing `docker run` install over, and now
   gives pinned tags with their `v` prefix (`:v1.6.0`, not `:1.6.0`).
+- Digests stopped for good once a server had about 16 new listings. The whole
+  digest went out as one message, Discord rejects messages over 2,000
+  characters, and a failed digest keeps its listings for the next run, so
+  every later digest was larger and failed too, firing a critical alert each
+  time. The digest is now split into as many messages as it needs, breaking
+  at section headings where it can (`src/services/digest.ts`). A destination
+  counts as delivered only when every message arrives; if one fails partway,
+  the next run may repeat the messages that did arrive rather than drop
+  listings.
+- `/admin` was hidden by default from members with Manage Server unless they
+  were also Administrators: its default permission was set to the
+  Administrator bit (`0x8`) with a comment calling it Manage Server (`0x20`).
+  It now uses Manage Server, matching the permission `/admin` checks when
+  run. The change reaches each server when the bot next starts and
+  re-registers its commands; a server that set its own permission for
+  `/admin` under Server Settings > Integrations keeps that setting.
+- The public docs site's "Discord Bot Invite" link contained the literal
+  placeholder `YOUR_CLIENT_ID`, so it could not invite anything. It is removed
+  until the public instance's link is added; "Getting Started" now points to
+  the steps for building an invite link for your own instance.
+- A slow Scryfall response during card autocomplete fired a critical alert.
+  Each keystroke's lookup could take over 10 seconds (a 5-second timeout plus
+  a retry, after waiting in the request queue), but Discord accepts
+  suggestions for only 3 seconds, and the resulting error went to the handler
+  for unexpected failures. Card autocomplete now makes one short attempt with
+  no retry, and a lookup still waiting in the queue when its time runs out is
+  skipped rather than delaying the card lookups behind it. Card and set
+  suggestions are sent only if they're ready in time, and autocomplete
+  failures are logged as warnings instead of alerts.
 
 ## [1.6.0] - 2026-09-18
 
