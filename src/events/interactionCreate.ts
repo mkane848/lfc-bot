@@ -26,8 +26,14 @@ export async function handleInteractionCreate(interaction: Interaction): Promise
   try {
     if (interaction.isAutocomplete()) {
       const command = commandMap.get(interaction.commandName);
-      if (command?.autocomplete) {
-        await command.autocomplete(interaction);
+      try {
+        await command?.autocomplete?.(interaction);
+      } catch (err) {
+        // Suggestions are best effort, and there is nothing to reply to. The
+        // usual cause is Discord's 3-second window closing, which the member
+        // sees as "Loading options failed" and fixes by typing on, so this is
+        // logged rather than sent as a critical alert.
+        log.warn({ err, commandName: interaction.commandName }, 'Autocomplete failed');
       }
       return;
     }

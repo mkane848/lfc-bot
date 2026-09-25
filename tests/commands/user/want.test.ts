@@ -153,7 +153,7 @@ describe('/want autocomplete', () => {
 
     await wantCommand.autocomplete?.(i);
 
-    expect(autocompleteCards).toHaveBeenCalledWith('black');
+    expect(autocompleteCards).toHaveBeenCalledWith('black', expect.any(Number));
     expect(autocompleteSets).not.toHaveBeenCalled();
     expect(i.respond).toHaveBeenCalledWith([
       { name: 'Black Lotus', value: 'Black Lotus' },

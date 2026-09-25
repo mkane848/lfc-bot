@@ -226,6 +226,8 @@ export interface FakeAutocompleteInit {
   guildId?: string | null;
   userId?: string;
   username?: string;
+  /** When Discord created the interaction (epoch ms); defaults to now. */
+  createdTimestamp?: number;
 }
 
 export type FakeAutocompleteInteraction = AutocompleteInteraction & {
@@ -242,6 +244,7 @@ export function fakeAutocompleteInteraction(
     guild: guildId ? { id: guildId } : null,
     inGuild: vi.fn(() => guildId !== null),
     user: { id: init.userId ?? 'user-1', username: init.username ?? 'alice' },
+    createdTimestamp: init.createdTimestamp ?? Date.now(),
     options: buildOptions({ focused: init.focused, strings: init.strings }),
     respond: vi.fn().mockResolvedValue(undefined),
   };
