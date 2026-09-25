@@ -6,9 +6,12 @@ working from the repository directory (`~/lfc-bot`).
 
 ## Set up the backup cron job
 
-The bot keeps its SQLite database in the `lfcbot-data` Docker volume.
-`scripts/backup.sh` snapshots that volume to a compressed archive, restarts the
-bot, and prunes archives older than a configurable retention window.
+The bot keeps its SQLite database in a Docker volume, declared as
+`lfcbot-data` in `docker-compose.yml`. Compose prefixes it with the project
+name, so for a clone in `~/lfc-bot` its real name is `lfc-bot_lfcbot-data`.
+`scripts/backup.sh` finds that volume from the bot's container, snapshots it to
+a compressed archive, restarts the bot, and prunes archives older than a
+configurable retention window.
 
 1. Make the script executable (it is committed executable, but confirm):
 
@@ -23,7 +26,17 @@ bot, and prunes archives older than a configurable retention window.
    ```
 
    This stops the bot, writes an archive under `./backups/`, and restarts the
-   bot. Confirm the log still shows `Bot is online` afterward:
+   bot. The archive should list the database file:
+
+   ```sh
+   tar tzf "$(ls -t backups/lfcbot-*.tar.gz | head -n 1)" | grep '\.db$'
+   ```
+
+   It should print `./lfcbot.db`. Archives from earlier versions of the script
+   may be empty: it copied a volume named literally `lfcbot-data` rather than
+   the compose volume. Take a fresh backup rather than relying on them.
+
+   Confirm the log still shows `Bot is online` afterward:
 
    ```sh
    docker compose logs --tail=20 bot

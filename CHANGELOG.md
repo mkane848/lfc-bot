@@ -52,6 +52,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   skipped rather than delaying the card lookups behind it. Card and set
   suggestions are sent only if they're ready in time, and autocomplete
   failures are logged as warnings instead of alerts.
+- `scripts/backup.sh` backed up an empty volume on compose installs, which is
+  every documented setup. It copied a volume named literally `lfcbot-data`,
+  but compose names the volume after the project (`lfc-bot_lfcbot-data` for a
+  clone in `lfc-bot`), so `docker run` created an empty `lfcbot-data` and the
+  script archived that and reported success. It now reads the volume mounted
+  at `/app/data` from the bot's container (`VOLUME` still overrides), exits
+  with an error and deletes the archive when it holds no database file, and
+  restarts the bot even when the copy fails. **Archives made by earlier
+  versions on a compose install are likely empty: take a fresh backup.**
 
 ## [1.6.0] - 2026-09-18
 
