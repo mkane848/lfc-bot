@@ -425,6 +425,23 @@ describe('listing status transitions (setStatus guard)', () => {
     return id;
   }
 
+  // The contract (lfc-03 prompt) fixes WHAT the error must say - the listing id,
+  // its current status and the requested status - not the wording. Assert those
+  // three facts, never a phrasing, so a correct guard is not failed on style.
+  function expectBlockedTransition(action: () => unknown, id: number, from: string, to: string): void {
+    let err: unknown;
+    try {
+      action();
+    } catch (e) {
+      err = e;
+    }
+    expect(err, `expected ${from} -> ${to} to throw`).toBeInstanceOf(Error);
+    const message = (err as Error).message;
+    expect(message).toContain(String(id));
+    expect(message).toContain(from);
+    expect(message).toContain(to);
+  }
+
   it('allows an active listing to be fulfilled', () => {
     const id = seedListingWithStatus('active');
     const row = fulfillListing(id);
@@ -445,31 +462,31 @@ describe('listing status transitions (setStatus guard)', () => {
 
   it('throws when fulfilling an already-fulfilled listing and leaves it fulfilled', () => {
     const id = seedListingWithStatus('fulfilled');
-    expect(() => fulfillListing(id)).toThrow(/cannot .* from .*fulfilled/);
+    expectBlockedTransition(() => fulfillListing(id), id, 'fulfilled', 'fulfilled');
     expect(getListingById(id)?.status).toBe('fulfilled');
   });
 
   it('throws when deleting an already-deleted listing and leaves it deleted', () => {
     const id = seedListingWithStatus('deleted');
-    expect(() => softDeleteListing(id)).toThrow(/cannot .* from .*deleted/);
+    expectBlockedTransition(() => softDeleteListing(id), id, 'deleted', 'deleted');
     expect(getListingById(id)?.status).toBe('deleted');
   });
 
   it('throws when fulfilling a deleted listing (deleted is terminal)', () => {
     const id = seedListingWithStatus('deleted');
-    expect(() => fulfillListing(id)).toThrow(/cannot .* from .*deleted/);
+    expectBlockedTransition(() => fulfillListing(id), id, 'deleted', 'fulfilled');
     expect(getListingById(id)?.status).toBe('deleted');
   });
 
   it('throws when fulfilling an expired listing and leaves it expired', () => {
     const id = seedListingWithStatus('expired');
-    expect(() => fulfillListing(id)).toThrow(/cannot .* from .*expired/);
+    expectBlockedTransition(() => fulfillListing(id), id, 'expired', 'fulfilled');
     expect(getListingById(id)?.status).toBe('expired');
   });
 
   it('throws when deleting an expired listing and leaves it expired', () => {
     const id = seedListingWithStatus('expired');
-    expect(() => softDeleteListing(id)).toThrow(/cannot .* from .*expired/);
+    expectBlockedTransition(() => softDeleteListing(id), id, 'expired', 'deleted');
     expect(getListingById(id)?.status).toBe('expired');
   });
 });
