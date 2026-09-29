@@ -11,7 +11,7 @@ export default [
   ...tseslint.configs.recommendedTypeChecked,
   prettier,
   {
-    files: ['src/**/*.ts', 'tests/**/*.ts'],
+    files: ['src/**/*.ts', 'tests/**/*.ts', 'vitest.config.ts'],
     languageOptions: {
       parser: tseslint.parser,
       parserOptions: {
