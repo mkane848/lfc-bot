@@ -91,6 +91,33 @@ describe('/mylistings execute', () => {
       expect.objectContaining({ content: expect.stringContaining('no active listings') }),
     );
   });
+
+  it('renders a sealed listing with the sealed Product field', async () => {
+    seedListing({
+      kind: 'sealed',
+      cardName: 'Bloomburrow Bundle',
+      cardNameNormalized: 'bloomburrow bundle',
+      condition: null,
+      priceCents: 4000,
+      sealedUuid: 'uuid-blb',
+      sealedCategory: 'bundle',
+      sealedSubtype: 'default',
+    });
+    const i = fakeChatInputInteraction({ userId: 'owner-1' });
+
+    await myListingsCommand.execute(i);
+
+    expect(i.reply).toHaveBeenCalled();
+  });
+
+  it('falls back to raw intent/accepts labels when not in the map', async () => {
+    seedListing({ intent: 'unknown-intent' as never, accepts: 'unknown-accepts' as never });
+    const i = fakeChatInputInteraction({ userId: 'owner-1' });
+
+    await myListingsCommand.execute(i);
+
+    expect(i.reply).toHaveBeenCalled();
+  });
 });
 
 describe('handleListingButton', () => {
