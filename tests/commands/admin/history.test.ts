@@ -55,4 +55,34 @@ describe('/admin history', () => {
     };
     expect(call.embeds[0]!.toJSON().description).toContain('/admin mode');
   });
+
+  it('renders an entry without details when details are empty', async () => {
+    recordAdminAction({
+      serverId: 'guild-1',
+      adminId: 'admin-1',
+      adminUsername: 'admin',
+      action: 'mode',
+      details: null,
+    });
+    const i = fakeChatInputInteraction({});
+
+    await historyExecute(i);
+
+    const call = i.reply.mock.calls[0]?.[0] as {
+      embeds: Array<{ toJSON: () => { description?: string } }>;
+    };
+    const desc = call.embeds[0]!.toJSON().description ?? '';
+    expect(desc).toContain('/admin mode');
+    expect(desc).toContain('<@admin-1>');
+  });
+
+  it('replies ephemerally and bails when the interaction is outside a guild', async () => {
+    const i = fakeChatInputInteraction({ guildId: null });
+
+    await historyExecute(i);
+
+    expect(i.reply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('inside a server') }),
+    );
+  });
 });

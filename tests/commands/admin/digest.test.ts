@@ -87,4 +87,27 @@ describe('/admin digest', () => {
       expect.objectContaining({ content: expect.stringContaining('delivery failed') }),
     );
   });
+
+  it('uses singular phrasing when listingCount === 1', async () => {
+    getDb().insert(servers).values(serverRow()).run();
+    runDigest.mockResolvedValue({ sent: true, channelOk: true, dmOk: false, listingCount: 1 });
+    const i = fakeChatInputInteraction({});
+
+    await digestExecute(i);
+
+    expect(i.reply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringMatching(/1 new listing\b(?!s)/) }),
+    );
+  });
+
+  it('replies ephemerally and bails when the interaction is outside a guild', async () => {
+    const i = fakeChatInputInteraction({ guildId: null });
+
+    await digestExecute(i);
+
+    expect(runDigest).not.toHaveBeenCalled();
+    expect(i.reply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('inside a server') }),
+    );
+  });
 });
