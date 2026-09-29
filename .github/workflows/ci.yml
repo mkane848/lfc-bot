@@ -42,5 +42,19 @@ jobs:
       - name: Type check
         run: npm run type-check
 
-      - name: Test
-        run: npm test
+      - name: Test with coverage
+        # `--coverage` enables the v8 provider configured in
+        # vitest.config.ts. The Gold threshold there is the merge gate
+        # declared by docs/TEST_COVERAGE_AUDIT.md; a PR that drops any of
+        # statements/branches/functions/lines below 95/90/90/95 fails this
+        # step. Coverage/ is .gitignore'd so the HTML report stays off the
+        # repo and is uploaded as a workflow artifact instead.
+        run: npm test -- --coverage
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 14
