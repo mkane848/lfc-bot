@@ -150,6 +150,29 @@ describe('handleListingButton', () => {
       expect.objectContaining({ content: expect.stringContaining('Only the listing owner') }),
     );
   });
+
+  it('replies with "Listing not found." when the id does not resolve', async () => {
+    const i = fakeButtonInteraction({
+      customId: encodeListingActionId('fulfill', 99999),
+      userId: 'owner-1',
+    });
+
+    await handleListingButton(i);
+
+    expect(i.reply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('Listing not found') }),
+    );
+  });
+
+  it('returns silently when the customId is not a recognised listing action', async () => {
+    const i = fakeButtonInteraction({
+      customId: 'lfc:garbage:1',
+      userId: 'owner-1',
+    });
+
+    await expect(handleListingButton(i)).resolves.toBeUndefined();
+    expect(i.reply).not.toHaveBeenCalled();
+  });
 });
 
 describe('handleBatchSelect', () => {
@@ -202,5 +225,50 @@ describe('handleBatchSelect', () => {
     await handleBatchSelect(i);
 
     expect(i.showModal).toHaveBeenCalledTimes(1);
+  });
+
+  it('replies with "Listing not found." on batchedit when the first id does not resolve', async () => {
+    const i = fakeSelectMenuInteraction({
+      customId: encodeBatchSelectId('batchedit'),
+      values: ['99999'],
+      userId: 'owner-1',
+    });
+
+    await handleBatchSelect(i);
+
+    expect(i.showModal).not.toHaveBeenCalled();
+    expect(i.reply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('Listing not found') }),
+    );
+  });
+
+  it('replies ephemeral on batchedit when the first id is not owned by the caller', async () => {
+    const first = seedListing({ userId: 'someone-else' });
+    const i = fakeSelectMenuInteraction({
+      customId: encodeBatchSelectId('batchedit'),
+      values: [String(first)],
+      userId: 'owner-1',
+    });
+
+    await handleBatchSelect(i);
+
+    expect(i.showModal).not.toHaveBeenCalled();
+    expect(i.reply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('Only the listing owner') }),
+    );
+  });
+
+  it('reports "Nothing to do." when neither succeeded nor skipped arrays have items', async () => {
+    const i = fakeSelectMenuInteraction({
+      customId: encodeBatchSelectId('batchfulfill'),
+      values: [],
+      userId: 'owner-1',
+    });
+
+    await handleBatchSelect(i);
+
+    // An empty values array bypasses the per-id loop; the function falls
+    // through to `parts.join(' ') || 'Nothing to do.'` reply.
+    expect(i.reply).toHaveBeenCalledWith({ content: 'Nothing to do.', ephemeral: true });
   });
 });
