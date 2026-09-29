@@ -151,6 +151,23 @@ describe('refreshServerDigest', () => {
 
     expect(() => refreshServerDigest(client, 'guild-1')).not.toThrow();
   });
+
+  it('falls back to "0 9 * * *" when digestCron is empty', () => {
+    getDb()
+      .insert(servers)
+      .values(serverRow({ digestCron: '' }))
+      .run();
+    const client = fakeClient();
+    const scheduleSpy = vi.spyOn(cron, 'schedule');
+
+    scheduleAllDigests(client);
+
+    expect(scheduleSpy).toHaveBeenCalledWith(
+      '0 9 * * *',
+      expect.any(Function),
+      expect.any(Object),
+    );
+  });
 });
 
 describe('removeServerDigest / stopAllJobs', () => {
