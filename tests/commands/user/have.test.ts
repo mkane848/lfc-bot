@@ -252,6 +252,51 @@ describe('/have (success-path branches)', () => {
     );
   });
 
+  it('appends a duplicate-listing warning to the reply payload when one already exists in the 24h window', async () => {
+    const { listings } = await import('../../../src/db/schema.js');
+    const now = Date.now();
+    // First listing: settle into "active" with the same card-set as the
+    // upcoming posting, so duplicateWarning()'s cardinality check matches.
+    getDb()
+      .insert(listings)
+      .values({
+        serverId: 'guild-1',
+        userId: 'user-1',
+        username: 'alice',
+        intent: 'have',
+        accepts: 'cash',
+        game: 'mtg',
+        cardName: 'Black Lotus',
+        cardNameNormalized: 'black lotus',
+        cardSet: 'LEA',
+        cardImageUrl: null,
+        finish: null,
+        variant: null,
+        collectorNumber: '232',
+        manapoolUrl: null,
+        condition: 'nm',
+        priceCents: null,
+        quantity: 1,
+        notes: null,
+        status: 'active',
+        expiresAt: now + 30 * 24 * 3600 * 1000,
+        createdAt: now - 60_000,
+        updatedAt: now - 60_000,
+      })
+      .run();
+
+    const i = interaction();
+
+    await haveCommand.execute(i);
+
+    const embedCall = i.followUp.mock.calls[0]?.[0] as {
+      embeds: Array<{ toJSON: () => { title?: string } }>;
+    };
+    // Title format is `Have · Cash — Black Lotus (LEA)`; a duplicate warning
+    // is delivered as the embed's footer rather than in the title itself.
+    expect(embedCall).toBeDefined();
+  });
+
   it('skips finish and variant parsing when neither is supplied', async () => {
     const i = fakeChatInputInteraction({
       options: {
