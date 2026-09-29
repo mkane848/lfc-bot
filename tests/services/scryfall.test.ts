@@ -54,6 +54,18 @@ describe('scryfall service', () => {
     await expect(autocompleteCards('black')).resolves.toEqual(['Black Lotus', 'Black Vice']);
   });
 
+  it('returns an empty list for a whitespace-only query without making a network call', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ data: ['Should not be called'] }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(autocompleteCards('   ')).resolves.toEqual([]);
+
+    const autocompleteCalls = fetchMock.mock.calls.filter((c) =>
+      String(c[0]).includes('/cards/autocomplete'),
+    );
+    expect(autocompleteCalls).toHaveLength(0);
+  });
+
   it('resolves a card through the paper-preferring default search and caches it', async () => {
     vi.stubGlobal(
       'fetch',

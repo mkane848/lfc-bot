@@ -418,6 +418,28 @@ describe('handleEditModal', () => {
   });
 });
 
+describe('/edit execute', () => {
+  it('rejects outside a guild before doing any work', async () => {
+    const i = fakeChatInputInteraction({ guildId: null, options: { integers: { listing_id: 1 } } });
+
+    await editCommand.execute(i);
+
+    expect(i.reply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('inside a server') }),
+    );
+  });
+
+  it('replies with "Listing not found." when the listing id does not resolve', async () => {
+    const i = fakeChatInputInteraction({ options: { integers: { listing_id: 99999 } } });
+
+    await editCommand.execute(i);
+
+    expect(i.reply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('Listing not found') }),
+    );
+  });
+});
+
 describe('handleEditNextButton', () => {
   it('opens the next listing modal for the owner', async () => {
     const first = seedListing();

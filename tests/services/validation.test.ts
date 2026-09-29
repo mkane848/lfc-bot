@@ -86,6 +86,11 @@ describe('parsePriceToCents', () => {
     expect(parsePriceToCents('100000.00')).toBe(10000000);
   });
 
+  it('rejects empty input', () => {
+    expect(() => parsePriceToCents('')).toThrow(/Price is required/);
+    expect(() => parsePriceToCents('   ')).toThrow(/Price is required/);
+  });
+
   it('rejects invalid or out-of-range prices', () => {
     expect(() => parsePriceToCents('abc')).toThrow(ValidationError);
     expect(() => parsePriceToCents('-5')).toThrow(ValidationError);
