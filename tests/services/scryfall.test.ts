@@ -313,4 +313,108 @@ describe('scryfall service', () => {
     const choices = await autocompleteSets('mh3');
     expect(choices).toEqual([{ name: 'Modern Horizons 3 (MH3)', value: 'MH3' }]);
   });
+
+  it('returns all set autocomplete choices when the query is empty', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          data: [
+            { code: 'mh3', name: 'Modern Horizons 3' },
+            { code: 'lea', name: 'Limited Edition Alpha' },
+          ],
+        }),
+      ),
+    );
+    const choices = await autocompleteSets('');
+    expect(choices).toHaveLength(2);
+  });
+
+  it('caches the set list across multiple calls and does not re-fetch', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        data: [{ code: 'mh3', name: 'Modern Horizons 3' }],
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await autocompleteSets('mh3');
+    const beforeCalls = fetchMock.mock.calls.length;
+    await autocompleteSets('mh3');
+
+    // The second call must not have hit the network at all. (Earlier tests
+    // may have populated the in-memory `setListCache`; we test the cache
+    // contract rather than the populate path.)
+    expect(fetchMock.mock.calls.length).toBe(beforeCalls);
+  });  it('uses the "large" image URL as the fallback when "normal" is missing', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          data: [
+            {
+              id: 'lotus-id',
+              name: 'Black Lotus',
+              set: 'LEA',
+              collector_number: '232',
+              games: ['paper'],
+              image_uris: { large: 'http://img/lotus-large.png' },
+            },
+          ],
+        }),
+      ),
+    );
+
+    const resolved = await resolveCard('Black Lotus');
+    expect(resolved.cardImageUrl).toBe('http://img/lotus-large.png');
+  });
+
+  it('uses the front-face image when the card has faces and only the face has image_uris', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          data: [
+            {
+              id: 'split-id',
+              name: 'Wear // Tear',
+              set: 'isd',
+              collector_number: '230',
+              games: ['paper'],
+              card_faces: [
+                { name: 'Wear', image_uris: { normal: 'http://img/wear.png' } },
+                { name: 'Tear', image_uris: { normal: 'http://img/tear.png' } },
+              ],
+            },
+          ],
+        }),
+      ),
+    );
+
+    const resolved = await resolveCard('Wear // Tear');
+    expect(resolved.cardImageUrl).toBe('http://img/wear.png');
+  });
+
+  it('still produces a resolved response when no image URL is available', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          data: [
+            {
+              id: 'noimg-id',
+              name: 'Black Lotus',
+              set: 'LEA',
+              collector_number: '232',
+              games: ['paper'],
+            },
+          ],
+        }),
+      ),
+    );
+
+    const resolved = await resolveCard('Black Lotus');
+    expect(resolved.resolved).toBe(true);
+    expect(resolved.cardImageUrl).toBeNull();
+  });
 });
