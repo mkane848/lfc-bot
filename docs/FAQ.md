@@ -28,6 +28,14 @@ collector number), double check the set code; an unrecognized set/collector
 number combination will fail to resolve even if the card name itself is
 right.
 
+**Two sealed products in the suggestions have the same name. Which is which?**
+Each suggestion ends with its set code, like `(FRA)` or `(FRC)`. MTGJSON, the
+source of the sealed catalog, lists some products under more than one set; a
+Commander deck, for example, can appear under both the main set and its
+Commander set. Either pick posts that deck, and the listing shows the set code
+you chose. If you type a name without picking a suggestion, fill in the `set`
+option too so the bot knows which one you mean.
+
 **Is there a limit on how many listings I can post?**
 No hard cap, but there's a 10-second cooldown between posts (per user, per
 server) to prevent spam. Posting the same card/condition/price you already

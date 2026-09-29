@@ -196,6 +196,12 @@ behavior changes; do not weaken assertions to make a change pass.
   digest is split into messages under Discord's 2,000-character limit
   (`splitDigestMessage`), and a destination counts as delivered only when
   every message arrives.
+- Sealed product autocomplete (`autocompleteSealedProducts` in
+  `src/services/sealed.ts`) labels each choice `Name (SET)` and sets its value
+  to `uuid:<catalog uuid>`, not the name, because MTGJSON repeats some names
+  across sets. `resolveSealedProduct` resolves that value by uuid; anything
+  else is treated as a typed name. `sealedProductChoiceUuid` in
+  `src/utils/constants.ts` tells the two apart.
 - `/admin games` exists in `src/commands/admin/games.ts` but is intentionally
   **not** registered in `src/commands/admin/admin.ts` — `enabledGames` isn't
   read anywhere else (`/have`, `/want`, `/search` all hardcode `game: 'mtg'`),

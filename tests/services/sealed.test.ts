@@ -261,12 +261,21 @@ describe('syncSealedCatalog', () => {
     expect(LONG_NAME.length).toBeGreaterThan(SEALED_PRODUCT_NAME_MAX);
     expect(row?.name).toBe(LONG_NAME.slice(0, SEALED_PRODUCT_NAME_MAX));
     expect(row?.name.length).toBe(SEALED_PRODUCT_NAME_MAX);
-    // nameNormalized is derived from the *truncated* name, so the value Discord
-    // hands back from autocomplete resolves exactly.
+    // nameNormalized is derived from the *truncated* name, so the stored name
+    // typed back in resolves exactly.
     const truncated = row?.name ?? '';
-    const choice = autocompleteSealedProducts('House of Horror').find((c) => c.value === truncated);
-    expect(choice).toBeDefined();
     await expect(resolveSealedProduct(truncated)).resolves.toMatchObject({
+      uuid: 'uuid-dsk-long',
+      resolved: true,
+    });
+    // The suggestion's label still fits Discord's limit with the set appended,
+    // and its value resolves to the same product.
+    const choice = autocompleteSealedProducts('House of Horror').find(
+      (c) => c.value === 'uuid:uuid-dsk-long',
+    );
+    expect(choice?.name.length).toBeLessThanOrEqual(SEALED_PRODUCT_NAME_MAX);
+    expect(choice?.name.endsWith(' (DSK)')).toBe(true);
+    await expect(resolveSealedProduct(choice?.value ?? '')).resolves.toMatchObject({
       uuid: 'uuid-dsk-long',
       resolved: true,
     });
@@ -413,20 +422,53 @@ describe('autocompleteSealedProducts', () => {
     expect(autocompleteSealedProducts('   ')).toEqual([]);
   });
 
-  it('substring-matches the normalized name and mirrors name into value', () => {
+  it('substring-matches the normalized name, labels each choice with its set, and carries the uuid', () => {
     expect(autocompleteSealedProducts('booster box')).toEqual([
-      { name: 'Bloomburrow Collector Booster Box', value: 'Bloomburrow Collector Booster Box' },
-      { name: 'Duskmourn Play Booster Box', value: 'Duskmourn Play Booster Box' },
+      { name: 'Bloomburrow Collector Booster Box (BLB)', value: 'uuid:b' },
+      { name: 'Duskmourn Play Booster Box (DSK)', value: 'uuid:c' },
     ]);
     // Casing, padding and punctuation are normalized away on both sides.
     expect(autocompleteSealedProducts('  BLOOMBURROW   Bundle!  ')).toEqual([
-      { name: 'Bloomburrow Bundle', value: 'Bloomburrow Bundle' },
+      { name: 'Bloomburrow Bundle (BLB)', value: 'uuid:a' },
     ]);
+  });
+
+  // MTGJSON lists some Commander decks under both the main set and the
+  // Commander set, with identical names.
+  it('tells same-named products apart by set, and each pick resolves to its own product', async () => {
+    const name = 'Reality Fracture Commander Deck Multiverse Reforged';
+    seedProducts([
+      { uuid: 'fra-deck', name, setCode: 'FRA', category: 'deck', subtype: 'commander' },
+      { uuid: 'frc-deck', name, setCode: 'FRC', category: 'deck', subtype: 'commander' },
+    ]);
+
+    const choices = autocompleteSealedProducts('multiverse reforged');
+
+    expect(choices).toEqual([
+      { name: `${name} (FRA)`, value: 'uuid:fra-deck' },
+      { name: `${name} (FRC)`, value: 'uuid:frc-deck' },
+    ]);
+    await expect(resolveSealedProduct(choices[1]?.value ?? '')).resolves.toMatchObject({
+      uuid: 'frc-deck',
+      setCode: 'FRC',
+      resolved: true,
+    });
+  });
+
+  it('shortens a long name so the labelled choice fits the 100-character limit', () => {
+    const longName = 'Very Long Product Name '.repeat(5).slice(0, SEALED_PRODUCT_NAME_MAX);
+    seedProducts([{ uuid: 'long', name: longName, setCode: 'MH3' }]);
+
+    const [choice] = autocompleteSealedProducts('very long product');
+
+    expect(choice?.name).toHaveLength(SEALED_PRODUCT_NAME_MAX);
+    expect(choice?.name.endsWith('… (MH3)')).toBe(true);
+    expect(choice?.value).toBe('uuid:long');
   });
 
   it('scopes results to setCode when given', () => {
     expect(autocompleteSealedProducts('booster box', 'DSK')).toEqual([
-      { name: 'Duskmourn Play Booster Box', value: 'Duskmourn Play Booster Box' },
+      { name: 'Duskmourn Play Booster Box (DSK)', value: 'uuid:c' },
     ]);
     expect(autocompleteSealedProducts('booster box', 'dsk')).toHaveLength(1);
     expect(autocompleteSealedProducts('bloomburrow', 'DSK')).toEqual([]);
@@ -536,6 +578,27 @@ describe('resolveSealedProduct', () => {
     expect(mismatched.resolved).toBe(false);
     expect(mismatched.uuid).toBeNull();
     expect(mismatched.setCode).toBe('DSK');
+    expect(manapool).not.toHaveBeenCalled();
+  });
+
+  it('resolves a picked suggestion by uuid, even when the set option names another set', async () => {
+    manapool.mockResolvedValue(null);
+
+    await expect(
+      resolveSealedProduct('uuid:uuid-blb-bundle', { setCode: 'DSK' }),
+    ).resolves.toMatchObject({
+      productName: 'Bloomburrow Bundle',
+      setCode: 'BLB',
+      uuid: 'uuid-blb-bundle',
+      resolved: true,
+    });
+  });
+
+  it('leaves a picked uuid that is no longer in the catalog unresolved, with no Mana Pool call', async () => {
+    const result = await resolveSealedProduct('uuid:since-removed');
+
+    expect(result.resolved).toBe(false);
+    expect(result.uuid).toBeNull();
     expect(manapool).not.toHaveBeenCalled();
   });
 

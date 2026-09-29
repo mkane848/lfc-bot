@@ -8,7 +8,7 @@ import {
 } from '../../services/sealed.js';
 import type { Accepts, GuildCommand } from '../../types/index.js';
 import { ACCEPTS_VALUES } from '../../types/index.js';
-import { ACCEPTS_LABELS } from '../../utils/constants.js';
+import { ACCEPTS_LABELS, sealedProductChoiceUuid } from '../../utils/constants.js';
 import { replyError, replyWithListing } from '../../utils/replies.js';
 import {
   isAccepts,
@@ -66,6 +66,15 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
   }
 
   const resolved = await resolveSealedProduct(productName, { setCode });
+  if (!resolved.resolved && sealedProductChoiceUuid(productName)) {
+    // A picked suggestion whose product left the catalog since: there is no
+    // name to fall back on, only the uuid.
+    await replyError(
+      interaction,
+      'That product is no longer in the catalog. Pick it again from the suggestions, or type its name.',
+    );
+    return;
+  }
 
   try {
     const { listing, warning } = createListing({

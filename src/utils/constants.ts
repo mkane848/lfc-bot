@@ -33,6 +33,25 @@ export const DIGEST_SECTION_CAP = 25;
 export const DISCORD_MESSAGE_MAX_LENGTH = 2000;
 /** Discord caps autocomplete choice name and value at 100 characters. */
 export const SEALED_PRODUCT_NAME_MAX = 100;
+/**
+ * Prefix on a sealed product autocomplete value that carries the product's
+ * catalog uuid instead of its name. MTGJSON can list the same product name more
+ * than once (a Commander deck under both its main set and its Commander set),
+ * so a picked suggestion has to name the exact product, not just its name.
+ */
+export const SEALED_PRODUCT_CHOICE_PREFIX = 'uuid:';
+
+/**
+ * The catalog uuid a picked sealed product suggestion carries, or `null` for a
+ * name the member typed without picking a suggestion.
+ */
+export function sealedProductChoiceUuid(value: string): string | null {
+  if (!value.startsWith(SEALED_PRODUCT_CHOICE_PREFIX)) {
+    return null;
+  }
+  const uuid = value.slice(SEALED_PRODUCT_CHOICE_PREFIX.length).trim();
+  return uuid.length > 0 ? uuid : null;
+}
 
 /** MTGJSON's full set list; every set's `sealedProduct[]` is read from it. */
 export const SEALED_CATALOG_URL = 'https://mtgjson.com/api/v5/SetList.json';
