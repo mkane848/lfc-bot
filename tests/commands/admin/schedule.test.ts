@@ -89,4 +89,29 @@ describe('/admin schedule', () => {
     );
     expect(refreshServerDigest).not.toHaveBeenCalled();
   });
+
+  it('rejects an invalid natural-language time', async () => {
+    const i = fakeChatInputInteraction({ options: { strings: { time: 'when pigs fly' } } });
+
+    await scheduleExecute(i);
+
+    expect(i.reply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.any(String) }),
+    );
+    expect(refreshServerDigest).not.toHaveBeenCalled();
+  });
+
+  it('replies ephemerally and bails when the interaction is outside a guild', async () => {
+    const i = fakeChatInputInteraction({
+      guildId: null,
+      options: { strings: { cron: '0 9 * * *' } },
+    });
+
+    await scheduleExecute(i);
+
+    expect(i.reply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('inside a server') }),
+    );
+    expect(refreshServerDigest).not.toHaveBeenCalled();
+  });
 });
