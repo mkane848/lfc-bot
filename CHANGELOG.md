@@ -7,14 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Automatic release tagging could put the tag on a commit merged after the
+  release, shipping changes the release hadn't included. The tag went on
+  whichever commit's CI run happened to start the workflow, so when a pull
+  request merged seconds after the release pull request and its CI finished
+  first, the tag landed there. `v1.6.2` did exactly that, on the drizzle-orm
+  bump merged 12 seconds after the release. `.github/workflows/tag-release.yml`
+  now tags the commit that set the `package.json` version, and only once CI
+  has passed on that commit itself.
+
 ## [1.6.2] - 2026-09-29
 
 ### Changed
 
-- dotenv, the one production dependency updated in this release, moves from
-  17 to 18. The bot loads `.env` exactly as before; the startup line reporting
-  how many variables it injected now reads `◇ injected env (N) from .env` and
-  goes to stderr instead of stdout.
+- dotenv moves from 17 to 18. The bot loads `.env` exactly as before; the
+  startup line reporting how many variables it injected now reads
+  `◇ injected env (N) from .env` and goes to stderr instead of stdout.
+- drizzle-orm moves from 0.45.2 to 0.45.3. This wasn't part of the release
+  pull request: the `v1.6.2` tag landed on the dependency bump merged just
+  after it (see the tagging fix under Unreleased), so the published image
+  includes it. CI passed on that commit.
 
 ### Fixed
 

@@ -60,7 +60,9 @@ A release is an ordinary pull request. In it:
    bottom.
 
 Once it merges and CI passes on `main`, `.github/workflows/tag-release.yml`
-tags the merge commit `vX.Y.Z` and runs the release workflow, which publishes
+tags `vX.Y.Z` on the commit that changed the version (your pull request's
+merge commit, even if more pull requests merge right after it) and runs the
+release workflow, which publishes
 the Docker image (`:vX.Y.Z` and `:latest`) and the GitHub Release. Don't push
 the tag yourself. Only plain `X.Y.Z` versions are tagged automatically, and
 the workflow fails if `CHANGELOG.md` has no section for the new version.
