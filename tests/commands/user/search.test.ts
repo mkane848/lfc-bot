@@ -184,6 +184,65 @@ describe('/search', () => {
     expect(line).not.toMatch(/^\s*·/);
     expect(line).not.toMatch(/·\s*·/);
   });
+
+  it('uses singular "listing" when exactly one result matches', async () => {
+    seedListing();
+    const i = interaction({ card_name: 'Black Lotus' });
+
+    await searchCommand.execute(i);
+
+    const payload = i.reply.mock.calls[0]?.[0] as { embeds: Array<{ data: unknown }> };
+    const embed = payload.embeds[0]?.data as { description?: string };
+    expect(embed.description).toMatch(/\(1 listing(?!s)/);
+  });
+
+  it('falls back to the raw intent label when not in the map', async () => {
+    seedListing({ intent: 'unknown-intent' as never });
+    const i = interaction({ card_name: 'Black Lotus' });
+
+    await searchCommand.execute(i);
+
+    const payload = i.reply.mock.calls[0]?.[0] as { embeds: Array<{ data: unknown }> };
+    const embed = payload.embeds[0]?.data as {
+      fields?: Array<{ name: string }>;
+    };
+    const firstName = embed.fields?.[0]?.name ?? '';
+    expect(firstName).toContain('unknown-intent');
+  });
+
+  it('falls back to the raw accepts label when not in the map', async () => {
+    seedListing({ accepts: 'unknown-accepts' as never });
+    const i = interaction({ card_name: 'Black Lotus' });
+
+    await searchCommand.execute(i);
+
+    const payload = i.reply.mock.calls[0]?.[0] as { embeds: Array<{ data: unknown }> };
+    const embed = payload.embeds[0]?.data as {
+      fields?: Array<{ name: string }>;
+    };
+    const firstName = embed.fields?.[0]?.name ?? '';
+    expect(firstName).toContain('unknown-accepts');
+  });
+
+  it('omits the sealed-category label entirely when sealedCategory is empty', async () => {
+    seedListing({
+      kind: 'sealed',
+      cardName: 'Unknown Bundle',
+      cardNameNormalized: 'unknown bundle',
+      condition: null,
+      priceCents: null,
+      sealedCategory: '',
+      sealedSubtype: '',
+    });
+    const i = interaction({ card_name: 'Unknown Bundle' });
+
+    await searchCommand.execute(i);
+
+    const payload = i.reply.mock.calls[0]?.[0] as { embeds: Array<{ data: unknown }> };
+    const embed = payload.embeds[0]?.data as { fields?: Array<{ value: string }> };
+    const line = embed.fields?.[0]?.value ?? '';
+    expect(line).not.toMatch(/·\s*$/);
+  });
 });
 
 describe('/search autocomplete', () => {

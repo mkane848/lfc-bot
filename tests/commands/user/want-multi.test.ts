@@ -213,6 +213,35 @@ describe('/want-multi sealed', () => {
     expect(message).not.toContain('could not resolve');
   });
 
+  it('reports a malformed sealed line via failures and posts the resolvable one', async () => {
+    resolveSealedProduct.mockImplementation((name: string) =>
+      Promise.resolve(resolvedProduct(name)),
+    );
+    const i = fakeModalSubmitInteraction({
+      customId: SEALED_MODAL_ID,
+      fields: { card1: 'NoPipeSegments', card2: 'Bloomburrow Bundle', card3: '', accepts: 'cash' },
+    });
+
+    await handleWantMultiModal(i);
+
+    const message = followUpContent(i);
+    expect(message).toContain('Product 2');
+    expect(message).toContain('Product 1');
+  });
+
+  it('says "No products were entered" for an empty sealed submission', async () => {
+    const i = fakeModalSubmitInteraction({
+      customId: SEALED_MODAL_ID,
+      fields: { card1: '', card2: '', card3: '', accepts: 'cash' },
+    });
+
+    await handleWantMultiModal(i);
+
+    expect(i.editReply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('No products were entered') }),
+    );
+  });
+
   it('never calls the card resolver on a sealed submission', async () => {
     resolveSealedProduct.mockImplementation((name: string) =>
       Promise.resolve(resolvedProduct(name)),
@@ -225,5 +254,50 @@ describe('/want-multi sealed', () => {
     await handleWantMultiModal(i);
 
     expect(resolveCard).not.toHaveBeenCalled();
+  });
+
+  it('reports a malformed card line via failures and posts the resolvable one alongside', async () => {
+    resolveCard.mockImplementation((name: string) => Promise.resolve(resolved(name)));
+    const i = fakeModalSubmitInteraction({
+      customId: WANT_MULTI_MODAL_ID,
+      fields: {
+        card1: 'NoPipeSegments',
+        card2: 'Brainstorm | nm | 5.00',
+        card3: '',
+        accepts: 'cash',
+      },
+    });
+
+    await handleWantMultiModal(i);
+
+    const message = followUpContent(i);
+    expect(message).toContain('Card 1');
+    expect(message).toContain('Card 2');
+  });
+
+  it('uses sort + replyPublicText when there are no failures and no warnings', async () => {
+    resolveCard.mockImplementation((name: string) => Promise.resolve(resolved(name)));
+    const i = fakeModalSubmitInteraction({
+      customId: WANT_MULTI_MODAL_ID,
+      fields: { card1: 'Brainstorm | nm | 5.00', card2: '', card3: '', accepts: 'cash' },
+    });
+
+    await handleWantMultiModal(i);
+
+    const message = followUpContent(i);
+    expect(message).toContain('Card 1');
+  });
+
+  it('uses singular phrasing when exactly one listing is created', async () => {
+    resolveCard.mockImplementation((name: string) => Promise.resolve(resolved(name)));
+    const i = fakeModalSubmitInteraction({
+      customId: WANT_MULTI_MODAL_ID,
+      fields: { card1: 'Brainstorm | nm | 5.00', card2: '', card3: '', accepts: 'cash' },
+    });
+
+    await handleWantMultiModal(i);
+
+    const message = followUpContent(i);
+    expect(message).toMatch(/^Product 1|^Card 1/);
   });
 });

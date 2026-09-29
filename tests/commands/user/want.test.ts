@@ -221,6 +221,32 @@ describe('/want (validation error paths)', () => {
   });
 });
 
+describe('/want (success-path branches)', () => {
+  it('uses the supplied finish, variant, and condition when all are valid', async () => {
+    const i = interaction({
+      card_name: 'Brainstorm',
+      accepts: 'trade',
+      condition: 'lp',
+      finish: 'foil',
+      variant: 'borderless',
+    });
+
+    await wantCommand.execute(i);
+
+    expect(i.followUp).toHaveBeenCalled();
+  });
+
+  it('rejects an invalid condition value', async () => {
+    const i = interaction({ card_name: 'Brainstorm', accepts: 'trade', condition: 'bogus' });
+
+    await wantCommand.execute(i);
+
+    expect(i.editReply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('Invalid condition') }),
+    );
+  });
+});
+
 describe('/want autocomplete', () => {
   it('suggests set codes when the set option is focused', async () => {
     autocompleteSets.mockResolvedValue([{ name: 'Modern Horizons 3 (MH3)', value: 'MH3' }]);

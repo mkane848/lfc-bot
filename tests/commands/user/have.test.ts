@@ -241,6 +241,48 @@ describe('/have (validation error paths)', () => {
   });
 });
 
+describe('/have (success-path branches)', () => {
+  it('uses the supplied finish and variant when both are valid', async () => {
+    const i = interaction({ finish: 'foil', variant: 'borderless' });
+
+    await haveCommand.execute(i);
+
+    expect(i.followUp).toHaveBeenCalledWith(
+      expect.objectContaining({ embeds: expect.any(Array) }),
+    );
+  });
+
+  it('skips finish and variant parsing when neither is supplied', async () => {
+    const i = fakeChatInputInteraction({
+      options: {
+        strings: {
+          card_name: 'Brainstorm',
+          accepts: 'trade',
+          condition: 'nm',
+        },
+      },
+    });
+
+    await haveCommand.execute(i);
+
+    expect(i.followUp).toHaveBeenCalled();
+  });
+
+  it('rejects an invalid condition value', async () => {
+    const i = fakeChatInputInteraction({
+      options: {
+        strings: { card_name: 'Black Lotus', accepts: 'cash', condition: 'bogus' },
+      },
+    });
+
+    await haveCommand.execute(i);
+
+    expect(i.editReply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('Invalid condition') }),
+    );
+  });
+});
+
 describe('/have autocomplete', () => {
   it('suggests set codes when the set option is focused', async () => {
     autocompleteSets.mockResolvedValue([{ name: 'Modern Horizons 3 (MH3)', value: 'MH3' }]);
