@@ -11,6 +11,10 @@ export default defineConfig({
         'src/types/**',
         'src/deploy.ts',
       ],
+      // Show every matched file in the text report, including ones already
+      // at 100% coverage. Without this, files with full coverage are
+      // silently omitted and their per-line numbers are invisible.
+      all: true,
       reporter: ['text', 'html'],
       thresholds: {
         statements: 95,

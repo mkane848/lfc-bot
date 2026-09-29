@@ -101,4 +101,17 @@ describe('/fulfill', () => {
       expect.objectContaining({ content: expect.stringContaining('Only the listing owner') }),
     );
   });
+
+  it('rejects calls outside a guild before doing any work', async () => {
+    const i = fakeChatInputInteraction({
+      guildId: null,
+      options: { integers: { listing_id: 1 } },
+    });
+
+    await fulfillCommand.execute(i);
+
+    expect(i.reply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('inside a server') }),
+    );
+  });
 });

@@ -183,3 +183,193 @@ describe('runDigest delivery retry', () => {
     expect(send).toHaveBeenCalledTimes(3);
   }, 10_000);
 });
+
+function fakeClientWithDmSend(send: (message: string) => Promise<unknown>): Client {
+  return {
+    channels: { fetch: vi.fn() },
+    users: {
+      fetch: vi.fn().mockResolvedValue({ send }),
+    },
+  } as unknown as Client;
+}
+
+function serverRowDm(overrides: Partial<NewServerRow> = {}): NewServerRow {
+  return {
+    ...serverRow,
+    digestMode: 'dm',
+    digestDmUserId: 'dm-user-1',
+    adminChannelId: null,
+    ...overrides,
+  };
+}
+
+function serverRowBoth(): NewServerRow {
+  return {
+    ...serverRow,
+    digestMode: 'both',
+    digestDmUserId: 'dm-user-1',
+    adminChannelId: 'channel-1',
+  };
+}
+
+describe('runDigest edge cases', () => {
+  it('returns sent=false with no calls when there are no listings to deliver', async () => {
+    getDb().insert(servers).values(serverRow).run();
+    const client = fakeClientWithChannelSend(vi.fn());
+
+    const result = await runDigest(client, getServerConfig('500')!, 'manual');
+
+    expect(result.sent).toBe(false);
+    expect(result.listingCount).toBe(0);
+    expect(result.channelOk).toBe(false);
+    expect(result.dmOk).toBe(false);
+  });
+
+  it('treats a missing adminChannelId as channelOk=false and leaves the watermark unchanged', async () => {
+    getDb()
+      .insert(servers)
+      .values({ ...serverRow, adminChannelId: null })
+      .run();
+    addListing();
+    const send = vi.fn().mockResolvedValue(undefined);
+    const client = fakeClientWithChannelSend(send);
+
+    const result = await runDigest(client, getServerConfig('500')!, 'manual');
+
+    expect(result.sent).toBe(false);
+    expect(result.channelOk).toBe(false);
+    expect(send).not.toHaveBeenCalled();
+    expect(getServerConfig('500')!.lastDigestAt).toBe(0);
+  });
+
+  it('treats a non-text channel as a failure', async () => {
+    getDb().insert(servers).values(serverRow).run();
+    addListing();
+    const client = {
+      channels: {
+        fetch: vi.fn().mockResolvedValue({
+          isTextBased: () => false,
+          isSendable: () => false,
+        }),
+      },
+    } as unknown as Client;
+
+    const result = await runDigest(client, getServerConfig('500')!, 'manual');
+
+    expect(result.sent).toBe(false);
+    expect(result.channelOk).toBe(false);
+    expect(getServerConfig('500')!.lastDigestAt).toBe(0);
+  });
+});
+
+describe('runDigest DM delivery', () => {
+  it('sends to a user via DM and advances the watermark when digestMode=dm', async () => {
+    getDb().insert(servers).values(serverRowDm()).run();
+    addListing();
+    const send = vi.fn().mockResolvedValue(undefined);
+    const client = fakeClientWithDmSend(send);
+
+    const result = await runDigest(client, getServerConfig('500')!, 'manual');
+
+    expect(result.sent).toBe(true);
+    expect(result.dmOk).toBe(true);
+    expect(result.channelOk).toBe(false);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(getServerConfig('500')!.lastDigestAt).toBeGreaterThan(0);
+  });
+
+  it('skips DM when digestDmUserId is null and reports dmOk=false', async () => {
+    getDb()
+      .insert(servers)
+      .values({ ...serverRowDm(), digestDmUserId: null })
+      .run();
+    addListing();
+    const client = fakeClientWithDmSend(vi.fn());
+
+    const result = await runDigest(client, getServerConfig('500')!, 'manual');
+
+    expect(result.sent).toBe(false);
+    expect(result.dmOk).toBe(false);
+    expect(getServerConfig('500')!.lastDigestAt).toBe(0);
+  });
+
+  it('treats a null user (fetched but missing from cache) as dmOk=false', async () => {
+    getDb().insert(servers).values(serverRowDm()).run();
+    addListing();
+    const client = {
+      channels: { fetch: vi.fn() },
+      users: { fetch: vi.fn().mockResolvedValue(null) },
+    } as unknown as Client;
+
+    const result = await runDigest(client, getServerConfig('500')!, 'manual');
+
+    expect(result.dmOk).toBe(false);
+    expect(result.sent).toBe(false);
+  });
+
+  it('treats a thrown DM send as a failure and retries', async () => {
+    getDb().insert(servers).values(serverRowDm()).run();
+    addListing();
+    const send = vi.fn().mockRejectedValue(new Error('persistent DM failure'));
+    const client = fakeClientWithDmSend(send);
+
+    const result = await runDigest(client, getServerConfig('500')!, 'manual');
+
+    expect(result.sent).toBe(false);
+    expect(send).toHaveBeenCalledTimes(3);
+  }, 10_000);
+});
+
+describe('runDigest both delivery', () => {
+  it('sends to both the channel and the DM when digestMode=both', async () => {
+    getDb().insert(servers).values(serverRowBoth()).run();
+    addListing();
+    const channelSend = vi.fn().mockResolvedValue(undefined);
+    const dmSend = vi.fn().mockResolvedValue(undefined);
+    const client = {
+      channels: {
+        fetch: vi.fn().mockResolvedValue({
+          isTextBased: () => true,
+          isSendable: () => true,
+          send: channelSend,
+        }),
+      },
+      users: {
+        fetch: vi.fn().mockResolvedValue({ send: dmSend }),
+      },
+    } as unknown as Client;
+
+    const result = await runDigest(client, getServerConfig('500')!, 'manual');
+
+    expect(result.sent).toBe(true);
+    expect(result.channelOk).toBe(true);
+    expect(result.dmOk).toBe(true);
+    expect(channelSend).toHaveBeenCalledTimes(1);
+    expect(dmSend).toHaveBeenCalledTimes(1);
+  });
+
+  it('still succeeds when only the DM succeeds but the channel fails', async () => {
+    getDb().insert(servers).values(serverRowBoth()).run();
+    addListing();
+    const channelSend = vi.fn().mockRejectedValue(new Error('channel 500'));
+    const dmSend = vi.fn().mockResolvedValue(undefined);
+    const client = {
+      channels: {
+        fetch: vi.fn().mockResolvedValue({
+          isTextBased: () => true,
+          isSendable: () => true,
+          send: channelSend,
+        }),
+      },
+      users: {
+        fetch: vi.fn().mockResolvedValue({ send: dmSend }),
+      },
+    } as unknown as Client;
+
+    const result = await runDigest(client, getServerConfig('500')!, 'manual');
+
+    expect(result.sent).toBe(true);
+    expect(result.channelOk).toBe(false);
+    expect(result.dmOk).toBe(true);
+  });
+});

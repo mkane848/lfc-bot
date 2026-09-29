@@ -444,4 +444,29 @@ describe('handleEditNextButton', () => {
 
     expect(i.showModal).not.toHaveBeenCalled();
   });
+
+  it('replies ephemerally with "Listing not found." when the next id does not resolve', async () => {
+    const i = fakeButtonInteraction({
+      customId: encodeEditNextId(99999, []),
+      userId: 'owner-1',
+    });
+
+    await handleEditNextButton(i);
+
+    expect(i.showModal).not.toHaveBeenCalled();
+    expect(i.reply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('Listing not found') }),
+    );
+  });
+
+  it('returns silently when the customId is not in the expected format', async () => {
+    const i = fakeButtonInteraction({
+      customId: 'lfc:garbage:42',
+      userId: 'owner-1',
+    });
+
+    await expect(handleEditNextButton(i)).resolves.toBeUndefined();
+    expect(i.showModal).not.toHaveBeenCalled();
+    expect(i.reply).not.toHaveBeenCalled();
+  });
 });
