@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.2] - 2026-09-29
+
+### Changed
+
+- dotenv, the one production dependency updated in this release, moves from
+  17 to 18. The bot loads `.env` exactly as before; the startup line reporting
+  how many variables it injected now reads `◇ injected env (N) from .env` and
+  goes to stderr instead of stdout.
+
 ### Fixed
 
 - Sealed products that share a name couldn't be told apart or chosen.
@@ -426,7 +435,8 @@ qty` for `/have-multi`, `Product Name | max_price` for `/want-multi`. Unlike
 - CI workflow running lint, format check, type-check, and tests on every push
   to `main` and every pull request.
 
-[Unreleased]: https://github.com/mkane848/lfc-bot/compare/v1.6.1...HEAD
+[Unreleased]: https://github.com/mkane848/lfc-bot/compare/v1.6.2...HEAD
+[1.6.2]: https://github.com/mkane848/lfc-bot/compare/v1.6.1...v1.6.2
 [1.6.1]: https://github.com/mkane848/lfc-bot/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/mkane848/lfc-bot/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/mkane848/lfc-bot/compare/v1.4.0...v1.5.0
