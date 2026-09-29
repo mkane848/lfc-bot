@@ -299,3 +299,66 @@ describe('handleBatchSelect', () => {
     expect(i.reply).toHaveBeenCalledWith({ content: 'Nothing to do.', ephemeral: true });
   });
 });
+
+describe('/mylistings execute (no-guild / page options)', () => {
+  it('replies ephemerally and bails when the interaction is outside a guild', async () => {
+    const i = fakeChatInputInteraction({ guildId: null, userId: 'owner-1' });
+
+    await myListingsCommand.execute(i);
+
+    expect(i.reply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('inside a server') }),
+    );
+  });
+
+  it('uses page=1 when the page option is missing', async () => {
+    seedListing();
+    const i = fakeChatInputInteraction({ userId: 'owner-1', options: {} });
+
+    await myListingsCommand.execute(i);
+
+    expect(i.reply).toHaveBeenCalledWith(
+      expect.objectContaining({ embeds: expect.any(Array) }),
+    );
+  });
+
+  it('renders a sealed listing with the sealed Product field included', async () => {
+    seedListing({
+      kind: 'sealed',
+      cardName: 'Bloomburrow Bundle',
+      cardNameNormalized: 'bloomburrow bundle',
+      condition: null,
+      sealedUuid: 'uuid-blb',
+      sealedCategory: 'bundle',
+      sealedSubtype: 'default',
+      priceCents: 4000,
+    });
+    const i = fakeChatInputInteraction({ userId: 'owner-1' });
+
+    await myListingsCommand.execute(i);
+
+    expect(i.reply).toHaveBeenCalled();
+  });
+
+  it('falls back to raw intent/accepts labels when not in the label map', async () => {
+    seedListing({ intent: 'unknown-intent' as never, accepts: 'unknown-accepts' as never });
+    const i = fakeChatInputInteraction({ userId: 'owner-1' });
+
+    await myListingsCommand.execute(i);
+
+    expect(i.reply).toHaveBeenCalled();
+  });
+});
+
+describe('handleBatchSelect (invalid customId)', () => {
+  it('returns silently when the customId does not decode to a batch select action', async () => {
+    const i = fakeSelectMenuInteraction({
+      customId: 'lfc:totally-unrelated',
+      values: ['1'],
+      userId: 'owner-1',
+    });
+
+    await expect(handleBatchSelect(i)).resolves.toBeUndefined();
+    expect(i.reply).not.toHaveBeenCalled();
+  });
+});
