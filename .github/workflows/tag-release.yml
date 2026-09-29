@@ -2,10 +2,11 @@ name: Tag release
 
 # Cutting a release is a merged pull request that bumps the version in
 # package.json (`npm version X.Y.Z --no-git-tag-version`) and moves the
-# changelog's Unreleased entries under that version. Once CI passes on main,
-# this tags the commit `vX.Y.Z` if that tag doesn't exist yet, then runs the
-# release workflow to publish the image and the GitHub Release. Every other
-# CI run on main finds the tag already there and does nothing.
+# changelog's Unreleased entries under that version. After a CI run passes on
+# main, this tags `vX.Y.Z` on the commit that set that version, if the tag
+# doesn't exist yet and CI passed on that commit too, then runs the release
+# workflow to publish the image and the GitHub Release. Every other CI run on
+# main finds the tag already there and does nothing.
 on:
   workflow_run:
     workflows: [CI]
@@ -16,6 +17,8 @@ permissions:
   contents: read
 
 # Serialize runs so two quick pushes can't both try to create the same tag.
+# GitHub keeps only the newest pending run and cancels the others, which loses
+# nothing: whichever run goes ahead tags the same release commit.
 concurrency:
   group: tag-release
   cancel-in-progress: false
@@ -29,17 +32,20 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: read
     outputs:
       tag: ${{ steps.tag.outputs.tag }}
     steps:
       - uses: actions/checkout@v7.0.1
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
+          # Full history, to find the commit that set the version.
+          fetch-depth: 0
 
       - name: Create the tag if this version has none
         id: tag
         env:
-          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           version="$(node -p "require('./package.json').version")"
           tag="v$version"
@@ -61,9 +67,28 @@ jobs:
             exit 1
           fi
 
-          git tag "$tag" "$HEAD_SHA"
+          # Tag the commit that set this version, not the commit whose CI run
+          # triggered this workflow. Otherwise a pull request merged just after
+          # the release rides into it: v1.6.2 was tagged on a dependency bump
+          # merged 12 seconds after the release, because that bump's CI
+          # finished first.
+          release_sha="$(git log --first-parent -1 --format=%H -S"\"version\": \"$version\"" -- package.json)"
+          if [ -z "$release_sha" ]; then
+            echo "::error::Could not find the commit that set version $version in package.json."
+            exit 1
+          fi
+
+          # Only once CI has passed on that commit itself. If it hasn't yet,
+          # stop: a passing CI run on it starts this workflow again.
+          passed="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$release_sha&status=success&per_page=1" --jq '.total_count')"
+          if [ "$passed" = "0" ]; then
+            echo "CI hasn't passed on $release_sha, which set $version; not tagging $tag yet."
+            exit 0
+          fi
+
+          git tag "$tag" "$release_sha"
           git push origin "refs/tags/$tag"
-          echo "Tagged $HEAD_SHA as $tag."
+          echo "Tagged $release_sha as $tag."
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
   release:
