@@ -8,7 +8,9 @@ import {
   SEALED_CATALOG_META_URL,
   SEALED_CATALOG_STALE_MS,
   SEALED_CATALOG_URL,
+  SEALED_PRODUCT_CHOICE_PREFIX,
   SEALED_PRODUCT_NAME_MAX,
+  sealedProductChoiceUuid,
 } from '../utils/constants.js';
 import { getLogger } from '../utils/logger.js';
 import { retryWithBackoff } from '../utils/retry.js';
@@ -117,8 +119,8 @@ function recordSyncMeta(
  * flat-maps every set's `sealedProduct[]`, then upserts by `uuid` and deletes
  * uuids no longer present — all inside a single better-sqlite3 transaction.
  * `name` is truncated to `SEALED_PRODUCT_NAME_MAX` before storing and
- * `nameNormalized` is derived from the *truncated* name, so autocomplete values
- * and `resolveSealedProduct` lookups agree.
+ * `nameNormalized` is derived from the *truncated* name, so a stored name typed
+ * back in resolves through `resolveSealedProduct`.
  *
  * Before downloading the multi-megabyte payload it compares MTGJSON's build version
  * (`SEALED_CATALOG_META_URL`) and the `SetList.json` ETag against
@@ -293,14 +295,27 @@ export function autocompleteSealedProducts(
   const code = setCode?.trim().toUpperCase();
   const nameMatch = like(sealedCache.nameNormalized, `%${normalized}%`);
   const rows = getDb()
-    .select({ name: sealedCache.name })
+    .select({ uuid: sealedCache.uuid, name: sealedCache.name, setCode: sealedCache.setCode })
     .from(sealedCache)
     .where(code ? and(nameMatch, eq(sealedCache.setCode, code)) : nameMatch)
-    .orderBy(sealedCache.name, sealedCache.uuid)
+    .orderBy(sealedCache.name, sealedCache.setCode, sealedCache.uuid)
     .limit(AUTOCOMPLETE_LIMIT)
     .all();
 
-  return rows.map((row) => ({ name: row.name, value: row.name }));
+  // The set code tells same-named products apart in the list, and the value
+  // carries the uuid so the pick resolves to exactly that product.
+  return rows.map((row) => ({
+    name: sealedChoiceLabel(row.name, row.setCode),
+    value: `${SEALED_PRODUCT_CHOICE_PREFIX}${row.uuid}`,
+  }));
+}
+
+/** `Name (SET)`, shortening the name so the label fits Discord's 100 characters. */
+function sealedChoiceLabel(name: string, setCode: string): string {
+  const suffix = ` (${setCode})`;
+  const room = SEALED_PRODUCT_NAME_MAX - suffix.length;
+  const shown = name.length > room ? `${name.slice(0, room - 1)}…` : name;
+  return `${shown}${suffix}`;
 }
 
 /**
@@ -331,8 +346,10 @@ export function autocompleteSealedSets(query: string): Array<{ name: string; val
 /**
  * Canonicalize a sealed product name against the catalog.
  *
- * Looks for an exact `name_normalized` match, scoped by `options.setCode` when
- * given. On a hit it enriches the result with the Mana Pool canonical URL for
+ * A value picked from `autocompleteSealedProducts` carries the product's uuid
+ * and resolves to exactly that product, whatever `options.setCode` says. Any
+ * other input is a typed name: it looks for an exact `name_normalized` match,
+ * scoped by `options.setCode` when given. On a hit it enriches the result with the Mana Pool canonical URL for
  * the product's MTGJSON uuid (hence async) and returns `resolved: true`.
  *
  * On a miss it returns a free-text result — the raw name, its normalized form,
@@ -355,16 +372,20 @@ export async function resolveSealedProduct(
   const trimmedCode = options?.setCode?.trim().toUpperCase();
   const code = trimmedCode && trimmedCode.length > 0 ? trimmedCode : null;
 
+  const choiceUuid = sealedProductChoiceUuid(productName);
   const nameMatch = eq(sealedCache.nameNormalized, productNameNormalized);
-  const row =
-    productNameNormalized.length === 0
+  const row = choiceUuid
+    ? getDb().select().from(sealedCache).where(eq(sealedCache.uuid, choiceUuid)).get()
+    : productNameNormalized.length === 0
       ? undefined
       : getDb()
           .select()
           .from(sealedCache)
           .where(code ? and(nameMatch, eq(sealedCache.setCode, code)) : nameMatch)
-          // Product names are unique in today's catalog, but that is not an
-          // invariant MTGJSON guarantees, so tie-break deterministically.
+          // MTGJSON can list one name more than once (a Commander deck under
+          // both its main set and its Commander set). A typed name can't say
+          // which, so tie-break deterministically; a picked suggestion
+          // resolves by uuid above instead.
           .orderBy(sealedCache.uuid)
           .limit(1)
           .get();

@@ -122,6 +122,23 @@ describe('/want-sealed', () => {
     expect(inserted?.manapoolUrl).toBeNull();
   });
 
+  it('replies with an error instead of posting when a picked product has left the catalog', async () => {
+    resolveSealedProduct.mockResolvedValue({
+      ...missResult,
+      productName: 'uuid:since-removed',
+      productNameNormalized: 'uuidsinceremoved',
+    });
+    const i = interaction({ product_name: 'uuid:since-removed' });
+
+    await wantSealedCommand.execute(i);
+
+    expect(i.editReply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('no longer in the catalog') }),
+    );
+    expect(i.followUp).not.toHaveBeenCalled();
+    expect(getDb().select().from(listings).all()).toHaveLength(0);
+  });
+
   it('still creates a listing when enrichment returns a null manapoolUrl', async () => {
     resolveSealedProduct.mockResolvedValue({ ...hitResult, manapoolUrl: null });
     const i = interaction();

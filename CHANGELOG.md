@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Sealed products that share a name couldn't be told apart or chosen.
+  MTGJSON lists some products more than once under the same name (a Commander
+  deck under both its main set and its Commander set). `/have-sealed` and
+  `/want-sealed` suggestions showed identical entries, and every pick
+  resolved to whichever copy sorted first, which could be the wrong set and
+  Mana Pool link. Suggestions now end with the set code, e.g. `(FRC)`, and
+  carry the product's catalog uuid, so a pick resolves to exactly that
+  product. A typed name still resolves by name as before (fill in `set` to
+  choose between same-named products). A picked product that has since left
+  the catalog gets an error instead of a listing named after its uuid.
+
 ## [1.6.1] - 2026-09-25
 
 ### Added
