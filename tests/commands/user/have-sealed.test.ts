@@ -136,6 +136,34 @@ describe('/have-sealed', () => {
     expect(inserted?.sealedUuid).toBe(hitResult.uuid);
   });
 
+  it('parses a valid price and posts the listing', async () => {
+    resolveSealedProduct.mockResolvedValue(hitResult);
+    const i = interaction({ price: '40.00' });
+
+    await haveSealedCommand.execute(i);
+
+    expect(i.followUp).toHaveBeenCalledWith(
+      expect.objectContaining({ embeds: expect.any(Array) }),
+    );
+    const inserted = getDb().select().from(listings).all()[0];
+    expect(inserted?.priceCents).toBe(4000);
+  });
+
+  it('uses quantity > 1 from the integer option', async () => {
+    resolveSealedProduct.mockResolvedValue(hitResult);
+    const i = fakeChatInputInteraction({
+      options: {
+        strings: { product_name: 'Bloomburrow Bundle', accepts: 'cash' },
+        integers: { quantity: 5 },
+      },
+    });
+
+    await haveSealedCommand.execute(i);
+
+    const inserted = getDb().select().from(listings).all()[0];
+    expect(inserted?.quantity).toBe(5);
+  });
+
   it('rejects outside a guild before deferring', async () => {
     const i = fakeChatInputInteraction({
       guildId: null,
