@@ -352,7 +352,7 @@ describe('/have-multi game, language and grade', () => {
       fields: { card1: 'Fake Box | 89.99 | 2', card2: '', card3: '', accepts: 'cash' },
     });
     await handleHaveMultiModal(i);
-    expect(fake.resolveSealed).toHaveBeenCalledWith('Fake Box', {});
+    expect(fake.resolveSealed).toHaveBeenCalledWith('Fake Box', { language: null });
     expect(stored()).toMatchObject([{ game: FAKE_GAME_ID, kind: 'sealed', catalogId: 'fk-box' }]);
   });
 

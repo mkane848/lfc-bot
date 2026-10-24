@@ -8,8 +8,9 @@ LFCbot is a multi-server Discord bot for have/want trading card listings:
 members post a card they have or want, whether they'll accept cash, trade, or
 both, and optionally an exact printing (set, finish, variant, collector
 number). It supports Magic: The Gathering via the Scryfall API, with
-optional links to the exact printing on Manapool, and Pokémon singles via a
-local catalog synced from TCGCSV, with links to TCGplayer. Stack: Node.js 22+,
+optional links to the exact printing on Manapool, and Pokémon singles and
+sealed product via a local catalog synced from TCGCSV, with links to TCGplayer.
+Stack: Node.js 22+,
 TypeScript (strict, ESM with `NodeNext`), discord.js v14, Drizzle ORM with
 better-sqlite3, node-cron for per-guild digest schedules, and Vitest for
 tests.
@@ -250,7 +251,7 @@ behavior changes; do not weaken assertions to make a change pass.
   the `grade` option (`PSA 10`, `BGS 9.5`) must be given exactly when the
   condition is graded, and `/edit` and the batch lines take a grade where they
   take a condition (`parseConditionOrGrade`).
-- Pokémon singles resolve against the local `catalog_sets`/`catalog_items`
+- Pokémon singles and sealed product resolve against the local `catalog_sets`/`catalog_items`
   tables that `src/services/tcgcsv.ts` fills from TCGCSV (English and Japan
   categories), so autocomplete and posting never make a network call. The sync
   follows TCGCSV's usage guidelines and must keep doing so: one pass a day,
@@ -267,6 +268,13 @@ behavior changes; do not weaken assertions to make a change pass.
   derived from its id (`src/utils/tcgplayer.ts`) and the link is frozen onto
   `listings.market_url` at posting, like Magic's. A Pokémon autocomplete value is
   `id:<product id>` (tagged `pkm:` on a multi-game server); the Japanese catalog
-  decides a listing's language. Sealed Pokémon product is in the schema
-  (`catalog_items.kind`, `category`) but isn't in the game's `kinds`, so the
-  sealed commands refuse it until it is classified.
+  decides a listing's language. TCGCSV gives no collector number to
+  sealed product, digital code cards, or about 3,100 older singles, so a
+  product without one is classified from its name (`classifyProduct` in
+  `src/utils/catalog-products.ts`): keyword rules, in order, give a sealed
+  category, a card, or nothing (code cards are not stored). When that
+  classification or any other part of how a product becomes a row changes, bump
+  `IMPORT_VERSION` in `src/services/tcgcsv.ts`: each set records the version that
+  imported it, and a set from an older one is fetched again without
+  `If-None-Match`, which an unchanged ETag or `last-updated.txt` would otherwise
+  prevent.

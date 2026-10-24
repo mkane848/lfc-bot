@@ -18,7 +18,8 @@ the same table, distinguished only by a `kind` column.
 Two games are registered. Magic: The Gathering is resolved through the Scryfall
 API (singles) and the MTGJSON catalog (sealed product). Pokémon singles (English
 and Japanese) are resolved against a local catalog a daily TCGCSV sync fills;
-Pokémon sealed product is in that catalog's tables but isn't offered yet. Games
+Pokémon sealed product comes from the same catalog, sorted into categories by a
+keyword classifier over the product name. Games
 sit behind a registry (`src/games/`): every command resolves a game and calls
 through its `GameDefinition`, each server chooses which games it has with
 `/admin games` (new servers have Magic only), and `listings.game` records which
@@ -198,6 +199,7 @@ row untouched, so a failure can't convince the next run the catalog is fresh.
 | `release_date` | TEXT, nullable | Only a real `T00:00:00` date is kept; the source's build-stamped placeholders become null |
 | `supplemental` | INTEGER | 1 for a supplemental set, which a typed set code prefers not to land on |
 | `etag` | TEXT, nullable | ETag of the set's product list at the last import, for `If-None-Match` |
+| `import_version` | INTEGER, default 0 | `IMPORT_VERSION` (`src/services/tcgcsv.ts`) of the importer that wrote the set's products. A set imported by an older one is fetched again without `If-None-Match`, and its presence stops the "nothing new today" shortcut. Added in migration 0008 |
 | `updated_at` | INTEGER | |
 
 Index: `(game, code)`.
@@ -211,8 +213,8 @@ Index: `(game, code)`.
 | `name_normalized` | TEXT | Search key for the full name |
 | `base_normalized` | TEXT | The name without its trailing parenthetical, normalized; what `listings.card_name_normalized` holds and `/search` matches on, so every printing of a card finds the others |
 | `set_id` | TEXT | `catalog_sets.id` |
-| `number` | TEXT, nullable | Collector number numerator as printed (`125`, `H25`, `TG01`); null for sealed |
-| `category` | TEXT, nullable | Reserved for the sealed product classifier; null for cards |
+| `number` | TEXT, nullable | Collector number numerator as printed (`125`, `H25`, `TG01`); null for sealed product and for the older singles TCGplayer never numbered |
+| `category` | TEXT, nullable | For sealed product, what the classifier made of the name (`booster_pack`, `booster_box`, `booster_bundle`, `elite_trainer_box`, `blister`, `tin`, `collection`, `deck`, `build_and_battle`, `prerelease_kit`, `case`, `other`); null for cards. Copied to `listings.sealed_category` |
 | `updated_at` | INTEGER | |
 
 Holds identity only. Prices and stock are never requested or stored, and a
@@ -363,12 +365,15 @@ Service: `src/services/sealed.ts`. Backs `/have-sealed`, `/want-sealed`, and `/e
 
 Services: `src/services/tcgcsv.ts` (sync), `src/services/catalog.ts` (search and
 resolution), `src/services/game-catalogs.ts` (which catalogs to keep fresh), game
-definition `src/games/pokemon.ts`, name parsing `src/utils/catalog-names.ts`.
+definition `src/games/pokemon.ts`, name parsing `src/utils/catalog-names.ts`,
+product classification `src/utils/catalog-products.ts`.
 
 - **Source**: TCGCSV (tcgcsv.com) alone, English (category 3) and Japan (category 85). TCGdex and pokemontcg.io aren't used (`docs/MULTI_GAME_PLAN.md` §11 has the probes that led here).
-- **Sync** (`syncPokemonCatalog`): follows TCGCSV's usage guidelines. Reads `last-updated.txt` first and stops if it matches the stored fingerprint; otherwise lists each category's groups and fetches each group's products with `If-None-Match`, so an unchanged group is a `304`. Requests carry `User-Agent: LFCbot/<version> (+<repository>)` and are at least 150 ms apart. Each group imports in its own transaction; groups TCGCSV no longer lists are pruned; a `404` group is an empty one; five groups failing in a row abort the run. `catalog_sync_meta` is stamped only on a fully clean run. An in-flight guard keeps two syncs from overlapping. A first sync is about 681 requests and 74 MB and takes several minutes; steady state is one request. No prices are requested or stored.
+- **Sync** (`syncPokemonCatalog`): follows TCGCSV's usage guidelines. Reads `last-updated.txt` first and stops if it matches the stored fingerprint; otherwise lists each category's groups and fetches each group's products with `If-None-Match`, so an unchanged group is a `304`. Requests carry `User-Agent: LFCbot/<version> (+<repository>)` and are at least 150 ms apart. Each group imports in its own transaction; groups TCGCSV no longer lists are pruned; a `404` group is an empty one; five groups failing in a row abort the run. `catalog_sync_meta` is stamped only on a fully clean run. An in-flight guard keeps two syncs from overlapping. Each set records the `IMPORT_VERSION` that imported it; when the way a product becomes a row changes, bump the constant and every set from an older version is fetched again (no `If-None-Match`, no "nothing new" stop) and `isCatalogSyncStale` is true until they are, so a change reaches sets TCGCSV never touches again. A first sync is about 681 requests and 74 MB and takes several minutes; steady state is one request. No prices are requested or stored.
 - **When it runs**: only while some server has Pokémon enabled (`catalogGamesInUse` in `game-catalogs.ts`). Daily at 21:00 UTC (`startGameCatalogSync` in `scheduler.ts`), at boot when the catalog is missing or a day old (`warmUpGameCatalogs` in `ready.ts`), and when an admin enables a game whose catalog is stale (`refreshCatalogIfStale`, called by `/admin games`). All swallow rejections; the sync logs its own failures.
+- **Card or sealed** (`classifyProduct`): a product with a `Number` is a card. TCGCSV gives no number to about 3,100 older singles (`Magneton`, `Fire Energy (2006 Unnumbered)`, `Erika's Oddish (Lv.10)`), to about 1,300 digital code cards (`Code Card - …`, never stored) and to the sealed product, so a product without one is classified from its name: keyword rules in a fixed order (`case`, `elite_trainer_box`, `booster_bundle`, `booster_box`, `blister`, `tin`, `build_and_battle`, `prerelease_kit`, `deck`, `collection`/`box`/`chest`/`binder`, `booster_pack`/`pack`, then `other` for calendars, battle academy sets, card file sets and the like). A name that matches none is a card with a null number. `Prize Pack Series 1` energy cards are cards, so "prize pack" never counts as a pack. The rules are a heuristic over names; `tests/utils/catalog-products.test.ts` pins them against real product names, and a new family of products that lands in the wrong bucket is fixed by adding a rule and bumping `IMPORT_VERSION`.
 - **Names**: TCGCSV product names embed the number (`Pikachu - 058/078`), sometimes redundantly (`(58)`) or with leading zeros. `cleanProductName` strips those, `baseProductName` drops a trailing printing parenthetical, `normalizeCardName` folds `♀`/`♂` to `f`/`m` so Nidoran♀ is findable. A set's label is its code uppercased, or its name cut to 10 characters, so the edit modal's `set` field round-trips.
+- **Sealed resolution** (`resolveCatalogSealed`): a pick (`id:<id>`) resolves to exactly that product; a typed name matches `name_normalized`, narrowed by `set` (code, name prefix, or a picked `id:<set id>`) and by language, preferring English, a non-supplemental set, then the newest. A miss is the free-text result Magic's sealed commands also post: the typed name, no link, no category. The product's category becomes `listings.sealed_category`, shown through `formatSealedType`; `other` shows nothing. Sealed autocomplete narrows to the picked `set` (`context.setCode`); card autocomplete does not.
 - **Resolution** (`resolveCatalogCard`): a picked suggestion's value is `id:<product id>` and resolves to exactly that product; a typed name resolves by `base_normalized`, preferring an exact base match, then names containing every token, then shorter names, English before Japanese, non-supplemental sets, then newest. A typed `set` matches by code or name prefix (LIKE metacharacters escaped), a `collector_number` by `number`. A language the catalog fixes (Japanese) decides the listing's language and a contradicting `language` option is rejected.
 - **Links and images** come from the product id: `https://www.tcgplayer.com/product/<id>` and `https://tcgplayer-cdn.tcgplayer.com/product/<id>_200w.jpg`. Neither host is reachable from the development environment, so both URL shapes are unverified; Discord and members fetch them, not the bot.
 - **Autocomplete**: local queries only, so no external request per keystroke. A server with Pokémon and Magic gets one merged, tagged list (`pkm:id:<product id>`); a game that misses the 2.5 s deadline is dropped from it.
@@ -574,7 +579,7 @@ DISCORD_ALERT_WEBHOOK_URL=
 
 ## Assumptions and Defaults
 
-- Magic: The Gathering and Pokémon are registered; a server has only Magic enabled until an admin changes `/admin games`. Pokémon sealed product isn't offered yet.
+- Magic: The Gathering and Pokémon are registered; a server has only Magic enabled until an admin changes `/admin games`. Pokémon sealed product is classified from names, so the occasional product sits in the wrong category (see the classifier notes under Pokémon Catalog).
 - SQLite is the database; a future PostgreSQL migration would require type and migration adjustments, not just a driver swap.
 - Digest cron defaults to `0 9 * * *`; timezone defaults to `UTC`; mode defaults to `disabled` until an admin configures delivery.
 - Active listings expire after 30 days.

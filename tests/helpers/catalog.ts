@@ -115,6 +115,45 @@ export function seedPokemonCatalog(): void {
         name: 'Obsidian Flames Booster Pack',
         setId: '23228',
         kind: 'sealed',
+        category: 'booster_pack',
+      }),
+      itemRow({
+        id: '501257',
+        name: 'Obsidian Flames Elite Trainer Box',
+        setId: '23228',
+        kind: 'sealed',
+        category: 'elite_trainer_box',
+      }),
+      itemRow({
+        id: '501258',
+        name: 'Obsidian Flames Booster Box',
+        setId: '23228',
+        kind: 'sealed',
+        category: 'booster_box',
+      }),
+      // A name two sets share, as "Booster Bundle" style names are.
+      itemRow({
+        id: '501300',
+        name: 'Booster Bundle',
+        setId: '23228',
+        kind: 'sealed',
+        category: 'booster_bundle',
+      }),
+      itemRow({
+        id: '601300',
+        name: 'Booster Bundle',
+        setId: '23229',
+        kind: 'sealed',
+        category: 'booster_bundle',
+      }),
+      // The Japanese product of the same name, so a language is what tells them apart.
+      itemRow({
+        id: '520010',
+        name: 'Booster Bundle',
+        setId: '23400',
+        language: 'ja',
+        kind: 'sealed',
+        category: 'booster_bundle',
       }),
       itemRow({
         id: '520001',
@@ -122,8 +161,15 @@ export function seedPokemonCatalog(): void {
         setId: '23400',
         language: 'ja',
         kind: 'sealed',
+        category: 'booster_box',
       }),
-      itemRow({ id: '930001', name: 'Sealed Only Box', setId: '23600', kind: 'sealed' }),
+      itemRow({
+        id: '930001',
+        name: 'Sealed Only Box',
+        setId: '23600',
+        kind: 'sealed',
+        category: 'collection',
+      }),
     ])
     .run();
 }

@@ -6,6 +6,7 @@ import {
   catalogSearchTarget,
   findCatalogEntry,
   resolveCatalogCard,
+  resolveCatalogSealed,
   searchCatalogItems,
   searchCatalogSets,
 } from '../../src/services/catalog.js';
@@ -171,7 +172,13 @@ describe('searchCatalogItems', () => {
   });
 
   it('answers only for the kind asked', () => {
-    expect(values(searchCatalogItems(POKEMON, 'sealed', 'flames'))).toEqual(['id:501256']);
+    expect(values(searchCatalogItems(POKEMON, 'sealed', 'flames')).sort()).toEqual([
+      'id:501256',
+      'id:501257',
+      'id:501258',
+      // The set's name matches too, since a token may match the set as well as the name.
+      'id:501300',
+    ]);
     expect(values(search('booster'))).toEqual([]);
   });
 
@@ -233,7 +240,9 @@ describe('searchCatalogSets', () => {
     expect(values(sets('sealed only'))).toEqual([]);
     expect(values(sets('sealed only', 'sealed'))).toEqual(['id:23600']);
     expect(values(sets('obf', 'sealed'))).toEqual(['id:23228']);
-    expect(values(sets('mew', 'sealed'))).toEqual([]);
+    // 151 has a Booster Bundle in the fixture, so it has sealed product too.
+    expect(values(sets('mew', 'sealed'))).toEqual(['id:23229']);
+    expect(values(sets('xy promos', 'sealed'))).toEqual([]);
   });
 });
 
@@ -401,5 +410,144 @@ describe('catalogSearchTarget', () => {
 
   it('is null for a pick that is no longer in the catalog', () => {
     expect(catalogSearchTarget(POKEMON, 'id:424242')).toBeNull();
+  });
+});
+
+describe('searchCatalogItems for sealed product', () => {
+  const sealedSearch = (query: string, set?: string | null, language?: 'ja' | 'en' | null) =>
+    searchCatalogItems(POKEMON, 'sealed', query, language, set);
+
+  it('labels a product with its set and no number, and a Japanese one with JA', () => {
+    expect(names(sealedSearch('elite trainer'))).toEqual([
+      'Obsidian Flames Elite Trainer Box · OBF',
+    ]);
+    expect(names(sealedSearch('black flame booster box'))).toEqual([
+      'Ruler of the Black Flame Booster Box · SV3 · JA',
+    ]);
+  });
+
+  it('keeps to one set when a set is picked or typed, and finds nothing outside it', () => {
+    expect(values(sealedSearch('booster bundle', 'id:23229'))).toEqual(['id:601300']);
+    expect(values(sealedSearch('booster bundle', 'OBF'))).toEqual(['id:501300']);
+    expect(values(sealedSearch('booster bundle', 'Obsidian Flames'))).toEqual(['id:501300']);
+    expect(sealedSearch('booster bundle', 'XY Promos')).toEqual([]);
+  });
+
+  it('tells the same name in two sets apart by id and set label', () => {
+    const bundles = sealedSearch('booster bundle', null, 'en');
+    expect(names(bundles).sort()).toEqual(['Booster Bundle · MEW', 'Booster Bundle · OBF']);
+    expect(new Set(values(bundles)).size).toBe(2);
+    expect(names(sealedSearch('booster bundle', null, 'ja'))).toEqual([
+      'Booster Bundle · SV3 · JA',
+    ]);
+  });
+
+  it('narrows to a language, with every language but Japanese meaning the English product', () => {
+    expect(values(sealedSearch('booster box', null, 'ja'))).toEqual(['id:520001']);
+    expect(values(sealedSearch('booster box', null, 'en'))).toEqual(['id:501258']);
+  });
+
+  it('puts a whole-word match ahead of a shorter name that only contains the letters', () => {
+    getDb()
+      .insert(catalogItems)
+      .values([
+        itemRow({
+          id: '888',
+          name: 'Victini Box',
+          setId: '23229',
+          kind: 'sealed',
+          category: 'collection',
+        }),
+        itemRow({
+          id: '889',
+          name: 'Paldean Fates Mini Tin',
+          setId: '23229',
+          kind: 'sealed',
+          category: 'tin',
+        }),
+      ])
+      .run();
+    // "Victini Box" is the shorter name and contains "tin", but is not a tin.
+    expect(values(sealedSearch('tin'))).toEqual(['id:889', 'id:888']);
+  });
+
+  it('never suggests a card for a sealed lookup, or sealed product for a card one', () => {
+    expect(sealedSearch('charizard')).toEqual([]);
+    expect(search('elite trainer')).toEqual([]);
+  });
+});
+
+describe('resolveCatalogSealed', () => {
+  const sealed = (input: string, options: Parameters<typeof resolveCatalogSealed>[2] = {}) =>
+    resolveCatalogSealed(POKEMON, input, options);
+
+  it('resolves a picked suggestion exactly, with its category, set label and TCGplayer link', () => {
+    expect(sealed('id:501257')).toEqual({
+      productName: 'Obsidian Flames Elite Trainer Box',
+      productNameNormalized: 'obsidian flames elite trainer box',
+      setCode: 'OBF',
+      uuid: '501257',
+      category: 'elite_trainer_box',
+      subtype: null,
+      marketUrl: 'https://www.tcgplayer.com/product/501257',
+      language: null,
+      resolved: true,
+    });
+  });
+
+  it('resolves a typed name, whatever its case or punctuation', () => {
+    expect(sealed('obsidian flames  elite trainer box!')).toMatchObject({
+      uuid: '501257',
+      resolved: true,
+    });
+  });
+
+  it('lets a Japanese product fix the language', () => {
+    expect(sealed('id:520001')).toMatchObject({ language: 'ja', setCode: 'SV3', resolved: true });
+    expect(sealed('Ruler of the Black Flame Booster Box')).toMatchObject({ language: 'ja' });
+  });
+
+  it('uses the set to choose between a name two sets share, and the newest English one without it', () => {
+    expect(sealed('Booster Bundle', { setCode: 'OBF' }).uuid).toBe('501300');
+    expect(sealed('Booster Bundle', { setCode: 'id:23229' }).uuid).toBe('601300');
+    // 151 is the newer set.
+    expect(sealed('Booster Bundle').uuid).toBe('601300');
+  });
+
+  it('keeps to the language asked for', () => {
+    expect(sealed('Obsidian Flames Booster Box', { language: 'ja' }).resolved).toBe(false);
+    expect(sealed('Ruler of the Black Flame Booster Box', { language: 'de' }).resolved).toBe(false);
+    expect(sealed('Ruler of the Black Flame Booster Box', { language: 'ja' }).resolved).toBe(true);
+  });
+
+  it('is a free-text result for a product it does not know, keeping what was typed and no link', () => {
+    expect(sealed('Some New Box', { setCode: 'OBF' })).toEqual({
+      productName: 'Some New Box',
+      productNameNormalized: 'some new box',
+      setCode: 'OBF',
+      uuid: null,
+      category: null,
+      subtype: null,
+      marketUrl: null,
+      resolved: false,
+    });
+  });
+
+  it('does not keep a picked set id as if it were the set a member typed', () => {
+    expect(sealed('Some New Box', { setCode: 'id:23228' }).setCode).toBeNull();
+  });
+
+  it('is unresolved with no name to fall back on for a pick that is gone', () => {
+    expect(sealed('id:424242')).toMatchObject({
+      resolved: false,
+      productName: '',
+      uuid: null,
+    });
+  });
+
+  it('never resolves a card, and does not take sealed product for a card name', () => {
+    expect(sealed('Charizard ex').resolved).toBe(false);
+    expect(sealed('id:509879').resolved).toBe(false);
+    expect(resolveCatalogCard(POKEMON, 'Obsidian Flames Elite Trainer Box').resolved).toBe(false);
   });
 });

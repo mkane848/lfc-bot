@@ -246,3 +246,40 @@ describe('0007_catalog_tables', () => {
     ).not.toThrow();
   });
 });
+
+describe('0008_catalog_sets_import_version', () => {
+  let db: Database.Database;
+
+  beforeEach(() => {
+    db = new Database(':memory:');
+  });
+
+  afterEach(() => {
+    db.close();
+  });
+
+  it('marks the sets an earlier importer wrote as version 0, so they are imported again', () => {
+    applyMigrations(db, { through: '0007' });
+    db.exec(
+      `INSERT INTO catalog_sets (game, language, id, name, etag, updated_at)
+       VALUES ('pokemon', 'en', '23228', 'Obsidian Flames', '"obf-1"', 1)`,
+    );
+
+    applyMigrations(db, { from: '0008' });
+
+    expect(db.prepare(`SELECT name, etag, import_version FROM catalog_sets`).all()).toEqual([
+      { name: 'Obsidian Flames', etag: '"obf-1"', import_version: 0 },
+    ]);
+  });
+
+  it('defaults the version of a set inserted without one to 0', () => {
+    applyMigrations(db);
+    db.exec(
+      `INSERT INTO catalog_sets (game, language, id, name, updated_at)
+       VALUES ('pokemon', 'en', '1', 'X', 1)`,
+    );
+    expect(db.prepare(`SELECT import_version FROM catalog_sets`).get()).toEqual({
+      import_version: 0,
+    });
+  });
+});

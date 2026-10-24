@@ -257,7 +257,10 @@ describe('/want-sealed across games', () => {
 
   it('resolves a picked suggestion through its own game and stores the language', async () => {
     await wantSealedCommand.execute(interaction({ product_name: 'fk:id:fk-box', language: 'ja' }));
-    expect(fake.resolveSealed).toHaveBeenCalledWith('id:fk-box', { setCode: null });
+    expect(fake.resolveSealed).toHaveBeenCalledWith('id:fk-box', {
+      setCode: null,
+      language: 'ja',
+    });
     expect(resolveSealedProduct).not.toHaveBeenCalled();
     expect(wanted()).toMatchObject({
       game: FAKE_GAME_ID,

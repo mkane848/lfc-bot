@@ -6,7 +6,12 @@ import { baseProductName, setLabelFor } from '../utils/catalog-names.js';
 import { tcgplayerImageUrl, tcgplayerProductUrl } from '../utils/tcgplayer.js';
 import { normalizeCardName } from '../utils/validation.js';
 import type { CardResolveOptions, SearchTarget } from '../games/types.js';
-import type { ListingKind, ListingLanguage, ResolvedCard } from '../types/index.js';
+import type {
+  ListingKind,
+  ListingLanguage,
+  ResolvedCard,
+  ResolvedSealedProduct,
+} from '../types/index.js';
 
 /**
  * Reads from the non-Magic catalog (`catalog_sets`, `catalog_items`), filled by
@@ -75,13 +80,15 @@ const joinSets = and(
  * (all tokens, any order), so `pikachu obf 025` and `charizard 125` both work.
  * A card has many printings, so the newest set comes first (supplemental sets
  * last), and an exact name match comes before a partial one. Each choice's value
- * carries the exact id.
+ * carries the exact id. A `setCode` (typed, or picked as `id:<set id>`) keeps to
+ * that set's products.
  */
 export function searchCatalogItems(
   game: string,
   kind: ListingKind,
   query: string,
   language?: ListingLanguage | null,
+  setCode?: string | null,
 ): Array<{ name: string; value: string }> {
   const tokens = tokensOf(query);
   if (tokens.length === 0) {
@@ -113,14 +120,17 @@ export function searchCatalogItems(
         eq(catalogItems.game, game),
         eq(catalogItems.kind, kind),
         wanted ? eq(catalogItems.language, wanted) : undefined,
+        setCode ? setCondition(setCode) : undefined,
         ...tokens.map(matchesToken),
       ),
     )
     .orderBy(
-      // An exact name first, then a card whose own name has every token (so a
-      // lone `m` finds Nidoran M ahead of cards that only match it in a set
-      // code), and only then the rest.
+      // An exact name first, then one that has every token as a whole word (so
+      // `tin` finds Mini Tin ahead of Victini Box), then one whose own name has
+      // every token somewhere (so a lone `m` finds Nidoran M ahead of cards that
+      // only match it in a set code), and only then the rest.
       sql`(${catalogItems.baseNormalized} = ${tokens.join(' ')}) desc`,
+      sql`(${and(...tokens.map((token) => like(sql`' ' || ${catalogItems.nameNormalized} || ' '`, `% ${token} %`)))}) desc`,
       sql`(${and(...tokens.map((token) => like(catalogItems.nameNormalized, `%${token}%`)))}) desc`,
       // Of what is left, the shorter name is the closer to what was typed
       // (`Charizard ex` before `Mega Charizard X ex` for "charizard ex 125").
@@ -197,8 +207,11 @@ export interface CatalogEntry {
   id: string;
   kind: string;
   name: string;
+  nameNormalized: string;
   baseNormalized: string;
   number: string | null;
+  /** The kind of sealed product, null for a card. */
+  category: string | null;
   language: string;
   /** What a listing's set shows and `/edit` round-trips (see `setLabelFor`). */
   setLabel: string;
@@ -208,8 +221,10 @@ const entryColumns = {
   id: catalogItems.id,
   kind: catalogItems.kind,
   name: catalogItems.name,
+  nameNormalized: catalogItems.nameNormalized,
   baseNormalized: catalogItems.baseNormalized,
   number: catalogItems.number,
+  category: catalogItems.category,
   language: catalogItems.language,
   setCode: catalogSets.code,
   setName: catalogSets.name,
@@ -219,8 +234,10 @@ function toEntry(row: {
   id: string;
   kind: string;
   name: string;
+  nameNormalized: string;
   baseNormalized: string;
   number: string | null;
+  category: string | null;
   language: string;
   setCode: string;
   setName: string;
@@ -229,8 +246,10 @@ function toEntry(row: {
     id: row.id,
     kind: row.kind,
     name: row.name,
+    nameNormalized: row.nameNormalized,
     baseNormalized: row.baseNormalized,
     number: row.number,
+    category: row.category,
     language: row.language,
     setLabel: setLabelFor(row.setCode, row.setName),
   };
@@ -352,6 +371,80 @@ export function resolveCatalogCard(
     )
     .get();
   return row ? resolvedFrom(toEntry(row)) : unresolved;
+}
+
+function sealedFrom(entry: CatalogEntry): ResolvedSealedProduct {
+  return {
+    productName: entry.name,
+    productNameNormalized: entry.nameNormalized,
+    setCode: entry.setLabel,
+    uuid: entry.id,
+    category: entry.category,
+    subtype: null,
+    marketUrl: tcgplayerProductUrl(entry.id),
+    language: entry.language === 'ja' ? 'ja' : null,
+    resolved: true,
+  };
+}
+
+/**
+ * Resolve a typed or picked sealed product. A pick (`id:501256`) is looked up
+ * exactly; a typed name matches the product's full name, narrowed by the set
+ * and language if given. A name two sets share can't say which, so the English
+ * one in the newest set wins (a picked suggestion never has that problem). A
+ * miss is the free-text result the sealed commands still post, with no link.
+ */
+export function resolveCatalogSealed(
+  game: string,
+  input: string,
+  options: { setCode?: string | null; language?: ListingLanguage | null } = {},
+): ResolvedSealedProduct {
+  const typedName = input.trim();
+  const unresolved: ResolvedSealedProduct = {
+    productName: typedName,
+    productNameNormalized: normalizeCardName(typedName),
+    setCode: options.setCode && !catalogPickId(options.setCode) ? options.setCode.trim() : null,
+    uuid: null,
+    category: null,
+    subtype: null,
+    marketUrl: null,
+    resolved: false,
+  };
+
+  const pickedId = catalogPickId(input);
+  if (pickedId) {
+    const entry = findCatalogEntry(game, 'sealed', pickedId);
+    return entry
+      ? sealedFrom(entry)
+      : { ...unresolved, productName: '', productNameNormalized: '' };
+  }
+
+  const typed = normalizeCardName(typedName);
+  if (!typed) {
+    return unresolved;
+  }
+  const wanted = catalogLanguage(options.language);
+  const row = getDb()
+    .select(entryColumns)
+    .from(catalogItems)
+    .innerJoin(catalogSets, joinSets)
+    .where(
+      and(
+        eq(catalogItems.game, game),
+        eq(catalogItems.kind, 'sealed'),
+        eq(catalogItems.nameNormalized, typed),
+        wanted ? eq(catalogItems.language, wanted) : undefined,
+        options.setCode ? setCondition(options.setCode) : undefined,
+      ),
+    )
+    .orderBy(
+      sql`(${catalogItems.language} = 'en') desc`,
+      asc(catalogSets.supplemental),
+      desc(catalogSets.releaseDate),
+      asc(catalogItems.id),
+    )
+    .get();
+  return row ? sealedFrom(toEntry(row)) : unresolved;
 }
 
 /** What `/search` needs from a typed or picked card name. */

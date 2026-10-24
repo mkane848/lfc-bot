@@ -129,6 +129,7 @@ export const SEALED_TYPE_LABEL_OVERRIDES: Record<string, string> = {
   from_the_vault: 'From the Vault',
   two_player_starter: 'Two-Player Starter',
   'six-card': 'Six-Card',
+  build_and_battle: 'Build & Battle',
 };
 
 /**

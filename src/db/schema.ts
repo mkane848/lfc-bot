@@ -159,6 +159,8 @@ export const catalogSets = sqliteTable(
     supplemental: integer('supplemental').notNull().default(0),
     /** The ETag of this set's product list at the last import, so the next sync can send `If-None-Match`. */
     etag: text('etag'),
+    /** The importer version that wrote this set's products; a set imported by an older one is imported again. */
+    importVersion: integer('import_version').notNull().default(0),
     updatedAt: integer('updated_at').notNull(),
   },
   (table) => {
