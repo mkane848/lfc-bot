@@ -232,7 +232,7 @@ export async function resolveCard(
       cardSet: cached.cardSet,
       cardImageUrl: cached.cardImageUrl,
       collectorNumber: cached.collectorNumber,
-      manapoolUrl: cached.manapoolUrl,
+      marketUrl: cached.manapoolUrl,
       manapoolPriceCents: cached.manapoolPriceCents,
       resolved: cached.resolved === 1,
     };
@@ -272,7 +272,7 @@ export async function resolveCard(
     const cardCollectorNumber = card.collector_number ?? null;
     const isPaperCard = card.games?.includes('paper') ?? false;
     const manapool = isPaperCard && scryfallId ? await lookupManapoolPrinting(scryfallId) : null;
-    const manapoolUrl = isPaperCard
+    const marketUrl = isPaperCard
       ? (manapool?.url ??
         buildManapoolUrl({
           cardName: card.name,
@@ -287,7 +287,7 @@ export async function resolveCard(
       cardSet: cardSetCode,
       cardImageUrl: pickImageUrl(card),
       collectorNumber: cardCollectorNumber,
-      manapoolUrl,
+      marketUrl,
       manapoolPriceCents: manapool?.priceCents ?? null,
       resolved: true,
     };
@@ -299,7 +299,7 @@ export async function resolveCard(
       cardSet: resolved.cardSet,
       cardImageUrl: resolved.cardImageUrl,
       collectorNumber: resolved.collectorNumber,
-      manapoolUrl: resolved.manapoolUrl,
+      manapoolUrl: resolved.marketUrl,
       manapoolPriceCents: resolved.manapoolPriceCents,
       resolved: true,
     });
@@ -316,7 +316,7 @@ export async function resolveCard(
     cardSet: cardSet ?? null,
     cardImageUrl: null,
     collectorNumber: null,
-    manapoolUrl: null,
+    marketUrl: null,
     manapoolPriceCents: null,
     resolved: false,
   };

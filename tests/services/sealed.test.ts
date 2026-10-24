@@ -551,7 +551,7 @@ describe('resolveSealedProduct', () => {
       uuid: 'uuid-blb-bundle',
       category: 'bundle',
       subtype: 'default',
-      manapoolUrl: 'https://manapool.com/sealed/blb/bundle',
+      marketUrl: 'https://manapool.com/sealed/blb/bundle',
       resolved: true,
     });
     expect(manapool).toHaveBeenCalledWith('uuid-blb-bundle');
@@ -563,7 +563,7 @@ describe('resolveSealedProduct', () => {
   it('still resolves when Mana Pool returns no link', async () => {
     manapool.mockResolvedValue(null);
     await expect(resolveSealedProduct('Bloomburrow Bundle')).resolves.toMatchObject({
-      manapoolUrl: null,
+      marketUrl: null,
       resolved: true,
     });
   });
@@ -612,7 +612,7 @@ describe('resolveSealedProduct', () => {
       uuid: null,
       category: null,
       subtype: null,
-      manapoolUrl: null,
+      marketUrl: null,
       resolved: false,
     });
     expect(manapool).not.toHaveBeenCalled();
@@ -627,7 +627,7 @@ describe('resolveSealedProduct', () => {
     expect(result.setCode).toBe('BLB');
     expect(result.uuid).toBeNull();
     expect(result.category).toBeNull();
-    expect(result.manapoolUrl).toBeNull();
+    expect(result.marketUrl).toBeNull();
     expect(manapool).not.toHaveBeenCalled();
   });
 

@@ -53,7 +53,7 @@ beforeEach(() => {
     cardSet: 'LEA',
     cardImageUrl: 'http://img/lotus.png',
     collectorNumber: '232',
-    manapoolUrl: null,
+    marketUrl: null,
     manapoolPriceCents: null,
     resolved: true,
   });
@@ -101,7 +101,7 @@ describe('/have', () => {
       cardSet: null,
       cardImageUrl: null,
       collectorNumber: null,
-      manapoolUrl: null,
+      marketUrl: null,
       manapoolPriceCents: null,
       resolved: false,
     });

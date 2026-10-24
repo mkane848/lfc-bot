@@ -195,8 +195,8 @@ export async function handleEditModal(interaction: ModalSubmitInteraction): Prom
         cardSet: resolved.setCode ?? cardSet,
         cardName: resolved.productName,
         cardNameNormalized: resolved.productNameNormalized,
-        manapoolUrl: resolved.manapoolUrl,
-        sealedUuid: resolved.uuid,
+        marketUrl: resolved.marketUrl,
+        catalogId: resolved.uuid,
         sealedCategory: resolved.category,
         sealedSubtype: resolved.subtype,
       });
@@ -219,7 +219,7 @@ export async function handleEditModal(interaction: ModalSubmitInteraction): Prom
         cardNameNormalized: resolved.cardNameNormalized,
         cardImageUrl: resolved.cardImageUrl,
         collectorNumber: resolved.collectorNumber ?? null,
-        manapoolUrl: resolved.manapoolUrl,
+        marketUrl: resolved.marketUrl,
       });
     }
 

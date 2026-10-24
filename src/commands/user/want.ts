@@ -132,7 +132,7 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
       finish,
       variant,
       collectorNumber: resolved.collectorNumber ?? collectorNumber,
-      manapoolUrl: resolved.manapoolUrl,
+      marketUrl: resolved.marketUrl,
       condition,
       priceCents: maxPrice,
       notes,

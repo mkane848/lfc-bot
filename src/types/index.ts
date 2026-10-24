@@ -37,7 +37,7 @@ export interface ResolvedCard {
   cardSet?: string | null;
   cardImageUrl?: string | null;
   collectorNumber?: string | null;
-  manapoolUrl?: string | null;
+  marketUrl?: string | null;
   manapoolPriceCents?: number | null;
   resolved: boolean;
 }
@@ -54,7 +54,7 @@ export interface ResolvedSealedProduct {
   uuid: string | null;
   category: string | null;
   subtype: string | null;
-  manapoolUrl: string | null;
+  marketUrl: string | null;
   resolved: boolean;
 }
 
@@ -71,14 +71,14 @@ export interface ListingCreateInput {
   finish?: CardFinish | null;
   variant?: CardVariant | null;
   collectorNumber?: string | null;
-  manapoolUrl?: string | null;
+  marketUrl?: string | null;
   condition?: CardCondition | null;
   priceCents?: number | null;
   quantity?: number;
   notes?: string | null;
   game?: string;
   kind?: ListingKind;
-  sealedUuid?: string | null;
+  catalogId?: string | null;
   sealedCategory?: string | null;
   sealedSubtype?: string | null;
 }
