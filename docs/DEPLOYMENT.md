@@ -102,6 +102,8 @@ Channel**, **Send Messages**, **Embed Links**, and **Read Message History**
 https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&permissions=84992&scope=bot%20applications.commands
 ```
 
+The reason for each permission is on the [docs front page](./index.md#permissions).
+
 You can also generate the same link in the Discord developer portal under
 **OAuth2 > URL Generator**.
 

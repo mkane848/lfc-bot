@@ -62,8 +62,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ahead of one that merely contains the letters, so `tin` finds Mini Tin before
   Victini Box. This applies to Pokémon cards and products.
 
+### Changed
+
+- The docs front page now explains the permissions LFCbot requests and why:
+  the scopes, the `Guilds`-only intent, each invite permission, and what members
+  need. Its links are one section at the bottom, which now includes the privacy
+  policy and terms. The README and deployment guide point to it, and the README
+  list matches the invite link (it was missing View Channel and listed Use
+  Application Commands, which is not an invite permission).
+
 ### Fixed
 
+- The privacy policy, terms of service and legal index linked to
+  `github.com/mkane848/lfcbot`, which does not exist. They now link to
+  `lfc-bot`.
 - Automatic release tagging could put the tag on a commit merged after the
   release, shipping changes the release hadn't included. The tag went on
   whichever commit's CI run happened to start the workflow, so when a pull

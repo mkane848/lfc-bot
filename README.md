@@ -77,15 +77,17 @@ Listings can also carry a language and, for graded slabs, a grade
 
 ## Bot Permissions
 
-Invite the bot with the `applications.commands` scope and grant these
-permissions for user-visible features:
+Invite the bot with the `bot` and `applications.commands` scopes and these
+permissions (permission value `84992`):
 
+- View Channel
 - Send Messages
 - Embed Links
 - Read Message History
-- Use Application Commands
 
-Admin commands require the **Manage Server** permission.
+Only the `Guilds` gateway intent is used; the privileged intents stay off. Admin
+commands require the **Manage Server** permission for the member running them.
+[docs/index.md](docs/index.md#permissions) explains what each permission is for.
 
 ## Command Reference
 

@@ -70,7 +70,7 @@ Disputes should be handled directly between users or through Discord's reporting
 To report violations of these Terms or illegal activity:
 - Report to your Discord server administrator
 - Use Discord's reporting tools
-- Open an issue on our [GitHub repository](https://github.com/mkane848/lfcbot)
+- Open an issue on our [GitHub repository](https://github.com/mkane848/lfc-bot)
 
 ## 8. Intellectual Property
 
@@ -113,7 +113,7 @@ If any provision of these Terms is found to be unenforceable, that provision sha
 ## 13. Contact Us
 
 For questions about these Terms, please:
-- Open an issue on our [GitHub repository](https://github.com/mkane848/lfcbot)
+- Open an issue on our [GitHub repository](https://github.com/mkane848/lfc-bot)
 - Contact the bot owner or your server administrator
 
 ---

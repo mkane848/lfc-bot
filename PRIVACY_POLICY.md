@@ -55,7 +55,7 @@ You have the right to:
 - **Delete**: Remove any of your listings at any time using `/delete`
 - **Correct**: Edit your listings using `/edit`
 
-To request deletion of all your data or to exercise privacy rights, contact the server administrator or open an issue on our [GitHub repository](https://github.com/mkane848/lfcbot).
+To request deletion of all your data or to exercise privacy rights, contact the server administrator or open an issue on our [GitHub repository](https://github.com/mkane848/lfc-bot).
 
 ## 6. Data Sharing
 
@@ -87,7 +87,7 @@ We may update this Privacy Policy at any time. Changes will be posted to this pa
 ## 10. Contact Us
 
 For privacy inquiries, questions, or requests, please:
-- Open an issue on our [GitHub repository](https://github.com/mkane848/lfcbot)
+- Open an issue on our [GitHub repository](https://github.com/mkane848/lfc-bot)
 - Contact the bot owner or your server administrator
 
 ---
