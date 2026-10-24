@@ -92,7 +92,7 @@ export interface GameDefinition {
   /** Resolve a typed or picked sealed product. A miss is a free-text result. */
   resolveSealed: (
     name: string,
-    options: { setCode?: string | null },
+    options: { setCode?: string | null; language?: ListingLanguage | null },
   ) => Promise<ResolvedSealedProduct>;
   /**
    * Whether `value` is a picked suggestion that names one exact catalog entry,

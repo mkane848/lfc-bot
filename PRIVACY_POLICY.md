@@ -10,7 +10,7 @@ When you interact with LFCbot, we collect and store:
 
 - **Discord User Information**: Your Discord user ID and display name
 - **Listing Content**: The text, preferences, and metadata of have/want listings you create
-- **Card Metadata**: Information from Scryfall about Magic: The Gathering cards, and from the TCGCSV catalog about Pokémon cards, that you search or list
+- **Card Metadata**: Information from Scryfall about Magic: The Gathering cards, and from the TCGCSV catalog about Pokémon cards and sealed product, that you search or list
 - **Server Configuration**: Settings configured by server administrators (timezone, digest schedule, channel preferences)
 
 We do **not** collect:
@@ -38,7 +38,7 @@ We use your Discord user ID as the primary identifier for your listings. Your di
 - **Access**: Only the bot application has access to the database. No third parties have access to your data except as required by law
 - **Scryfall Integration**: Card searches are passed to Scryfall's public API; see [Scryfall's privacy policy](https://scryfall.com/docs/api) for their data handling
 - **MTGJSON Integration**: The sealed-product catalog behind `/have-sealed` and `/want-sealed` is downloaded from [MTGJSON](https://mtgjson.com) on a recurring schedule and matched entirely against our own local database — no user information is ever sent to MTGJSON
-- **TCGCSV Integration**: Where a server has enabled Pokémon, the Pokémon card catalog is downloaded from [TCGCSV](https://tcgcsv.com) (a mirror of TCGplayer's public catalog) on a recurring schedule and matched entirely against our own local database — no user information is ever sent to TCGCSV, and prices are never requested or stored
+- **TCGCSV Integration**: Where a server has enabled Pokémon, the Pokémon card and sealed-product catalog is downloaded from [TCGCSV](https://tcgcsv.com) (a mirror of TCGplayer's public catalog) on a recurring schedule and matched entirely against our own local database — no user information is ever sent to TCGCSV, and prices are never requested or stored
 - **Mana Pool Integration**: When a listing resolves to a specific card printing or sealed product, the bot requests that product's canonical link from [Mana Pool's](https://manapool.com) API using only the printing or product identifier — no user information is sent
 
 ## 4. Data Retention
@@ -77,7 +77,7 @@ LFCbot integrates with:
 - **Discord API**: For bot functionality (see [Discord Privacy Policy](https://discord.com/privacy))
 - **Scryfall API**: For Magic: The Gathering card data (see [Scryfall Privacy Policy](https://scryfall.com/docs/api))
 - **MTGJSON**: For the sealed-product catalog behind `/have-sealed` and `/want-sealed`, downloaded on a recurring schedule and used under the MIT License (https://mtgjson.com)
-- **TCGCSV**: For the Pokémon card catalog, downloaded on a recurring schedule while a server has Pokémon enabled (https://tcgcsv.com)
+- **TCGCSV**: For the Pokémon card and sealed-product catalog, downloaded on a recurring schedule while a server has Pokémon enabled (https://tcgcsv.com)
 - **Mana Pool API**: For product links on card and sealed listings (https://manapool.com)
 
 ## 9. Changes to This Policy

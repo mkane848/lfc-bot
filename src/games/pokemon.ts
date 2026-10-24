@@ -2,6 +2,7 @@ import {
   catalogPickId,
   catalogSearchTarget,
   resolveCatalogCard,
+  resolveCatalogSealed,
   searchCatalogItems,
   searchCatalogSets,
 } from '../services/catalog.js';
@@ -14,8 +15,10 @@ import type { GameDefinition } from './types.js';
  * and posting never waits on a network call. Links go to TCGplayer, from the
  * product id every catalog row has.
  *
- * Sealed product is in the same catalog but isn't offered yet (`kinds`), so
- * the sealed commands tell a member so rather than posting free text.
+ * Sealed product comes from the same catalog and sync: a product with no
+ * collector number is sealed unless its name says it is an older single
+ * (`classifyProduct`), and it is filed under a category such as Elite Trainer
+ * Box. Digital code cards are not kept.
  */
 export const pokemonGame: GameDefinition = {
   id: POKEMON_GAME_ID,
@@ -23,7 +26,7 @@ export const pokemonGame: GameDefinition = {
   label: 'Pokémon',
   shortLabel: 'Pokémon',
   marketLabel: 'TCGplayer',
-  kinds: ['card'],
+  kinds: ['card', 'sealed'],
   // Reverse holo is a Pokémon finish; "holo" is Magic's foil. Etched is Magic's.
   finishes: ['nonfoil', 'foil', 'reverse'],
   supportsVariant: false,
@@ -33,7 +36,16 @@ export const pokemonGame: GameDefinition = {
   },
 
   autocompleteItems: (kind, query, context) =>
-    Promise.resolve(searchCatalogItems(POKEMON_GAME_ID, kind, query, context.language)),
+    Promise.resolve(
+      searchCatalogItems(
+        POKEMON_GAME_ID,
+        kind,
+        query,
+        context.language,
+        // A picked set narrows sealed product, as it does Magic's; cards are found by name.
+        kind === 'sealed' ? context.setCode : null,
+      ),
+    ),
 
   autocompleteSets: (kind, query) =>
     Promise.resolve(searchCatalogSets(POKEMON_GAME_ID, kind, query)),
@@ -41,9 +53,8 @@ export const pokemonGame: GameDefinition = {
   resolveCard: (name, options) =>
     Promise.resolve(resolveCatalogCard(POKEMON_GAME_ID, name, options)),
 
-  resolveSealed: (name) =>
-    // Not reachable while `kinds` leaves sealed out; it fails loudly rather than posting nothing.
-    Promise.reject(new Error(`Pokémon sealed product is not available (${name}).`)),
+  resolveSealed: (name, options) =>
+    Promise.resolve(resolveCatalogSealed(POKEMON_GAME_ID, name, options)),
 
   isCatalogPick: (_kind, value) => catalogPickId(value) !== null,
 

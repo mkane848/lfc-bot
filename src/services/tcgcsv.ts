@@ -1,8 +1,9 @@
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, lt, sql } from 'drizzle-orm';
 import { getDb } from '../db/index.js';
 import { catalogItems, catalogSets, catalogSyncMeta } from '../db/schema.js';
 import type { NewCatalogItemRow } from '../db/schema.js';
 import { PROJECT_NAME, PROJECT_REPOSITORY } from '../utils/constants.js';
+import { classifyProduct } from '../utils/catalog-products.js';
 import {
   baseProductName,
   cleanGroupName,
@@ -43,6 +44,16 @@ export const POKEMON_GAME_ID = 'pokemon';
 export const POKEMON_SYNC_SOURCE = 'tcgcsv:pokemon';
 /** How long before a boot-time check asks for another sync. TCGCSV rebuilds once a day. */
 export const CATALOG_STALE_MS = 24 * 60 * 60 * 1000;
+/**
+ * Bump this when the way a product becomes a row changes (which kind it is,
+ * its name, its category). Each set records the version that imported it, and a
+ * set imported by an older one is fetched again without `If-None-Match`: its
+ * stored ETag and the "nothing new today" check would otherwise leave it as the
+ * old code made it for as long as TCGCSV doesn't touch it.
+ * 0: before sets recorded a version (kind from the presence of a number).
+ * 1: kind and category from the name (`classifyProduct`).
+ */
+export const IMPORT_VERSION = 1;
 
 /** TCGCSV's two Pokémon categories: English, and Japan, whose products also have English names. */
 const POKEMON_CATEGORIES = [
@@ -133,14 +144,30 @@ function withRetry<T>(run: () => Promise<T>): Promise<T> {
   return retryWithBackoff(run, { attempts: 2, baseDelayMs: 500, maxDelayMs: 2000 });
 }
 
-/** Whether a `servers`-independent catalog sync is due: never run, or not confirmed current for a day. */
+/** Whether some set was imported by an older version of the importer than this one. */
+function hasOutdatedSets(): boolean {
+  const row = getDb()
+    .select({ id: catalogSets.id })
+    .from(catalogSets)
+    .where(
+      and(eq(catalogSets.game, POKEMON_GAME_ID), lt(catalogSets.importVersion, IMPORT_VERSION)),
+    )
+    .limit(1)
+    .get();
+  return row !== undefined;
+}
+
+/**
+ * Whether the catalog sync is due: never run, not confirmed current for a day,
+ * or holding sets an older version of the importer wrote.
+ */
 export function isCatalogSyncStale(source = POKEMON_SYNC_SOURCE): boolean {
   const row = getDb()
     .select({ syncedAt: catalogSyncMeta.syncedAt })
     .from(catalogSyncMeta)
     .where(eq(catalogSyncMeta.source, source))
     .get();
-  return !row || Date.now() - row.syncedAt > CATALOG_STALE_MS;
+  return !row || Date.now() - row.syncedAt > CATALOG_STALE_MS || hasOutdatedSets();
 }
 
 function recordSyncMeta(source: string, fingerprint: string): void {
@@ -176,9 +203,13 @@ function toItemRow(
   if (!name) {
     return null;
   }
+  const productClass = classifyProduct(name, rawNumber);
+  if (productClass.kind === 'skip') {
+    return null;
+  }
   return {
     game: POKEMON_GAME_ID,
-    kind: rawNumber ? 'card' : 'sealed',
+    kind: productClass.kind,
     language,
     id: String(productId),
     name,
@@ -186,7 +217,7 @@ function toItemRow(
     baseNormalized: normalizeCardName(baseProductName(name)),
     setId,
     number: collectorNumberOf(rawNumber),
-    category: null,
+    category: productClass.kind === 'sealed' ? productClass.category : null,
     updatedAt,
   };
 }
@@ -280,6 +311,7 @@ function upsertSet(
     releaseDate: input.releaseDate,
     supplemental: input.supplemental ? 1 : 0,
     etag: input.etag,
+    importVersion: IMPORT_VERSION,
     updatedAt,
   };
   db.insert(catalogSets)
@@ -292,6 +324,7 @@ function upsertSet(
         releaseDate: values.releaseDate,
         supplemental: values.supplemental,
         etag: values.etag,
+        importVersion: values.importVersion,
         updatedAt,
       },
     })
@@ -352,10 +385,19 @@ async function runPokemonSync(options: CatalogSyncOptions): Promise<CatalogSyncR
     if (!stamp) {
       throw new Error('TCGCSV last-updated.txt was empty');
     }
-    if (meta?.fingerprint === stamp) {
+    // Sets an older version of the importer wrote are fetched again below even
+    // though TCGCSV hasn't changed them, so "nothing new" only counts without any.
+    const outdated = hasOutdatedSets();
+    if (!outdated && meta?.fingerprint === stamp) {
       logger.debug({ stamp }, 'Pokémon catalog already at the latest TCGCSV build');
       recordSyncMeta(POKEMON_SYNC_SOURCE, stamp);
       return { ...result, status: 'skipped' };
+    }
+    if (outdated) {
+      logger.info(
+        { importVersion: IMPORT_VERSION },
+        'Pokémon catalog has sets from an older importer; importing them again',
+      );
     }
 
     // 2. Every category's group list, before anything is changed, so an empty or
@@ -400,7 +442,7 @@ async function runPokemonSync(options: CatalogSyncOptions): Promise<CatalogSyncR
         };
         try {
           const stored = db
-            .select({ etag: catalogSets.etag })
+            .select({ etag: catalogSets.etag, importVersion: catalogSets.importVersion })
             .from(catalogSets)
             .where(
               and(
@@ -414,7 +456,10 @@ async function runPokemonSync(options: CatalogSyncOptions): Promise<CatalogSyncR
           const response = await withRetry(() =>
             request(
               `/tcgplayer/${categoryIdFor(language)}/${setId}/products`,
-              stored?.etag ? { 'If-None-Match': stored.etag } : {},
+              // An ETag only vouches for a set the current importer wrote.
+              stored?.etag && stored.importVersion === IMPORT_VERSION
+                ? { 'If-None-Match': stored.etag }
+                : {},
               [304, 404],
             ),
           );

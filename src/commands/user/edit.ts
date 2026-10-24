@@ -209,7 +209,13 @@ export async function handleEditModal(interaction: ModalSubmitInteraction): Prom
       });
       return;
     } else if (isSealed) {
-      const resolved = await game.resolveSealed(listing.cardName, { setCode: cardSet });
+      // Language is fixed when a listing is posted, so the product in the new
+      // set has to be in the same language.
+      const sealedLanguage = isListingLanguage(listing.language) ? listing.language : null;
+      const resolved = await game.resolveSealed(listing.cardName, {
+        setCode: cardSet,
+        language: sealedLanguage,
+      });
       // Asymmetry with the card branch below, and deliberate: an unresolved
       // product does NOT abort. The sealed catalog is not exhaustive (new
       // releases, store-only drops, custom lots), so creation accepts a

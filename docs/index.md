@@ -10,7 +10,8 @@ Welcome to LFCbot! This is a free, multi-server Discord bot for card trading lis
 ## Features
 
 - Post `/have` and `/want` listings with card resolution and autocomplete, for
-  Magic: The Gathering and (once an admin enables it) Pokémon singles
+  Magic: The Gathering and (once an admin enables it) Pokémon singles and
+  sealed product
 - Post up to 3 cards at once with `/have-multi` and `/want-multi`
 - Post `/have-sealed` and `/want-sealed` listings for sealed product (booster
   boxes, bundles, prerelease kits, Commander decks), with autocomplete backed
