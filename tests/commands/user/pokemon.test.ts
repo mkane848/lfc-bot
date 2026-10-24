@@ -4,13 +4,14 @@ import { getDb } from '../../../src/db/index.js';
 import { listings } from '../../../src/db/schema.js';
 import { editCommand, handleEditModal } from '../../../src/commands/user/edit.js';
 import { haveCommand } from '../../../src/commands/user/have.js';
-import { haveMultiCommand } from '../../../src/commands/user/have-multi.js';
+import { handleHaveMultiModal, haveMultiCommand } from '../../../src/commands/user/have-multi.js';
 import { haveSealedCommand } from '../../../src/commands/user/have-sealed.js';
 import { searchCommand } from '../../../src/commands/user/search.js';
 import { wantCommand } from '../../../src/commands/user/want.js';
 import { wantSealedCommand } from '../../../src/commands/user/want-sealed.js';
 import { formatDigest } from '../../../src/services/digest.js';
 import * as scryfall from '../../../src/services/scryfall.js';
+import * as sealedService from '../../../src/services/sealed.js';
 import {
   handleCardAutocomplete,
   handleSealedAutocomplete,
@@ -33,8 +34,15 @@ vi.mock('../../../src/services/scryfall.js', async (importOriginal) => {
   return { ...actual, resolveCard: vi.fn(), autocompleteCards: vi.fn(), autocompleteSets: vi.fn() };
 });
 
+vi.mock('../../../src/services/sealed.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../src/services/sealed.js')>();
+  return { ...actual, autocompleteSealedProducts: vi.fn(), autocompleteSealedSets: vi.fn() };
+});
+
 const resolveCard = vi.mocked(scryfall.resolveCard);
 const autocompleteCards = vi.mocked(scryfall.autocompleteCards);
+const autocompleteSealedProducts = vi.mocked(sealedService.autocompleteSealedProducts);
+const autocompleteSealedSets = vi.mocked(sealedService.autocompleteSealedSets);
 
 beforeEach(() => {
   seedPokemonCatalog();
@@ -42,6 +50,10 @@ beforeEach(() => {
   resolveCard.mockReset();
   autocompleteCards.mockReset();
   autocompleteCards.mockResolvedValue([]);
+  autocompleteSealedProducts.mockReset();
+  autocompleteSealedProducts.mockResolvedValue([]);
+  autocompleteSealedSets.mockReset();
+  autocompleteSealedSets.mockResolvedValue([]);
 });
 
 const post = (strings: Record<string, string | null>, command = haveCommand) => {
@@ -198,27 +210,136 @@ describe('/want a Pokémon card', () => {
   });
 });
 
-describe('Pokémon sealed product is not offered yet', () => {
-  it('turns /have-sealed and /want-sealed away with a message, posting nothing', async () => {
-    for (const command of [haveSealedCommand, wantSealedCommand]) {
-      const i = fakeChatInputInteraction({
-        options: { strings: { product_name: 'pkm:id:501256', accepts: 'cash' } },
-      });
-      await command.execute(i);
-      expect(errorOf(i)).toBe("Pokémon doesn't have sealed product here yet.");
-    }
+describe('Pokémon sealed product', () => {
+  const postSealed = (strings: Record<string, string | null>, command = haveSealedCommand) => {
+    const i = fakeChatInputInteraction({
+      options: { strings: { accepts: 'cash', ...strings } },
+    });
+    return command.execute(i).then(() => i);
+  };
+
+  it('posts a picked suggestion with its category, set, TCGplayer link and catalog id', async () => {
+    const i = await postSealed({ product_name: 'pkm:id:501257' });
+
+    expect(stored()).toMatchObject([
+      {
+        game: 'pokemon',
+        kind: 'sealed',
+        intent: 'have',
+        cardName: 'Obsidian Flames Elite Trainer Box',
+        cardNameNormalized: 'obsidian flames elite trainer box',
+        cardSet: 'OBF',
+        marketUrl: 'https://www.tcgplayer.com/product/501257',
+        catalogId: '501257',
+        sealedCategory: 'elite_trainer_box',
+        sealedSubtype: null,
+        language: 'en',
+        condition: null,
+      },
+    ]);
+    const embed = embedOf(i);
+    expect(embed.url).toBe('https://www.tcgplayer.com/product/501257');
+    expect(JSON.stringify(embed)).toContain('Elite Trainer Box');
+    expect(embed.footer?.text).toBe('Listing #1 · Pokémon');
+  });
+
+  it('wants a typed product, narrowed by the set the member gave', async () => {
+    await postSealed(
+      { product_name: 'Booster Bundle', set: 'OBF', game: 'pokemon' },
+      wantSealedCommand,
+    );
+    expect(stored()[0]).toMatchObject({
+      intent: 'want',
+      game: 'pokemon',
+      catalogId: '501300',
+      cardSet: 'OBF',
+      sealedCategory: 'booster_bundle',
+    });
+  });
+
+  it('takes a picked set the same way', async () => {
+    await postSealed({ product_name: 'Booster Bundle', set: 'id:23229', game: 'pokemon' });
+    expect(stored()[0]).toMatchObject({ catalogId: '601300', cardSet: 'MEW' });
+  });
+
+  it('posts a product the catalog does not have as free text with no link, like Magic’s', async () => {
+    await postSealed({ product_name: 'Brand New Mystery Box', game: 'pokemon', set: 'OBF' });
+    expect(stored()[0]).toMatchObject({
+      game: 'pokemon',
+      kind: 'sealed',
+      cardName: 'Brand New Mystery Box',
+      cardSet: 'OBF',
+      marketUrl: null,
+      catalogId: null,
+      sealedCategory: null,
+    });
+  });
+
+  it('refuses a picked product that has since left the catalog, rather than posting its id', async () => {
+    const i = await postSealed({ product_name: 'pkm:id:424242' });
+    expect(errorOf(i)).toMatch(/no longer in the catalog/);
     expect(stored()).toHaveLength(0);
   });
 
-  it('turns /have-multi away before opening a sealed modal for Pokémon', async () => {
+  it('posts a Japanese product in Japanese, and rejects a clashing language option', async () => {
+    await postSealed({ product_name: 'pkm:id:520001' });
+    expect(stored()[0]).toMatchObject({ language: 'ja', cardSet: 'SV3', catalogId: '520001' });
+
+    getDb().delete(listings).run();
+    const i = await postSealed({ product_name: 'pkm:id:520001', language: 'en' });
+    expect(errorOf(i)).toMatch(/Japanese printing, but you chose English/);
+    expect(stored()).toHaveLength(0);
+  });
+
+  it('looks a typed name up in the language the member chose', async () => {
+    await postSealed({
+      product_name: 'Ruler of the Black Flame Booster Box',
+      game: 'pokemon',
+      language: 'ja',
+    });
+    expect(stored()[0]).toMatchObject({ catalogId: '520001', language: 'ja' });
+
+    getDb().delete(listings).run();
+    await postSealed({
+      product_name: 'Ruler of the Black Flame Booster Box',
+      game: 'pokemon',
+      language: 'de',
+    });
+    // No German version exists, and German is the English product, which this name isn't.
+    expect(stored()[0]).toMatchObject({ catalogId: null, language: 'de', marketUrl: null });
+  });
+
+  it('refuses Pokémon sealed product on a server that has not enabled Pokémon', async () => {
+    enableGames('guild-1', ['mtg']);
+    const i = await postSealed({ product_name: 'pkm:id:501257' });
+    expect(errorOf(i)).toMatch(/Pokémon is not enabled/);
+    expect(stored()).toHaveLength(0);
+  });
+
+  it('opens a sealed modal for Pokémon, with the game in its id', async () => {
     const i = fakeChatInputInteraction({
       options: { strings: { type: 'sealed', game: 'pokemon' } },
     });
     await haveMultiCommand.execute(i);
-    expect(i.showModal).not.toHaveBeenCalled();
-    expect(i.reply).toHaveBeenCalledWith(
-      expect.objectContaining({ content: "Pokémon doesn't have sealed product here yet." }),
-    );
+    const modal = i.showModal.mock.calls[0]?.[0] as { data: { custom_id: string } };
+    expect(modal.data.custom_id).toBe('lfc:havemultimodal:sealed:pokemon');
+  });
+
+  it('posts the lines of a sealed modal to Pokémon, each resolved on its own', async () => {
+    const i = fakeModalSubmitInteraction({
+      customId: 'lfc:havemultimodal:sealed:pokemon',
+      fields: {
+        card1: 'Obsidian Flames Elite Trainer Box | 54.99 | 2',
+        card2: 'Mystery Tin | 20 | 1',
+        card3: '',
+        accepts: 'cash',
+      },
+    });
+    await handleHaveMultiModal(i);
+    expect(stored()).toMatchObject([
+      { game: 'pokemon', catalogId: '501257', cardSet: 'OBF', quantity: 2, priceCents: 5499 },
+      { game: 'pokemon', catalogId: null, cardName: 'Mystery Tin', marketUrl: null },
+    ]);
   });
 
   it('still opens a card modal for Pokémon', async () => {
@@ -257,11 +378,40 @@ describe('autocomplete with Magic and Pokémon both enabled', () => {
     ]);
   });
 
-  it('suggests only Magic’s sealed product, since Pokémon has none yet', async () => {
-    const i = typing('flames', {}, 'product_name');
+  it('merges Magic’s and Pokémon’s sealed product too, Pokémon’s tagged with its id', async () => {
+    const onlyPokemon = typing('elite trainer', {}, 'product_name');
+    await handleSealedAutocomplete(onlyPokemon);
+    expect(onlyPokemon.respond).toHaveBeenCalledWith([
+      { name: 'Obsidian Flames Elite Trainer Box · OBF · Pokémon', value: 'pkm:id:501257' },
+    ]);
+
+    autocompleteSealedProducts.mockResolvedValue([
+      { name: 'Flames Bundle (FLM)', value: 'uuid:abc' },
+    ]);
+    const both = typing('bundle', {}, 'product_name');
+    await handleSealedAutocomplete(both);
+    const sent = both.respond.mock.calls[0]?.[0] as Array<{ name: string; value: string }>;
+    expect(sent).toEqual(
+      expect.arrayContaining([
+        { name: 'Flames Bundle (FLM) · MTG', value: 'mtg:uuid:abc' },
+        { name: 'Booster Bundle · OBF · Pokémon', value: 'pkm:id:501300' },
+        { name: 'Booster Bundle · MEW · Pokémon', value: 'pkm:id:601300' },
+      ]),
+    );
+  });
+
+  it('keeps Pokémon’s sealed suggestions to the set already picked', async () => {
+    const i = typing('booster bundle', { set: 'id:23229', game: 'pokemon' }, 'product_name');
     await handleSealedAutocomplete(i);
-    const sent = i.respond.mock.calls[0]?.[0] as Array<{ value: string }>;
-    expect(sent.some((choice) => choice.value.startsWith('pkm:'))).toBe(false);
+    expect(i.respond).toHaveBeenCalledWith([
+      { name: 'Booster Bundle · MEW · Pokémon', value: 'pkm:id:601300' },
+    ]);
+  });
+
+  it('asks for the set option’s suggestions among sets that have sealed product', async () => {
+    const i = typing('sealed only', { product_name: 'pkm:id:930001' }, 'set');
+    await handleSetAutocomplete(i, 'sealed');
+    expect(i.respond).toHaveBeenCalledWith([{ name: 'Sealed Only Set (SOS)', value: 'id:23600' }]);
   });
 
   it('suggests Pokémon sets for the set option once the card or game is Pokémon', async () => {
@@ -403,6 +553,81 @@ describe('a Pokémon listing in a digest', () => {
     const text = formatDigest(stored(), { showGame: true });
     expect(text).toContain('Charizard ex (OBF) — NM — Pokémon — ');
     expect(text).toContain('[View on TCGplayer](https://www.tcgplayer.com/product/509879)');
+    expect(text).not.toContain('Manapool');
+  });
+});
+
+describe('/edit a Pokémon sealed listing', () => {
+  const edit = async (id: number, set: string) => {
+    const i = fakeModalSubmitInteraction({
+      customId: encodeEditModalId(id),
+      userId: 'user-1',
+      // A sealed modal has no condition row.
+      fields: { price: '', quantity: '', set, notes: '' },
+    });
+    await handleEditModal(i);
+    return i;
+  };
+  const postSealed = async (productName: string) => {
+    const i = fakeChatInputInteraction({
+      options: { strings: { product_name: productName, accepts: 'cash' } },
+    });
+    await haveSealedCommand.execute(i);
+  };
+
+  it('re-resolves the product in the new set and updates its link, category and catalog id', async () => {
+    await postSealed('pkm:id:501300');
+    const id = stored()[0]!.id;
+
+    const i = await edit(id, 'mew');
+
+    expect(i.editReply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('updated') }),
+    );
+    expect(stored()[0]).toMatchObject({
+      cardSet: 'MEW',
+      catalogId: '601300',
+      marketUrl: 'https://www.tcgplayer.com/product/601300',
+      sealedCategory: 'booster_bundle',
+    });
+  });
+
+  it('writes the free-text result when the product is not in the new set, as Magic’s does', async () => {
+    await postSealed('pkm:id:501257');
+    const id = stored()[0]!.id;
+
+    await edit(id, 'mew');
+
+    expect(stored()[0]).toMatchObject({
+      cardSet: 'MEW',
+      cardName: 'Obsidian Flames Elite Trainer Box',
+      catalogId: null,
+      marketUrl: null,
+      sealedCategory: null,
+    });
+  });
+
+  it('keeps a Japanese product in Japanese when its set changes', async () => {
+    await postSealed('pkm:id:520010');
+    const id = stored()[0]!.id;
+
+    await edit(id, 'obf');
+
+    // OBF has an English "Booster Bundle" but no Japanese one, so the edit must not
+    // move the listing onto the English product.
+    expect(stored()[0]).toMatchObject({ catalogId: null, language: 'ja', marketUrl: null });
+  });
+});
+
+describe('a Pokémon sealed listing in a digest', () => {
+  it('links to TCGplayer and names the game on a multi-game server', async () => {
+    const i = fakeChatInputInteraction({
+      options: { strings: { product_name: 'pkm:id:501257', accepts: 'cash' } },
+    });
+    await haveSealedCommand.execute(i);
+    const text = formatDigest(stored(), { showGame: true });
+    expect(text).toContain('Obsidian Flames Elite Trainer Box');
+    expect(text).toContain('[View on TCGplayer](https://www.tcgplayer.com/product/501257)');
     expect(text).not.toContain('Manapool');
   });
 });

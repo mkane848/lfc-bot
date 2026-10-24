@@ -7,9 +7,9 @@ search what others are offering, and admins receive configurable daily digest
 notifications of new activity.
 
 It supports **Magic: The Gathering**, resolved through the Scryfall API for
-cards and the MTGJSON catalog for sealed product, and **Pokémon** singles in
-English and Japanese, resolved against a local catalog synced daily from
-TCGCSV. Games sit behind a registry and each server chooses which ones it has
+cards and the MTGJSON catalog for sealed product, and **Pokémon** singles and
+sealed product in English and Japanese, resolved against a local catalog synced
+daily from TCGCSV. Games sit behind a registry and each server chooses which ones it has
 with `/admin games` (new servers have Magic only, so Pokémon is opt-in).
 Listings can also carry a language and, for graded slabs, a grade
 (`PSA 10`, `BGS 9.5`).
@@ -27,9 +27,10 @@ Listings can also carry a language and, for graded slabs, a grade
   collector number), and link out to it on Manapool.
 - Say what language a card or product is in, and post graded slabs with their
   company and grade (`PSA 10`, `BGS 9.5`, `CGC 9`).
-- Post Pokémon singles (English and Japanese, with an exact link to the card on
-  TCGplayer) once an admin enables Pokémon with `/admin games`. Pokémon sealed
-  product isn't supported yet.
+- Post Pokémon singles and sealed product (English and Japanese, with an exact
+  link to the card or product on TCGplayer) once an admin enables Pokémon with
+  `/admin games`. Sealed product is sorted into booster boxes, Elite Trainer
+  Boxes, tins, collections and so on.
 - Search active listings by card with filtered, paginated results.
 - Manage your own listings with `/mylistings`, `/edit`, `/fulfill`, and
   `/delete`. `/mylistings` also offers dropdowns to delete, fulfill, or edit
@@ -76,15 +77,17 @@ Listings can also carry a language and, for graded slabs, a grade
 
 ## Bot Permissions
 
-Invite the bot with the `applications.commands` scope and grant these
-permissions for user-visible features:
+Invite the bot with the `bot` and `applications.commands` scopes and these
+permissions (permission value `84992`):
 
+- View Channel
 - Send Messages
 - Embed Links
 - Read Message History
-- Use Application Commands
 
-Admin commands require the **Manage Server** permission.
+Only the `Guilds` gateway intent is used; the privileged intents stay off. Admin
+commands require the **Manage Server** permission for the member running them.
+[docs/index.md](docs/index.md#permissions) explains what each permission is for.
 
 ## Command Reference
 
@@ -164,7 +167,7 @@ LFCbot resolves and links Magic: The Gathering and Pokémon content from these s
 - **Card data**: [Scryfall](https://scryfall.com) — card details, images, and search behind `/have`, `/want`, and their variants.
 - **Sealed product catalog**: [MTGJSON](https://mtgjson.com) — the sealed-product catalog behind `/have-sealed` and `/want-sealed`, used under the MIT License. Copyright © 2018 – Present, Zach Halpern.
 - **Product links**: [Mana Pool](https://manapool.com) — the "View on Manapool" links on both card and sealed listings.
-- **Pokémon catalog**: [TCGCSV](https://tcgcsv.com) — a daily mirror of TCGplayer's catalog, the source of the Pokémon card catalog behind `/have` and `/want` once Pokémon is enabled. Only names, sets and numbers are kept (never prices). Thanks to TCGCSV for running it. Pokémon listings link to [TCGplayer](https://www.tcgplayer.com).
+- **Pokémon catalog**: [TCGCSV](https://tcgcsv.com) — a daily mirror of TCGplayer's catalog, the source of the Pokémon card and sealed-product catalog behind `/have`, `/want`, `/have-sealed` and `/want-sealed` once Pokémon is enabled. Only names, sets and numbers are kept (never prices). Thanks to TCGCSV for running it. Pokémon listings link to [TCGplayer](https://www.tcgplayer.com).
 
 LFCbot is unofficial Fan Content permitted under the [Fan Content Policy](https://company.wizards.com/en/legal/fancontentpolicy). Not approved/endorsed by Wizards. Portions of the materials used are property of Wizards of the Coast. ©Wizards of the Coast LLC.
 

@@ -159,7 +159,7 @@ export async function handleHaveMultiModal(interaction: ModalSubmitInteraction):
         // miss returns a free-text result and still posts, matching
         // `/have-sealed`. A product too new to be in the catalog is exactly
         // what that path is for.
-        const resolved = await game.resolveSealed(parsed.productName, {});
+        const resolved = await game.resolveSealed(parsed.productName, { language });
         readyInputs.push({
           serverId: guild.id,
           userId: interaction.user.id,

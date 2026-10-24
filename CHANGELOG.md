@@ -29,13 +29,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   optional `game`, autocomplete merges every enabled game and tags its
   suggestions, and listings, digests and links follow their own game. None of it
   appears on a server with only Magic enabled.
-- Pokémon singles, in English and Japanese. After an admin enables Pokémon with
-  `/admin games`, `/have`, `/want`, `/have-multi`, `/want-multi`, `/edit` and
-  `/search` work on Pokémon cards: suggestions show the card with its set and
-  number (`Pikachu · OBF 025`), a listing links to its exact card on
-  TCGplayer, and `finish` offers Reverse Holo. A Japanese card is a separate
-  suggestion ending in `· JA`, and picking it sets the language. Pokémon sealed
-  product is not supported yet; the sealed commands say so.
+- Pokémon singles and sealed product, in English and Japanese. After an admin
+  enables Pokémon with `/admin games`, `/have`, `/want`, `/have-sealed`,
+  `/want-sealed`, `/have-multi`, `/want-multi`, `/edit` and `/search` work on
+  Pokémon: suggestions show the card or product with its set (and a card's
+  number, `Pikachu · OBF 025`), a listing links to its exact card or product on
+  TCGplayer, and `finish` offers Reverse Holo. A Japanese card or product is a
+  separate suggestion ending in `· JA`, and picking it sets the language. Cards
+  TCGplayer lists without a collector number (about 3,000 older ones, such as
+  basic energy and early Pokémon) are included.
+- Pokémon sealed product is sorted into a type that shows on the listing:
+  Booster Pack, Booster Box, Booster Bundle, Elite Trainer Box, Blister, Tin,
+  Collection, Deck, Build & Battle, Prerelease Kit or Case. TCGplayer's catalog
+  doesn't say what a product is, so the type is read from its name; a product
+  that fits none shows no type. Digital code cards aren't kept. The `set` option
+  of the sealed commands narrows suggestions to one set, as it does for Magic.
+  A product that isn't in the catalog can still be posted by typing its name,
+  without a link.
 - A Pokémon card catalog kept by a daily sync from [TCGCSV](https://tcgcsv.com),
   a mirror of TCGplayer's catalog. It only runs while some server has Pokémon
   enabled, starts as soon as a server enables it, and refreshes at 21:00 UTC. It
@@ -45,10 +55,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stores names, sets and collector numbers only, never prices. The first sync
   makes about 680 requests and downloads about 74 MB, then stores about 16 MB;
   after that a quiet day costs one tiny request. Self-hosters need outbound
-  access to `tcgcsv.com` for it, only while Pokémon is enabled.
+  access to `tcgcsv.com` for it, only while Pokémon is enabled. A set imported
+  by an older version of the importer is fetched again once, so an existing
+  Pokémon catalog is downloaded in full one more time after this release.
+- Search suggestions rank a name that contains what was typed as a whole word
+  ahead of one that merely contains the letters, so `tin` finds Mini Tin before
+  Victini Box. This applies to Pokémon cards and products.
+
+### Changed
+
+- The docs front page now explains the permissions LFCbot requests and why:
+  the scopes, the `Guilds`-only intent, each invite permission, and what members
+  need. Its links are one section at the bottom, which now includes the privacy
+  policy and terms. The README and deployment guide point to it, and the README
+  list matches the invite link (it was missing View Channel and listed Use
+  Application Commands, which is not an invite permission).
 
 ### Fixed
 
+- The privacy policy, terms of service and legal index linked to
+  `github.com/mkane848/lfcbot`, which does not exist. They now link to
+  `lfc-bot`.
 - Automatic release tagging could put the tag on a commit merged after the
   release, shipping changes the release hadn't included. The tag went on
   whichever commit's CI run happened to start the workflow, so when a pull

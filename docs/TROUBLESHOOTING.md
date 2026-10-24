@@ -69,6 +69,7 @@ while still starting up or if either check is currently failing.
   Messages**, and **Embed Links** in the channel the command was used in,
   separate from the invite-time permission grant — a channel-level
   permission override can still block it.
+  See [Permissions](index.md#permissions) for what each one is for.
 
 ## Admin commands say "You need the Manage Server permission"
 

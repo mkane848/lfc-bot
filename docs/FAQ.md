@@ -120,12 +120,20 @@ digest; nothing retroactive.
 ## General
 
 **What games does LFCbot support?**
-Magic: The Gathering, and Pokémon singles in English and Japanese. Each server
-chooses which games it has with `/admin games`: a server starts with Magic only,
-and an admin turns Pokémon on. Pokémon sealed product isn't supported yet.
+Magic: The Gathering, and Pokémon singles and sealed product in English and
+Japanese. Each server chooses which games it has with `/admin games`: a server
+starts with Magic only, and an admin turns Pokémon on.
 
-**I enabled Pokémon, but there are no card suggestions.**
-The Pokémon card list is downloaded in the background when Pokémon is first
+**What Pokémon sealed product can I post?**
+Anything in TCGplayer's Pokémon catalog that isn't a single card: booster
+packs, boxes and bundles, Elite Trainer Boxes, blister packs, tins,
+collections, theme and battle decks, prerelease kits, and cases of these. Each
+is sorted into one of those types, which shows on the listing. Digital code
+cards aren't included. A product the catalog doesn't have (a store exclusive,
+say) can still be posted by typing its name; it just won't have a link.
+
+**I enabled Pokémon, but there are no card or product suggestions.**
+The Pokémon catalog is downloaded in the background when Pokémon is first
 enabled, and it takes a few minutes. After that it refreshes once a day.
 
 **How do I post a graded card or a Japanese card?**

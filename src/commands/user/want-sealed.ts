@@ -86,7 +86,10 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
     return;
   }
 
-  const resolved = await game.resolveSealed(productName, { setCode });
+  const resolved = await game.resolveSealed(productName, {
+    setCode,
+    language: universal.language,
+  });
   if (!resolved.resolved && game.isCatalogPick('sealed', productName)) {
     // A picked suggestion whose product left the catalog since: there is no
     // name to fall back on, only the uuid.

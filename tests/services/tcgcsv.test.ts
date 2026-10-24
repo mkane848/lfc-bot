@@ -1,8 +1,9 @@
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getDb } from '../../src/db/index.js';
 import { catalogItems, catalogSets, catalogSyncMeta } from '../../src/db/schema.js';
 import {
+  IMPORT_VERSION,
   isCatalogSyncStale,
   POKEMON_SYNC_SOURCE,
   syncPokemonCatalog,
@@ -79,7 +80,7 @@ describe('syncPokemonCatalog', () => {
       name: 'Obsidian Flames Booster Pack',
       kind: 'sealed',
       number: null,
-      category: null,
+      category: 'booster_pack',
     });
     expect(byId['509879']).toMatchObject({
       kind: 'card',
@@ -360,6 +361,143 @@ describe('failures keep the catalog', () => {
     expect(result.status).toBe('synced');
     expect(attempts).toBe(2);
   }, 15_000);
+});
+
+describe('which kind a product is', () => {
+  it('reads the name when a product has no number: sealed with a category, an unnumbered single as a card, a code card not at all', async () => {
+    tcgcsv.set(OBF_PATH, {
+      body: productsBody([
+        { productId: 1, name: 'Obsidian Flames Elite Trainer Box' },
+        { productId: 2, name: 'Obsidian Flames Booster Bundle' },
+        { productId: 3, name: 'Charizard' },
+        { productId: 4, name: 'Fire Energy (2006 Unnumbered)' },
+        { productId: 5, name: 'Code Card - Obsidian Flames Booster Pack' },
+        { productId: 6, name: 'Charizard ex', number: '125/197' },
+      ]),
+    });
+
+    await run();
+
+    const inSet = items()
+      .filter((item) => item.setId === '23228')
+      .map((item) => [item.id, item.kind, item.category, item.number]);
+    expect(inSet).toEqual(
+      expect.arrayContaining([
+        ['1', 'sealed', 'elite_trainer_box', null],
+        ['2', 'sealed', 'booster_bundle', null],
+        ['3', 'card', null, null],
+        ['4', 'card', null, null],
+        ['6', 'card', null, '125'],
+      ]),
+    );
+    expect(inSet).toHaveLength(5);
+  });
+
+  it('gives a card with no number a null number, which the card flow already handles', async () => {
+    tcgcsv.set(OBF_PATH, { body: productsBody([{ productId: 3, name: 'Charizard' }]) });
+    await run();
+    expect(items().find((item) => item.id === '3')).toMatchObject({
+      kind: 'card',
+      number: null,
+      baseNormalized: 'charizard',
+    });
+  });
+});
+
+describe('sets imported by an older version of the importer', () => {
+  const OLD = IMPORT_VERSION - 1;
+  const versionOf = (id: string) => sets().find((set) => set.id === id)?.importVersion;
+
+  /** What PR 4's importer left: sets at version 0, and a card filed as sealed. */
+  async function seedOldImport(setIds: string[] = ['23228', '23400']): Promise<void> {
+    await run();
+    getDb()
+      .update(catalogSets)
+      .set({ importVersion: OLD })
+      .where(inArray(catalogSets.id, setIds))
+      .run();
+    getDb()
+      .update(catalogItems)
+      .set({ kind: 'sealed', category: null })
+      .where(eq(catalogItems.id, '509879'))
+      .run();
+    tcgcsv.calls.length = 0;
+  }
+
+  it('records the current version on every set a run imports', async () => {
+    await run();
+    expect(versionOf('23228')).toBe(IMPORT_VERSION);
+    expect(versionOf('23400')).toBe(IMPORT_VERSION);
+  });
+
+  it('is stale at boot even though it was confirmed current an hour ago', async () => {
+    await seedOldImport();
+    expect(isCatalogSyncStale()).toBe(true);
+  });
+
+  it('is imported again, without the "nothing new" stop or any If-None-Match', async () => {
+    await seedOldImport();
+
+    const result = await run();
+
+    expect(result).toMatchObject({ status: 'synced', setsImported: 2, setsUnchanged: 0 });
+    const productCalls = tcgcsv.calls.filter((call) => call.path.endsWith('/products'));
+    expect(productCalls).toHaveLength(2);
+    for (const call of productCalls) {
+      expect(call.headers['if-none-match']).toBeUndefined();
+    }
+    expect(items().find((item) => item.id === '509879')).toMatchObject({
+      kind: 'card',
+      category: null,
+    });
+    expect(versionOf('23228')).toBe(IMPORT_VERSION);
+    expect(isCatalogSyncStale()).toBe(false);
+  });
+
+  it('goes back to one request a day once every set is current', async () => {
+    await seedOldImport();
+    await run();
+    tcgcsv.calls.length = 0;
+
+    const result = await run();
+
+    expect(result.status).toBe('skipped');
+    expect(tcgcsv.paths).toEqual(['/last-updated.txt']);
+  });
+
+  it('imports again only the sets that are outdated, and trusts the ETag of the rest', async () => {
+    await seedOldImport(['23228']);
+
+    const result = await run();
+
+    expect(result).toMatchObject({ status: 'synced', setsImported: 1, setsUnchanged: 1 });
+    const headers = Object.fromEntries(
+      tcgcsv.calls
+        .filter((call) => call.path.endsWith('/products'))
+        .map((call) => [call.path, call.headers['if-none-match']]),
+    );
+    expect(headers).toEqual({ [OBF_PATH]: undefined, [SV3_PATH]: '"sv3-1"' });
+  });
+
+  it('keeps what a failed re-import already redid, and finishes the rest next time', async () => {
+    await seedOldImport();
+    tcgcsv.set(SV3_PATH, { fail: true });
+
+    const first = await run();
+
+    expect(first.status).toBe('failed');
+    expect(versionOf('23228')).toBe(IMPORT_VERSION);
+    expect(versionOf('23400')).toBe(OLD);
+    expect(isCatalogSyncStale()).toBe(true);
+
+    tcgcsv.set(SV3_PATH, { body: productsBody(SV3_PRODUCTS), etag: '"sv3-1"' });
+    tcgcsv.calls.length = 0;
+    const second = await run();
+
+    // The English set was redone by the failed run, so it is a 304 now.
+    expect(second).toMatchObject({ status: 'synced', setsImported: 1, setsUnchanged: 1 });
+    expect(isCatalogSyncStale()).toBe(false);
+  });
 });
 
 describe('what a run does with odd data', () => {

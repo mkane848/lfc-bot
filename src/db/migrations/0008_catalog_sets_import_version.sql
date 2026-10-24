@@ -1,0 +1,1 @@
+ALTER TABLE `catalog_sets` ADD `import_version` integer DEFAULT 0 NOT NULL;

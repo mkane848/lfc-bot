@@ -1,4 +1,4 @@
-> **Status: Phase 0 done; PRs 1–4 implemented (PR 5, Pokémon sealed product, is next).** Written 2026-10-23 against `main` at
+> **Status: Phase 0 done; PRs 1–5 implemented.** Written 2026-10-23 against `main` at
 > `9060ae9` (v1.6.2); Phase 0 ran on 2026-10-24 and its results are in §11. **Phase 0 changed the
 > plan:** TCGCSV alone is the source of record for Pokémon singles and sealed product (English
 > and Japanese), and TCGdex is no longer used. Sections amended after Phase 0 are marked
@@ -265,7 +265,7 @@ Probed from the planning session with `curl` through the environment proxy. `api
 
 **Volume.** 63,623 products over 681 group files, about 74 MB uncompressed (38 MB English, 36 MB Japanese). English: 32,882 products (28,068 singles, 4,814 sealed). Japanese: 30,741 (27,949 singles, 2,792 sealed). A single group file is about 100 to 300 KB.
 
-**Sealed vs single.** `extendedData` has a `Number` entry for every single and for no sealed product (checked on all 63,623 products). Sealed items include booster packs and boxes, ETBs, blisters, tins, bundles, cases, and `Code Card - …` digital codes.
+**Sealed vs single.** `extendedData` has a `Number` entry for every single and for no sealed product (checked on all 63,623 products). Sealed items include booster packs and boxes, ETBs, blisters, tins, bundles, cases, and `Code Card - …` digital codes. *(Amended in PR 5: "no `Number` ⇒ sealed" is wrong. Of the 7,606 products without one, 1,279 are `Code Card - …` digital codes and about 3,100 are older singles TCGplayer never numbered (`Magneton`, `Fire Energy (2006 Unnumbered)`), so only about 3,200 are sealed product. PR 5 classifies them from the name (`src/utils/catalog-products.ts`), files the unnumbered singles as cards, and drops the code cards.)*
 
 **Japanese names are English.** 0 of 30,741 Japanese-category product names contain non-ASCII text, and the group names are English too (`M6: Storm Emeralda`, `SV11B: Black Bolt`). This resolves risk 2 and the §5 decision point.
 

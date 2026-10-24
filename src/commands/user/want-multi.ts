@@ -158,7 +158,7 @@ export async function handleWantMultiModal(interaction: ModalSubmitInteraction):
         // No resolution guard here, unlike the card branch below: a catalog
         // miss returns a free-text result and still posts, matching
         // `/want-sealed`.
-        const resolved = await game.resolveSealed(parsed.productName, {});
+        const resolved = await game.resolveSealed(parsed.productName, { language });
         readyInputs.push({
           serverId: guild.id,
           userId: interaction.user.id,

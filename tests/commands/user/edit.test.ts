@@ -301,7 +301,10 @@ describe('handleEditModal', () => {
 
     await handleEditModal(i);
 
-    expect(resolveSealedProduct).toHaveBeenCalledWith('Bloomburrow Bundle', { setCode: 'MKM' });
+    expect(resolveSealedProduct).toHaveBeenCalledWith('Bloomburrow Bundle', {
+      setCode: 'MKM',
+      language: 'en',
+    });
     expect(resolveCard).not.toHaveBeenCalled();
     const row = getListingById(id)!;
     expect(row.cardSet).toBe('MKM');
@@ -619,7 +622,10 @@ describe('/edit on a listing from another game', () => {
 
     await submitSet(id, 'FK2', false);
 
-    expect(fake.resolveSealed).toHaveBeenCalledWith('Bloomburrow Bundle', { setCode: 'FK2' });
+    expect(fake.resolveSealed).toHaveBeenCalledWith('Bloomburrow Bundle', {
+      setCode: 'FK2',
+      language: 'en',
+    });
     expect(resolveSealedProduct).not.toHaveBeenCalled();
     expect(getListingById(id)).toMatchObject({ catalogId: 'fk-box', cardName: 'Fake Box' });
   });

@@ -262,7 +262,10 @@ describe('/have-sealed across games', () => {
   it('resolves a picked suggestion through its own game, not the Magic catalog', async () => {
     await haveSealedCommand.execute(interaction({ product_name: 'fk:id:fk-box', set: 'FK1' }));
 
-    expect(fake.resolveSealed).toHaveBeenCalledWith('id:fk-box', { setCode: 'FK1' });
+    expect(fake.resolveSealed).toHaveBeenCalledWith('id:fk-box', {
+      setCode: 'FK1',
+      language: null,
+    });
     expect(resolveSealedProduct).not.toHaveBeenCalled();
     expect(sealedListing()).toMatchObject({
       game: FAKE_GAME_ID,
