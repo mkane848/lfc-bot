@@ -87,7 +87,10 @@ describe('/admin', () => {
     expect(games).toBeDefined();
     expect(games?.options?.find((option) => option.name === 'game')).toMatchObject({
       required: true,
-      choices: [{ name: 'Magic: The Gathering', value: 'mtg' }],
+      choices: [
+        { name: 'Magic: The Gathering', value: 'mtg' },
+        { name: 'Pokémon', value: 'pokemon' },
+      ],
     });
     expect(games?.options?.find((option) => option.name === 'enabled')).toMatchObject({
       required: true,

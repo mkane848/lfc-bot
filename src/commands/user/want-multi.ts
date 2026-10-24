@@ -51,6 +51,7 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
     serverId: interaction.guildId,
     value: '',
     gameOption: universal.gameOption,
+    kind,
   });
   if (!resolution.ok) {
     await replyError(interaction, resolution.message);
@@ -125,6 +126,7 @@ export async function handleWantMultiModal(interaction: ModalSubmitInteraction):
     serverId: guild.id,
     value: '',
     gameOption: gameId,
+    kind,
   });
   if (!resolution.ok) {
     await replyError(interaction, resolution.message);

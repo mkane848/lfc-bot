@@ -1,5 +1,6 @@
 import type { AutocompleteInteraction } from 'discord.js';
-import type { ListingKind } from '../types/index.js';
+import type { ListingKind, ListingLanguage } from '../types/index.js';
+import { isListingLanguage } from '../utils/validation.js';
 import { DEFAULT_GAME_ID, getGame } from './registry.js';
 import { resolveGameForValue, tagChoice } from './resolve.js';
 import { enabledGames } from './server.js';
@@ -35,17 +36,28 @@ export async function beforeDeadline<T>(lookup: Promise<T>, deadline: number): P
 }
 
 /** The games an autocomplete should draw from: the server's, narrowed by a chosen `game`. */
-function gamesFor(interaction: AutocompleteInteraction): {
+function gamesFor(
+  interaction: AutocompleteInteraction,
+  kind: ListingKind,
+): {
   games: GameDefinition[];
   merged: boolean;
 } {
   const enabled = interaction.guildId ? enabledGames(interaction.guildId) : [];
   const available = enabled.length > 0 ? enabled : defaultGames();
   const chosen = interaction.options.getString('game');
+  const narrowed = chosen ? available.filter((game) => game.id === chosen) : available;
   return {
-    games: chosen ? available.filter((game) => game.id === chosen) : available,
+    // A game with no sealed product has nothing to suggest for a sealed name.
+    games: narrowed.filter((game) => game.kinds.includes(kind)),
     merged: available.length > 1,
   };
+}
+
+/** The `language` option the member already chose, if it is one we know. */
+function chosenLanguage(interaction: AutocompleteInteraction): ListingLanguage | null {
+  const language = interaction.options.getString('language');
+  return language && isListingLanguage(language) ? language : null;
 }
 
 function defaultGames(): GameDefinition[] {
@@ -86,28 +98,27 @@ export async function autocompleteChoices(
   interaction: AutocompleteInteraction,
   kind: ListingKind,
 ): Promise<AutocompleteChoice[] | null> {
-  const { games, merged } = gamesFor(interaction);
+  const { games, merged } = gamesFor(interaction, kind);
   const query = interaction.options.getFocused();
-  const setCode = interaction.options.getString('set');
-  const deadline = autocompleteDeadline(interaction);
+  const context = {
+    setCode: interaction.options.getString('set'),
+    language: chosenLanguage(interaction),
+    deadline: autocompleteDeadline(interaction),
+  };
+  const deadline = context.deadline;
 
   if (!merged) {
     const [game] = games;
     if (!game) {
       return [];
     }
-    const choices = await beforeDeadline(
-      game.autocompleteItems(kind, query, { deadline, setCode }),
-      deadline,
-    );
+    const choices = await beforeDeadline(game.autocompleteItems(kind, query, context), deadline);
     return choices ? choices.slice(0, MAX_CHOICES) : null;
   }
 
   const results = await Promise.all(
     games.map((game) =>
-      beforeDeadline(game.autocompleteItems(kind, query, { deadline, setCode }), deadline).catch(
-        () => null,
-      ),
+      beforeDeadline(game.autocompleteItems(kind, query, context), deadline).catch(() => null),
     ),
   );
   if (results.every((result) => result === null)) {

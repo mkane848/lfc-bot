@@ -1,3 +1,4 @@
+import type { ListingKind } from '../types/index.js';
 import { getGame, listGames } from './registry.js';
 import { enabledGames } from './server.js';
 import type { AutocompleteChoice, GameDefinition } from './types.js';
@@ -49,6 +50,8 @@ export function resolveGameForValue(input: {
   serverId: string;
   value: string;
   gameOption?: string | null;
+  /** The kind of listing being made; a game that doesn't support it is rejected. */
+  kind?: ListingKind;
 }): GameResolution {
   const enabled = enabledGames(input.serverId);
   const tagged = splitGameTag(input.value);
@@ -70,6 +73,12 @@ export function resolveGameForValue(input: {
     return {
       ok: false,
       message: `${game?.label ?? 'That game'} is not enabled on this server. Enabled: ${names}. A server admin can change this with /admin games.`,
+    };
+  }
+  if (input.kind && !game.kinds.includes(input.kind)) {
+    return {
+      ok: false,
+      message: `${game.label} doesn't have ${input.kind === 'sealed' ? 'sealed product' : 'cards'} here yet.`,
     };
   }
   return { ok: true, game, value };

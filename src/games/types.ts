@@ -29,6 +29,20 @@ export interface AutocompleteContext {
   deadline: number;
   /** The set the member already picked, to narrow sealed-product suggestions. */
   setCode: string | null;
+  /** The `language` the member already chose, to narrow suggestions to that language's printings. */
+  language: ListingLanguage | null;
+}
+
+/**
+ * A game whose cards and products come from a local catalog that a sync fills
+ * (Magic has its own, older sync for sealed product). The bot only syncs a
+ * game's catalog while some server has the game enabled.
+ */
+export interface GameCatalog {
+  /** Refresh the catalog. Never throws; a failed run leaves the old catalog in place. */
+  sync: () => Promise<unknown>;
+  /** Whether the catalog has never been synced or hasn't been confirmed current for a day. */
+  isStale: () => boolean;
 }
 
 /** What `/search` needs from a card the member typed or picked. */
@@ -56,6 +70,10 @@ export interface GameDefinition {
   shortLabel: string;
   /** The marketplace listings link to, as in "View on Manapool". */
   marketLabel: string;
+  /** The kinds of listing this game supports. A game without `sealed` rejects the sealed commands. */
+  kinds: readonly ListingKind[];
+  /** Present for a game backed by a synced catalog, so the bot knows when to refresh it. */
+  catalog?: GameCatalog;
   /** The finishes this game's cards come in; any other is rejected for it. */
   finishes: readonly CardFinish[];
   /** Whether printing variants (extended art, showcase, …) exist for this game. */

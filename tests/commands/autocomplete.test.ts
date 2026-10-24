@@ -163,6 +163,7 @@ describe('card autocomplete with several games enabled', () => {
     expect(fake.autocompleteItems).toHaveBeenCalledWith('sealed', 'box', {
       deadline: expect.any(Number),
       setCode: 'FK1',
+      language: null,
     });
   });
 });

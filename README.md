@@ -6,11 +6,13 @@ post a card they have or want, whether they'll accept cash, trade, or both,
 search what others are offering, and admins receive configurable daily digest
 notifications of new activity.
 
-Version 1 targets **Magic: The Gathering**, resolved through the Scryfall API
-for cards and the MTGJSON catalog for sealed product. Games sit behind a
-registry, and each server chooses which ones it has with `/admin games`, so
-other games can be added without changing the commands. Listings can also
-carry a language and, for graded slabs, a grade (`PSA 10`, `BGS 9.5`).
+It supports **Magic: The Gathering**, resolved through the Scryfall API for
+cards and the MTGJSON catalog for sealed product, and **Pokémon** singles in
+English and Japanese, resolved against a local catalog synced daily from
+TCGCSV. Games sit behind a registry and each server chooses which ones it has
+with `/admin games` (new servers have Magic only, so Pokémon is opt-in).
+Listings can also carry a language and, for graded slabs, a grade
+(`PSA 10`, `BGS 9.5`).
 
 ## Features
 
@@ -25,6 +27,9 @@ carry a language and, for graded slabs, a grade (`PSA 10`, `BGS 9.5`).
   collector number), and link out to it on Manapool.
 - Say what language a card or product is in, and post graded slabs with their
   company and grade (`PSA 10`, `BGS 9.5`, `CGC 9`).
+- Post Pokémon singles (English and Japanese, with an exact link to the card on
+  TCGplayer) once an admin enables Pokémon with `/admin games`. Pokémon sealed
+  product isn't supported yet.
 - Search active listings by card with filtered, paginated results.
 - Manage your own listings with `/mylistings`, `/edit`, `/fulfill`, and
   `/delete`. `/mylistings` also offers dropdowns to delete, fulfill, or edit
@@ -113,12 +118,13 @@ Admin commands require the **Manage Server** permission.
 | `/admin mode` | Set delivery to disabled, channel, dm, or both |
 | `/admin remove` | Remove any listing for moderation |
 | `/admin history` | Show recent admin command activity |
+| `/admin games` | Enable or disable a game (Magic, Pokémon) for the server |
 
 ## Self-Hosting
 
 LFCbot is a single Node.js process. It uses a file-based SQLite database and
 needs no external services beyond Discord, Scryfall, and MTGJSON (Mana Pool is
-optional). Run `npm run build` and
+optional, and TCGCSV is contacted only while some server has Pokémon enabled). Run `npm run build` and
 then `npm start` in production, or use any process manager of your choice. The
 bot stops all scheduled jobs gracefully on SIGINT/SIGTERM and rebuilds them from
 the database on boot.
@@ -153,13 +159,16 @@ suite, linter, and type-checker all run in CI on every push and pull request.
 
 ## Data Sources & Attribution
 
-LFCbot resolves and links Magic: The Gathering content from these sources:
+LFCbot resolves and links Magic: The Gathering and Pokémon content from these sources:
 
 - **Card data**: [Scryfall](https://scryfall.com) — card details, images, and search behind `/have`, `/want`, and their variants.
 - **Sealed product catalog**: [MTGJSON](https://mtgjson.com) — the sealed-product catalog behind `/have-sealed` and `/want-sealed`, used under the MIT License. Copyright © 2018 – Present, Zach Halpern.
 - **Product links**: [Mana Pool](https://manapool.com) — the "View on Manapool" links on both card and sealed listings.
+- **Pokémon catalog**: [TCGCSV](https://tcgcsv.com) — a daily mirror of TCGplayer's catalog, the source of the Pokémon card catalog behind `/have` and `/want` once Pokémon is enabled. Only names, sets and numbers are kept (never prices). Thanks to TCGCSV for running it. Pokémon listings link to [TCGplayer](https://www.tcgplayer.com).
 
 LFCbot is unofficial Fan Content permitted under the [Fan Content Policy](https://company.wizards.com/en/legal/fancontentpolicy). Not approved/endorsed by Wizards. Portions of the materials used are property of Wizards of the Coast. ©Wizards of the Coast LLC.
+
+Pokémon and Pokémon character names are trademarks of Nintendo, Creatures Inc. and GAME FREAK inc. LFCbot is not affiliated with or endorsed by them, or by TCGplayer.
 
 ## Legal
 

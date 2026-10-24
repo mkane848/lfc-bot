@@ -7,8 +7,9 @@ Guidance for coding agents working in this repository.
 LFCbot is a multi-server Discord bot for have/want trading card listings:
 members post a card they have or want, whether they'll accept cash, trade, or
 both, and optionally an exact printing (set, finish, variant, collector
-number). Version 1 targets Magic: The Gathering via the Scryfall API, with
-optional links to the exact printing on Manapool. Stack: Node.js 22+,
+number). It supports Magic: The Gathering via the Scryfall API, with
+optional links to the exact printing on Manapool, and Pokémon singles via a
+local catalog synced from TCGCSV, with links to TCGplayer. Stack: Node.js 22+,
 TypeScript (strict, ESM with `NodeNext`), discord.js v14, Drizzle ORM with
 better-sqlite3, node-cron for per-guild digest schedules, and Vitest for
 tests.
@@ -64,7 +65,7 @@ is the documentation surface for environment variables.
   (`Guilds` intent only), event wiring, health server, graceful shutdown
 - `src/games/` - the game registry: one `GameDefinition` per game (`types.ts`),
   registration (`registry.ts`, and `index.ts`, which registers Magic from
-  `mtg.ts`), per-server enabled games (`server.ts`), game resolution and
+  `mtg.ts` and Pokémon from `pokemon.ts`), per-server enabled games (`server.ts`), game resolution and
   autocomplete tagging (`resolve.ts`), and the merged autocomplete
   (`autocomplete.ts`). Import from `games/index.js`, which is what registers
   the games
@@ -73,7 +74,9 @@ is the documentation surface for environment variables.
 - `src/events/` - Discord event handlers
 - `src/db/` - Drizzle schema, connection singleton, and generated migrations
 - `src/services/` - Scryfall client, Manapool client, card cache, listings,
-  digests, scheduler, health checks, critical alerts, and admin audit logging
+  digests, scheduler, health checks, critical alerts, and admin audit logging;
+  the Pokémon catalog (`tcgcsv.ts` syncs it, `catalog.ts` searches and resolves
+  against it, `game-catalogs.ts` decides which catalogs to keep fresh)
 - `src/utils/` - validation, embeds, permissions, logging, constants, custom
   IDs, batch operations, the shared listing options (`listing-options.ts`:
   `game`, `language`, `grade`, and the rules between them), and
@@ -247,3 +250,23 @@ behavior changes; do not weaken assertions to make a change pass.
   the `grade` option (`PSA 10`, `BGS 9.5`) must be given exactly when the
   condition is graded, and `/edit` and the batch lines take a grade where they
   take a condition (`parseConditionOrGrade`).
+- Pokémon singles resolve against the local `catalog_sets`/`catalog_items`
+  tables that `src/services/tcgcsv.ts` fills from TCGCSV (English and Japan
+  categories), so autocomplete and posting never make a network call. The sync
+  follows TCGCSV's usage guidelines and must keep doing so: one pass a day,
+  `last-updated.txt` first, a `User-Agent` naming the app and version, at least
+  100 ms between requests (150 by default), `If-None-Match` per group, and no
+  prices requested or stored. It runs only while some server has Pokémon
+  enabled (daily at 21:00 UTC, at boot when stale, and when `/admin games`
+  enables it), imports each group in its own transaction, and stamps
+  `catalog_sync_meta` only after a fully clean run. Sets are identified by
+  TCGCSV's `groupId`, never by code, which is non-unique and sometimes empty.
+  `base_normalized` (the product name without its trailing printing
+  parenthetical) is what `listings.card_name_normalized` and `/search` key on,
+  so every printing of a card matches. A product's image and TCGplayer link are
+  derived from its id (`src/utils/tcgplayer.ts`) and the link is frozen onto
+  `listings.market_url` at posting, like Magic's. A Pokémon autocomplete value is
+  `id:<product id>` (tagged `pkm:` on a multi-game server); the Japanese catalog
+  decides a listing's language. Sealed Pokémon product is in the schema
+  (`catalog_items.kind`, `category`) but isn't in the game's `kinds`, so the
+  sealed commands refuse it until it is classified.

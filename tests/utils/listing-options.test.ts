@@ -1,5 +1,5 @@
 import { SlashCommandBuilder } from 'discord.js';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { getGame } from '../../src/games/index.js';
 import {
   addGameOption,
@@ -13,10 +13,24 @@ import {
   languageFor,
 } from '../../src/utils/listing-options.js';
 import { ValidationError } from '../../src/utils/validation.js';
-import { createFakeGame, registerFakeGame, unregisterFakeGame } from '../helpers/games.js';
+import {
+  createFakeGame,
+  registerFakeGame,
+  restrictGamesTo,
+  unregisterFakeGame,
+} from '../helpers/games.js';
+
+// These are about what the builders do with one game, or with Magic and a
+// fake, whatever else ships.
+let restoreGames: () => void;
+
+beforeEach(() => {
+  restoreGames = restrictGamesTo(['mtg']);
+});
 
 afterEach(() => {
   unregisterFakeGame();
+  restoreGames();
 });
 
 const optionNames = (builder: { toJSON: () => { options?: Array<{ name: string }> } }) =>

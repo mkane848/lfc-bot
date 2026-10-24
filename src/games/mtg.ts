@@ -20,6 +20,7 @@ export const mtgGame: GameDefinition = {
   label: 'Magic: The Gathering',
   shortLabel: 'MTG',
   marketLabel: 'Manapool',
+  kinds: ['card', 'sealed'],
   finishes: ['nonfoil', 'foil', 'etched'],
   supportsVariant: true,
 

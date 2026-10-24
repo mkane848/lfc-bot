@@ -1,9 +1,11 @@
 import { mtgGame } from './mtg.js';
+import { pokemonGame } from './pokemon.js';
 import { registerGame } from './registry.js';
 
 // Importing this module is what makes a game available. Registration order is
 // the order `/admin games` lists them in.
 registerGame(mtgGame);
+registerGame(pokemonGame);
 
 export { autocompleteChoices, autocompleteSetChoices } from './autocomplete.js';
 export {
@@ -26,6 +28,7 @@ export {
 export type {
   AutocompleteChoice,
   CardResolveOptions,
+  GameCatalog,
   GameDefinition,
   SearchTarget,
 } from './types.js';

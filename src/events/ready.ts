@@ -1,9 +1,11 @@
 import type { Client } from 'discord.js';
 import {
   scheduleAllDigests,
+  startGameCatalogSync,
   startMaintenance,
   startSealedCatalogSync,
 } from '../services/scheduler.js';
+import { warmUpGameCatalogs } from '../services/game-catalogs.js';
 import { expireListings } from '../services/listing-expiry.js';
 import { isSealedCatalogStale, syncSealedCatalog } from '../services/sealed.js';
 import { upsertServerConfig } from '../services/digest-state.js';
@@ -22,6 +24,7 @@ export function handleReady(client: Client): void {
   scheduleAllDigests(client);
   startMaintenance();
   startSealedCatalogSync();
+  startGameCatalogSync();
 
   // Fire-and-forget warm-up: only sync if the catalog is missing or stale, so
   // a restart doesn't re-download an already-fresh catalog. Boot must not
@@ -34,4 +37,8 @@ export function handleReady(client: Client): void {
       logger.error({ err }, 'Sealed catalog warm-up sync failed');
     });
   }
+
+  // The same for catalogs of other games, which are only synced for games some
+  // server has enabled.
+  warmUpGameCatalogs();
 }

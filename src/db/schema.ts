@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { index, integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
 export const servers = sqliteTable('servers', {
   id: text('id').primaryKey(),
@@ -138,6 +138,86 @@ export const sealedCatalogMeta = sqliteTable('sealed_catalog_meta', {
   syncedAt: integer('synced_at').notNull(),
 });
 
+/**
+ * One set of a non-Magic game's catalog, such as a TCGCSV "group". Magic keeps
+ * its own tables (`card_cache`, `sealed_cache`); this and `catalog_items` hold
+ * every other game. Identified by the source's own id, never by `code`: set
+ * codes repeat, can be empty, and can contain spaces.
+ */
+export const catalogSets = sqliteTable(
+  'catalog_sets',
+  {
+    game: text('game').notNull(),
+    language: text('language').notNull(),
+    /** The source's id for the set (a TCGCSV `groupId`), as text. */
+    id: text('id').notNull(),
+    name: text('name').notNull(),
+    /** The abbreviation members type and see, e.g. `OBF`. Empty when the source has none. */
+    code: text('code').notNull().default(''),
+    releaseDate: text('release_date'),
+    /** 1 for a supplemental set, which a typed set code prefers not to land on. */
+    supplemental: integer('supplemental').notNull().default(0),
+    /** The ETag of this set's product list at the last import, so the next sync can send `If-None-Match`. */
+    etag: text('etag'),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (table) => {
+    return {
+      pk: primaryKey({ columns: [table.game, table.language, table.id] }),
+      codeIdx: index('catalog_sets_code_idx').on(table.game, table.code),
+    };
+  },
+);
+
+/**
+ * One card or sealed product of a non-Magic game's catalog. Holds identity
+ * only (name, set, number); never prices or stock. A product's image and
+ * marketplace link are derived from `id`, so neither is stored.
+ */
+export const catalogItems = sqliteTable(
+  'catalog_items',
+  {
+    game: text('game').notNull(),
+    /** `card` or `sealed`. */
+    kind: text('kind').notNull(),
+    language: text('language').notNull(),
+    /** The source's id for the product (a TCGCSV `productId`), as text. */
+    id: text('id').notNull(),
+    /** Display name, with any printing qualifier such as `(Poke Ball Pattern)` kept. */
+    name: text('name').notNull(),
+    nameNormalized: text('name_normalized').notNull(),
+    /** `name` without its trailing parenthetical, normalized: the key a listing is searched by. */
+    baseNormalized: text('base_normalized').notNull(),
+    /** `catalog_sets.id` of the set this belongs to. */
+    setId: text('set_id').notNull(),
+    /** The collector number's numerator as printed (`125`, `H25`, `TG01`); null for sealed. */
+    number: text('number'),
+    /** The kind of sealed product (`booster_box`, …); null for a card. */
+    category: text('category'),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (table) => {
+    return {
+      pk: primaryKey({ columns: [table.game, table.kind, table.language, table.id] }),
+      nameIdx: index('catalog_items_name_idx').on(table.game, table.kind, table.nameNormalized),
+      baseIdx: index('catalog_items_base_idx').on(table.game, table.kind, table.baseNormalized),
+      setIdx: index('catalog_items_set_idx').on(table.game, table.kind, table.setId),
+    };
+  },
+);
+
+/**
+ * Bookkeeping for a catalog sync, one row per source. `fingerprint` is whatever
+ * the source uses to say "nothing changed" (TCGCSV's `last-updated.txt`), and
+ * `synced_at` is when a run last confirmed the catalog current. Generalizes
+ * `sealed_catalog_meta`, which stays as it is for Magic.
+ */
+export const catalogSyncMeta = sqliteTable('catalog_sync_meta', {
+  source: text('source').primaryKey(),
+  fingerprint: text('fingerprint'),
+  syncedAt: integer('synced_at').notNull(),
+});
+
 export type ServerRow = typeof servers.$inferSelect;
 export type NewServerRow = typeof servers.$inferInsert;
 
@@ -152,6 +232,14 @@ export type NewCardCacheRow = typeof cardCache.$inferInsert;
 
 export type SealedCacheRow = typeof sealedCache.$inferSelect;
 export type NewSealedCacheRow = typeof sealedCache.$inferInsert;
+
+export type CatalogSetRow = typeof catalogSets.$inferSelect;
+export type NewCatalogSetRow = typeof catalogSets.$inferInsert;
+
+export type CatalogItemRow = typeof catalogItems.$inferSelect;
+export type NewCatalogItemRow = typeof catalogItems.$inferInsert;
+
+export type CatalogSyncMetaRow = typeof catalogSyncMeta.$inferSelect;
 
 export type SealedCatalogMetaRow = typeof sealedCatalogMeta.$inferSelect;
 export type NewSealedCatalogMetaRow = typeof sealedCatalogMeta.$inferInsert;

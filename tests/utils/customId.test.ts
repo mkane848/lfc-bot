@@ -136,6 +136,12 @@ describe('batch-create modal ids', () => {
     expect(decodeMultiModalKind(id)).toBe('sealed');
   });
 
+  it('leaves no empty trailing segment when only a game was chosen', () => {
+    const id = encodeMultiModalId(HAVE_MULTI_MODAL_ID, 'card', { game: 'pokemon' });
+    expect(id).toBe('lfc:havemultimodal:card:pokemon');
+    expect(decodeMultiModal(id)).toEqual({ kind: 'card', gameId: 'pokemon', language: null });
+  });
+
   it('round-trips a language chosen without a game', () => {
     const id = encodeMultiModalId(HAVE_MULTI_MODAL_ID, 'card', { language: 'de' });
     expect(decodeMultiModal(id)).toEqual({ kind: 'card', gameId: null, language: 'de' });

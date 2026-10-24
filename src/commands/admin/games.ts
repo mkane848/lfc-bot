@@ -1,6 +1,7 @@
 import type { ChatInputCommandInteraction } from 'discord.js';
 import { enabledGameIds, getGame, listGames } from '../../games/index.js';
 import { upsertServerConfig } from '../../services/digest-state.js';
+import { refreshCatalogIfStale } from '../../services/game-catalogs.js';
 import { ensureConfig, requireGuild } from './context.js';
 import { replyError, replySuccess } from '../../utils/replies.js';
 
@@ -48,10 +49,20 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     serverId,
     enabledGames: enabled ? [...games, game.id] : games.filter((id) => id !== game.id),
   });
+  if (!enabled) {
+    await replySuccess(
+      interaction,
+      `${game.label} disabled. Its listings are kept, but hidden from search and digests until you enable it again.`,
+    );
+    return;
+  }
+  // A game backed by a catalog has nothing to suggest until the catalog is
+  // downloaded, so start that now rather than at the next daily run.
+  const downloading = refreshCatalogIfStale(game);
   await replySuccess(
     interaction,
-    enabled
-      ? `${game.label} enabled.`
-      : `${game.label} disabled. Its listings are kept, but hidden from search and digests until you enable it again.`,
+    downloading
+      ? `${game.label} enabled. Its card data is downloading in the background; suggestions will appear in a few minutes.`
+      : `${game.label} enabled.`,
   );
 }

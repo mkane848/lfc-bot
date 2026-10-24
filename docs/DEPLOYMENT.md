@@ -1,7 +1,8 @@
 # Deployment
 
 LFCbot is a single Node.js process backed by a file-based SQLite database. It
-connects outbound to Discord and Scryfall, so a deployment needs only an
+connects outbound to Discord and Scryfall (plus MTGJSON for sealed product, and
+TCGCSV while any server has Pokémon enabled), so a deployment needs only an
 always-on host, a persistent disk, and a little RAM. There is no inbound port
 to expose and no external database to provision.
 

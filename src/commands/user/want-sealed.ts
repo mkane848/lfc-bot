@@ -49,6 +49,7 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
     serverId: guild.id,
     value: rawProduct,
     gameOption: universal.gameOption,
+    kind: 'sealed',
   });
   if (!gameResolution.ok) {
     await replyError(interaction, gameResolution.message);

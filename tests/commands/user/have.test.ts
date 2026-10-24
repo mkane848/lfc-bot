@@ -464,13 +464,21 @@ describe('/have across games', () => {
   });
 });
 
-describe('/have finish choices', () => {
-  const finishValues = (command: typeof haveCommand) =>
-    (command.data.toJSON().options as Array<{ name: string; choices?: Array<{ value: string }> }>)
-      .find((option) => option.name === 'finish')
-      ?.choices?.map((choice) => choice.value);
+describe('/have options now that a second game is registered', () => {
+  type Option = { name: string; choices?: Array<{ value: string }> };
+  const option = (name: string) =>
+    (haveCommand.data.toJSON().options as Option[]).find((candidate) => candidate.name === name);
 
-  it('offers only the finishes some registered game has: no reverse holo while only Magic exists', () => {
-    expect(finishValues(haveCommand)).toEqual(['nonfoil', 'foil', 'etched']);
+  it('offers reverse holo, since Pokémon has it', () => {
+    expect(option('finish')?.choices?.map((choice) => choice.value)).toEqual([
+      'nonfoil',
+      'foil',
+      'etched',
+      'reverse',
+    ]);
+  });
+
+  it('offers a game option with every registered game', () => {
+    expect(option('game')?.choices?.map((choice) => choice.value)).toEqual(['mtg', 'pokemon']);
   });
 });

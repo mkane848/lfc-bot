@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EmbedBuilder } from 'discord.js';
 import { execute as gamesExecute } from '../../../src/commands/admin/games.js';
 import { execute as configExecute } from '../../../src/commands/admin/config.js';
@@ -6,6 +6,7 @@ import { adminCommand } from '../../../src/commands/admin/admin.js';
 import { listRecentAdminActions } from '../../../src/services/audit-log.js';
 import { fakeChatInputInteraction } from '../../helpers/interaction.js';
 import { setupTestDb } from '../../helpers/db.js';
+import type { GameCatalog } from '../../../src/games/index.js';
 import {
   enableGames,
   FAKE_GAME_ID,
@@ -67,7 +68,7 @@ describe('/admin games', () => {
 
   it('rejects a game that is not registered, listing the ones that are', async () => {
     const i = await run('nonsense', true);
-    expect(replied(i)).toBe(`Game not supported. Available: mtg, ${FAKE_GAME_ID}.`);
+    expect(replied(i)).toBe(`Game not supported. Available: mtg, pokemon, ${FAKE_GAME_ID}.`);
   });
 
   it('only changes the server it was run in', async () => {
@@ -121,5 +122,52 @@ describe('/admin config', () => {
     const call = i.reply.mock.calls[0]?.[0] as { embeds: EmbedBuilder[] };
     const field = call.embeds[0]?.toJSON().fields?.find((f) => f.name === 'Enabled games');
     expect(field?.value).toBe('Magic: The Gathering, Fake Game');
+  });
+});
+
+describe('/admin games enabling a game that has a catalog', () => {
+  let catalog: { sync: ReturnType<typeof vi.fn>; isStale: ReturnType<typeof vi.fn> };
+
+  beforeEach(() => {
+    unregisterFakeGame();
+    catalog = {
+      sync: vi.fn().mockResolvedValue(undefined),
+      isStale: vi.fn().mockReturnValue(true),
+    };
+    registerFakeGame({ catalog: catalog as unknown as GameCatalog });
+  });
+
+  it('starts downloading the data and tells the admin suggestions will take a few minutes', async () => {
+    const i = await run(FAKE_GAME_ID, true);
+
+    expect(catalog.sync).toHaveBeenCalledTimes(1);
+    expect(replied(i)).toBe(
+      'Fake Game enabled. Its card data is downloading in the background; suggestions will appear in a few minutes.',
+    );
+  });
+
+  it('just says enabled when the catalog is already fresh', async () => {
+    catalog.isStale.mockReturnValue(false);
+
+    const i = await run(FAKE_GAME_ID, true);
+
+    expect(catalog.sync).not.toHaveBeenCalled();
+    expect(replied(i)).toBe('Fake Game enabled.');
+  });
+
+  it('does not download anything when the game is disabled again', async () => {
+    enableGames('guild-1', ['mtg', FAKE_GAME_ID]);
+
+    await run(FAKE_GAME_ID, false);
+
+    expect(catalog.sync).not.toHaveBeenCalled();
+  });
+
+  it('does not download anything when the game was already enabled', async () => {
+    enableGames('guild-1', ['mtg', FAKE_GAME_ID]);
+
+    await run(FAKE_GAME_ID, true);
+
+    expect(catalog.sync).not.toHaveBeenCalled();
   });
 });

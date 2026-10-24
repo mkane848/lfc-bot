@@ -1,5 +1,5 @@
-import { createRequire } from 'node:module';
 import { PROJECT_NAME, PROJECT_REPOSITORY } from '../utils/constants.js';
+import { PROJECT_VERSION } from '../utils/version.js';
 import { buildManapoolUrl } from '../utils/manapool.js';
 import type { CardFinish, CardVariant, ResolvedCard } from '../types/index.js';
 import { normalizeCardName } from '../utils/validation.js';
@@ -10,26 +10,6 @@ import { lookupManapoolPrinting } from './manapool.js';
 const SCRYFALL_BASE = 'https://api.scryfall.com';
 const MIN_REQUEST_INTERVAL_MS = 100;
 
-/**
- * Read the package version for the outbound User-Agent. Scryfall asks that the
- * header carry the application's name and version, so it is read from
- * `package.json` rather than hardcoded, where it would silently drift on every
- * release. `createRequire` resolves relative to this module, which lands on the
- * project root under `tsx`, Vitest, and the compiled `dist/` layout alike (the
- * Dockerfile copies `package.json` next to `dist/`). A static import is not an
- * option: `package.json` sits outside `rootDir`, so importing it would break
- * the build.
- */
-function readPackageVersion(): string {
-  try {
-    const pkg = createRequire(import.meta.url)('../../package.json') as { version?: string };
-    return pkg.version ?? 'unknown';
-  } catch {
-    return 'unknown';
-  }
-}
-
-const PROJECT_VERSION = readPackageVersion();
 const SET_LIST_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 const ATTEMPT_TIMEOUT_MS = 5000;
 /** Upper bound for one autocomplete request; Discord allows 3 seconds in all. */

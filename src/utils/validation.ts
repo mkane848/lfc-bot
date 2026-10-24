@@ -146,10 +146,15 @@ export function validateCardName(input: string): string {
 
 /**
  * Normalize a string into a stable search key: lowercase, trim whitespace, and
- * strip punctuation and diacritics.
+ * strip punctuation and diacritics. The gender signs are spelled out first, so
+ * `Nidoran♀` and `Nidoran♂` stay two keys (`nidoran f`, `nidoran m`), matching
+ * the "Nidoran F" the catalog uses, instead of collapsing to one. No Magic card
+ * name has either sign, so existing keys are unchanged.
  */
 export function normalizeCardName(input: string): string {
   return input
+    .replace(/♀/g, ' f')
+    .replace(/♂/g, ' m')
     .normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()

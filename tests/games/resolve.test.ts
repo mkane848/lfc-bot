@@ -30,13 +30,13 @@ afterEach(() => {
 
 describe('game registry', () => {
   it('lists games in registration order, Magic first', () => {
-    expect(listGames().map((game) => game.id)).toEqual(['mtg', FAKE_GAME_ID]);
+    expect(listGames().map((game) => game.id)).toEqual(['mtg', 'pokemon', FAKE_GAME_ID]);
   });
 
   it('forgets a game once it is unregistered', () => {
     unregisterFakeGame();
     expect(getGame(FAKE_GAME_ID)).toBeUndefined();
-    expect(listGames().map((game) => game.id)).toEqual(['mtg']);
+    expect(listGames().map((game) => game.id)).toEqual(['mtg', 'pokemon']);
   });
 });
 

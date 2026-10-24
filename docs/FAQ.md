@@ -120,9 +120,20 @@ digest; nothing retroactive.
 ## General
 
 **What games does LFCbot support?**
-Magic: The Gathering only, for now. Games are built in as a registry and each
-server chooses which ones it has with `/admin games`, so others can be added
-later, but nothing else is selectable today.
+Magic: The Gathering, and Pokémon singles in English and Japanese. Each server
+chooses which games it has with `/admin games`: a server starts with Magic only,
+and an admin turns Pokémon on. Pokémon sealed product isn't supported yet.
+
+**I enabled Pokémon, but there are no card suggestions.**
+The Pokémon card list is downloaded in the background when Pokémon is first
+enabled, and it takes a few minutes. After that it refreshes once a day.
+
+**How do I post a graded card or a Japanese card?**
+For a slab, set `condition` to Graded and give the `grade` (`PSA 10`,
+`BGS 9.5`). For Japanese, pick the Japanese printing from the suggestions (it
+ends in `· JA`), or set `language` to Japanese and the suggestions narrow to
+Japanese printings. A card in any other language (German, say) is the same card
+as the English one: pick it and set `language`.
 
 **Can I use LFCbot in more than one server?**
 Yes — the bot supports many servers from one instance, and each server's

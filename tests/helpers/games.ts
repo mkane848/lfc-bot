@@ -1,5 +1,5 @@
 import { vi } from 'vitest';
-import { registerGame, unregisterGame } from '../../src/games/index.js';
+import { listGames, registerGame, unregisterGame } from '../../src/games/index.js';
 import type { GameDefinition } from '../../src/games/index.js';
 import { getServerConfig, upsertServerConfig } from '../../src/services/digest-state.js';
 import { normalizeCardName } from '../../src/utils/validation.js';
@@ -19,6 +19,7 @@ export function createFakeGame(overrides: Partial<GameDefinition> = {}): GameDef
     label: 'Fake Game',
     shortLabel: 'FKG',
     marketLabel: 'FakeMarket',
+    kinds: ['card', 'sealed'],
     finishes: ['nonfoil', 'reverse'],
     supportsVariant: false,
     autocompleteItems: vi.fn<GameDefinition['autocompleteItems']>().mockResolvedValue([]),
@@ -64,6 +65,28 @@ export function registerFakeGame(overrides: Partial<GameDefinition> = {}): GameD
 
 export function unregisterFakeGame(): void {
   unregisterGame(FAKE_GAME_ID);
+}
+
+/**
+ * Leave only `ids` registered, for a test of what happens with one game (or a
+ * known pair), whatever else ships. Returns a function that puts every game
+ * back in its original order; call it in `afterEach`.
+ */
+export function restrictGamesTo(ids: string[]): () => void {
+  const saved = listGames();
+  for (const game of saved) {
+    if (!ids.includes(game.id)) {
+      unregisterGame(game.id);
+    }
+  }
+  return () => {
+    for (const game of saved) {
+      unregisterGame(game.id);
+    }
+    for (const game of saved) {
+      registerGame(game);
+    }
+  };
 }
 
 /** Set which games a server has enabled, creating its config row if needed. */

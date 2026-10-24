@@ -22,14 +22,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   condition column takes a grade, and so does the condition row of `/edit`.
 - `/admin games` lets an admin enable or disable a game for the server. A
   disabled game's listings are kept but hidden from search and digests until it
-  is enabled again, and the last enabled game can't be disabled. Magic is the
-  only game today, so for now this changes nothing, but it is the switch for
-  the games that follow. `/admin config` now names the enabled games.
+  is enabled again, and the last enabled game can't be disabled. A server
+  starts with Magic only; Pokémon is switched on here. `/admin config` now names
+  the enabled games.
 - Groundwork for more than one game: the listing commands and `/search` take an
   optional `game`, autocomplete merges every enabled game and tags its
   suggestions, and listings, digests and links follow their own game. None of it
-  appears until a second game exists, so a Magic-only server sees no
-  difference.
+  appears on a server with only Magic enabled.
+- Pokémon singles, in English and Japanese. After an admin enables Pokémon with
+  `/admin games`, `/have`, `/want`, `/have-multi`, `/want-multi`, `/edit` and
+  `/search` work on Pokémon cards: suggestions show the card with its set and
+  number (`Pikachu · OBF 025`), a listing links to its exact card on
+  TCGplayer, and `finish` offers Reverse Holo. A Japanese card is a separate
+  suggestion ending in `· JA`, and picking it sets the language. Pokémon sealed
+  product is not supported yet; the sealed commands say so.
+- A Pokémon card catalog kept by a daily sync from [TCGCSV](https://tcgcsv.com),
+  a mirror of TCGplayer's catalog. It only runs while some server has Pokémon
+  enabled, starts as soon as a server enables it, and refreshes at 21:00 UTC. It
+  follows TCGCSV's usage guidelines (one pass a day, `last-updated.txt` first so
+  a day with no change is a single request, conditional requests per set, a
+  `User-Agent` naming the bot and version, requests at least 150 ms apart) and
+  stores names, sets and collector numbers only, never prices. The first sync
+  makes about 680 requests and downloads about 74 MB, then stores about 16 MB;
+  after that a quiet day costs one tiny request. Self-hosters need outbound
+  access to `tcgcsv.com` for it, only while Pokémon is enabled.
 
 ### Fixed
 

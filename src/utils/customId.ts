@@ -122,7 +122,8 @@ export function encodeMultiModalId(
   if (!extra.game && !extra.language) {
     return `${baseId}:${kind}`;
   }
-  return `${baseId}:${kind}:${extra.game ?? ''}:${extra.language ?? ''}`;
+  // Empty trailing segments are dropped (`…:card:pokemon`, not `…:card:pokemon:`).
+  return `${baseId}:${kind}:${extra.game ?? ''}:${extra.language ?? ''}`.replace(/:+$/, '');
 }
 
 /**
