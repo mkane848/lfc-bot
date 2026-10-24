@@ -120,7 +120,8 @@ digest; nothing retroactive.
 ## General
 
 **What games does LFCbot support?**
-Magic: The Gathering only, for now. The data model has room for other games
+Magic: The Gathering only, for now. Games are built in as a registry and each
+server chooses which ones it has with `/admin games`, so others can be added
 later, but nothing else is selectable today.
 
 **Can I use LFCbot in more than one server?**

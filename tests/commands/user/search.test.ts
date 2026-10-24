@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { EmbedBuilder } from 'discord.js';
 import { getDb } from '../../../src/db/index.js';
 import {
   listings,
@@ -13,6 +14,13 @@ import {
   fakeChatInputInteraction,
 } from '../../helpers/interaction.js';
 import { setupTestDb } from '../../helpers/db.js';
+import {
+  enableGames,
+  FAKE_GAME_ID,
+  registerFakeGame,
+  unregisterFakeGame,
+} from '../../helpers/games.js';
+import type { GameDefinition } from '../../../src/games/index.js';
 
 setupTestDb();
 
@@ -200,5 +208,123 @@ describe('/search autocomplete', () => {
 
     expect(autocompleteCards).toHaveBeenCalledWith('black', expect.any(Number));
     expect(i.respond).toHaveBeenCalledWith([{ name: 'Black Lotus', value: 'Black Lotus' }]);
+  });
+});
+
+function resultEmbed(i: ReturnType<typeof interaction>) {
+  const call = i.reply.mock.calls[0]?.[0] as { embeds: EmbedBuilder[] };
+  return call.embeds[0]!.toJSON();
+}
+
+describe('/search language, grade and game', () => {
+  let fake: GameDefinition;
+
+  beforeEach(() => {
+    fake = registerFakeGame();
+  });
+
+  afterEach(() => {
+    unregisterFakeGame();
+  });
+
+  it('shows a graded slab as its grade and a non-English listing’s language', async () => {
+    seedListing({ condition: 'graded', gradingCompany: 'PSA', grade: '10', language: 'ja' });
+    const i = interaction();
+    await searchCommand.execute(i);
+    expect(resultEmbed(i).fields?.[0]?.value).toBe('PSA 10 · JA · $1.00 · qty 1');
+  });
+
+  it('shows English listings without a language tag', async () => {
+    seedListing();
+    const i = interaction();
+    await searchCommand.execute(i);
+    expect(resultEmbed(i).fields?.[0]?.value).toBe('NM · $1.00 · qty 1');
+  });
+
+  it('searches every enabled game, labelling each result with its game once there are several', async () => {
+    enableGames('guild-1', ['mtg', FAKE_GAME_ID]);
+    seedListing({ username: 'mtg-seller' });
+    seedListing({ game: FAKE_GAME_ID, username: 'fake-seller' });
+    const i = interaction();
+    await searchCommand.execute(i);
+
+    const fields = resultEmbed(i).fields ?? [];
+    expect(fields).toHaveLength(2);
+    expect(fields.map((f) => f.value).sort()).toEqual([
+      'NM · FKG · $1.00 · qty 1',
+      'NM · MTG · $1.00 · qty 1',
+    ]);
+  });
+
+  it('leaves out the listings of a game the server has disabled, without deleting them', async () => {
+    seedListing({ username: 'mtg-seller' });
+    seedListing({ game: FAKE_GAME_ID, username: 'fake-seller' });
+    const i = interaction();
+    await searchCommand.execute(i);
+
+    const embed = resultEmbed(i);
+    expect(embed.description).toContain('1 listing');
+    expect(embed.fields?.[0]?.name).toContain('mtg-seller');
+    expect(getDb().select().from(listings).all()).toHaveLength(2);
+
+    enableGames('guild-1', ['mtg', FAKE_GAME_ID]);
+    const again = interaction();
+    await searchCommand.execute(again);
+    expect(resultEmbed(again).description).toContain('2 listings');
+  });
+
+  it('narrows to the game chosen in the game option', async () => {
+    enableGames('guild-1', ['mtg', FAKE_GAME_ID]);
+    seedListing({ username: 'mtg-seller' });
+    seedListing({ game: FAKE_GAME_ID, username: 'fake-seller' });
+    const i = interaction({ game: FAKE_GAME_ID });
+    await searchCommand.execute(i);
+    const fields = resultEmbed(i).fields ?? [];
+    expect(fields).toHaveLength(1);
+    expect(fields[0]?.name).toContain('fake-seller');
+  });
+
+  it('searches the game of a picked suggestion, under the card’s name rather than its tag', async () => {
+    enableGames('guild-1', ['mtg', FAKE_GAME_ID]);
+    vi.mocked(fake.searchTarget).mockReturnValue({
+      displayName: 'Fake Card',
+      searchKey: 'fake card',
+    });
+    seedListing({ game: FAKE_GAME_ID, cardName: 'Fake Card', cardNameNormalized: 'fake card' });
+    seedListing({ cardName: 'Fake Card', cardNameNormalized: 'fake card', username: 'mtg-seller' });
+    const i = interaction({ card_name: 'fk:fk-7' });
+    await searchCommand.execute(i);
+
+    expect(fake.searchTarget).toHaveBeenCalledWith('fk-7');
+    const embed = resultEmbed(i);
+    expect(embed.title).toBe('Search results: Fake Card');
+    expect(embed.fields).toHaveLength(1);
+  });
+
+  it('says so when a picked suggestion no longer names a card', async () => {
+    enableGames('guild-1', ['mtg', FAKE_GAME_ID]);
+    vi.mocked(fake.searchTarget).mockReturnValue(null);
+    const i = interaction({ card_name: 'fk:gone' });
+    await searchCommand.execute(i);
+    expect(i.reply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('could not find that card') }),
+    );
+  });
+
+  it('refuses a picked suggestion from a game that is not enabled', async () => {
+    const i = interaction({ card_name: 'fk:fk-7' });
+    await searchCommand.execute(i);
+    expect(i.reply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('Fake Game is not enabled') }),
+    );
+  });
+
+  it('searches a typed name across all enabled games by its normalized form', async () => {
+    enableGames('guild-1', ['mtg', FAKE_GAME_ID]);
+    seedListing({ game: FAKE_GAME_ID });
+    seedListing();
+    const i = interaction({ card_name: 'BLACK  lotus!' });
+    await searchCommand.execute(i);
+    expect(resultEmbed(i).fields).toHaveLength(2);
   });
 });

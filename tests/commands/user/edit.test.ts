@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getDb } from '../../../src/db/index.js';
 import {
   listings,
@@ -23,6 +23,8 @@ import {
   type FakeModalSubmitInteraction,
 } from '../../helpers/interaction.js';
 import { setupTestDb } from '../../helpers/db.js';
+import { FAKE_GAME_ID, registerFakeGame, unregisterFakeGame } from '../../helpers/games.js';
+import type { GameDefinition } from '../../../src/games/index.js';
 
 setupTestDb();
 
@@ -443,5 +445,205 @@ describe('handleEditNextButton', () => {
     await handleEditNextButton(i);
 
     expect(i.showModal).not.toHaveBeenCalled();
+  });
+});
+
+/** The `value` and `label` of one input in a modal. */
+function modalField(modal: ReturnType<typeof buildEditModal>, id: string) {
+  const json = modal.toJSON() as unknown as {
+    components: Array<{
+      components: Array<{ custom_id: string; value?: string; label: string; max_length?: number }>;
+    }>;
+  };
+  return json.components.flatMap((row) => row.components).find((c) => c.custom_id === id);
+}
+
+describe('/edit condition or grade', () => {
+  it('shows a graded listing’s grade in the condition row, and a raw condition as before', () => {
+    const graded = getListingById(
+      seedListing({ condition: 'graded', gradingCompany: 'PSA', grade: '10' }),
+    )!;
+    expect(modalField(buildEditModal(graded), 'condition')).toMatchObject({
+      value: 'PSA 10',
+      label: 'Condition or grade (e.g. nm, PSA 10)',
+    });
+
+    const raw = getListingById(seedListing())!;
+    expect(modalField(buildEditModal(raw), 'condition')?.value).toBe('nm');
+  });
+
+  it('keeps the condition label inside Discord’s 45 characters and the field wide enough for a grade', () => {
+    const modal = buildEditModal(getListingById(seedListing())!);
+    const field = modalField(modal, 'condition');
+    expect(field?.label.length).toBeLessThanOrEqual(45);
+    expect(field?.max_length).toBeGreaterThanOrEqual('BGS 9.5'.length);
+  });
+
+  async function submit(id: number, condition: string) {
+    const i = fakeModalSubmitInteraction({
+      customId: encodeEditModalId(id),
+      userId: 'owner-1',
+      fields: { condition, price: '', quantity: '', set: 'LEA', notes: '' },
+    });
+    await handleEditModal(i);
+    return i;
+  }
+
+  it('turns a grade into a graded condition with its company and grade', async () => {
+    const id = seedListing();
+    await submit(id, 'bgs 9.5');
+    expect(getListingById(id)).toMatchObject({
+      condition: 'graded',
+      gradingCompany: 'BGS',
+      grade: '9.5',
+    });
+  });
+
+  it('clears the grade when a graded listing goes back to a raw condition', async () => {
+    const id = seedListing({ condition: 'graded', gradingCompany: 'PSA', grade: '10' });
+    await submit(id, 'lp');
+    expect(getListingById(id)).toMatchObject({
+      condition: 'lp',
+      gradingCompany: null,
+      grade: null,
+    });
+  });
+
+  it('keeps a graded listing graded when its grade is resubmitted unchanged', async () => {
+    const id = seedListing({ condition: 'graded', gradingCompany: 'PSA', grade: '10' });
+    await submit(id, 'PSA 10');
+    expect(getListingById(id)).toMatchObject({
+      condition: 'graded',
+      gradingCompany: 'PSA',
+      grade: '10',
+    });
+  });
+
+  it('clears condition and grade together when the field is emptied', async () => {
+    const id = seedListing({ condition: 'graded', gradingCompany: 'PSA', grade: '10' });
+    await submit(id, '');
+    expect(getListingById(id)).toMatchObject({
+      condition: null,
+      gradingCompany: null,
+      grade: null,
+    });
+  });
+
+  it('rejects a bare "graded" and an unknown grade without changing the listing', async () => {
+    const id = seedListing();
+    const bare = await submit(id, 'graded');
+    expect(bare.editReply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('Say which grade') }),
+    );
+    const unknown = await submit(id, 'XYZ 10');
+    expect(unknown.editReply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('Invalid condition') }),
+    );
+    expect(getListingById(id)).toMatchObject({ condition: 'nm', grade: null });
+  });
+});
+
+describe('/edit on a listing from another game', () => {
+  let fake: GameDefinition;
+
+  beforeEach(() => {
+    fake = registerFakeGame();
+  });
+
+  afterEach(() => {
+    unregisterFakeGame();
+  });
+
+  function submitSet(id: number, set: string, withCondition = true) {
+    const fields = { price: '', quantity: '', set, notes: '' };
+    const i = withStrictFields(
+      fakeModalSubmitInteraction({ customId: encodeEditModalId(id), userId: 'owner-1' }),
+      withCondition ? { condition: 'nm', ...fields } : fields,
+    );
+    return handleEditModal(i).then(() => i);
+  }
+
+  it('re-resolves a card through its own game, in its own language, and keeps the catalog id', async () => {
+    const id = seedListing({
+      game: FAKE_GAME_ID,
+      language: 'ja',
+      catalogId: 'fk-old',
+      cardSet: 'FK1',
+    });
+    vi.mocked(fake.resolveCard).mockResolvedValue({
+      cardName: 'Fake Card',
+      cardNameNormalized: 'fake card',
+      cardSet: 'FK2',
+      collectorNumber: '9',
+      marketUrl: 'https://fake.example/product/9',
+      catalogId: 'fk-9',
+      resolved: true,
+    });
+
+    await submitSet(id, 'fk2');
+
+    expect(fake.resolveCard).toHaveBeenCalledWith('Black Lotus', {
+      cardSet: 'FK2',
+      finish: null,
+      variant: null,
+      language: 'ja',
+    });
+    expect(resolveCard).not.toHaveBeenCalled();
+    expect(getListingById(id)).toMatchObject({
+      cardSet: 'FK2',
+      collectorNumber: '9',
+      marketUrl: 'https://fake.example/product/9',
+      catalogId: 'fk-9',
+      language: 'ja',
+    });
+  });
+
+  it('aborts a card set change its game cannot resolve', async () => {
+    const id = seedListing({ game: FAKE_GAME_ID, catalogId: 'fk-old', cardSet: 'FK1' });
+    vi.mocked(fake.resolveCard).mockResolvedValue({
+      cardName: 'Black Lotus',
+      cardNameNormalized: 'black lotus',
+      resolved: false,
+    });
+
+    const i = await submitSet(id, 'NOPE');
+
+    expect(i.editReply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('Could not find') }),
+    );
+    expect(getListingById(id)).toMatchObject({ cardSet: 'FK1', catalogId: 'fk-old' });
+  });
+
+  it('re-resolves a sealed listing through its own game', async () => {
+    const id = seedSealedListing({ game: FAKE_GAME_ID, catalogId: 'fk-old', cardSet: 'FK1' });
+
+    await submitSet(id, 'FK2', false);
+
+    expect(fake.resolveSealed).toHaveBeenCalledWith('Bloomburrow Bundle', { setCode: 'FK2' });
+    expect(resolveSealedProduct).not.toHaveBeenCalled();
+    expect(getListingById(id)).toMatchObject({ catalogId: 'fk-box', cardName: 'Fake Box' });
+  });
+
+  it('leaves the set alone and says why when the listing’s game is gone', async () => {
+    const id = seedListing({ game: FAKE_GAME_ID, cardSet: 'FK1' });
+    unregisterFakeGame();
+
+    const i = await submitSet(id, 'FK2');
+
+    expect(i.editReply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('no longer supports') }),
+    );
+    expect(getListingById(id)?.cardSet).toBe('FK1');
+  });
+
+  it('still edits price and notes of a listing whose game is gone, since the set is unchanged', async () => {
+    const id = seedListing({ game: FAKE_GAME_ID, cardSet: 'FK1' });
+    unregisterFakeGame();
+    const i = withStrictFields(
+      fakeModalSubmitInteraction({ customId: encodeEditModalId(id), userId: 'owner-1' }),
+      { condition: 'nm', price: '9.99', quantity: '', set: 'FK1', notes: 'still here' },
+    );
+    await handleEditModal(i);
+    expect(getListingById(id)).toMatchObject({ priceCents: 999, notes: 'still here' });
   });
 });

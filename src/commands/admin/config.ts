@@ -3,6 +3,7 @@ import type { ChatInputCommandInteraction } from 'discord.js';
 import { getServerConfig } from '../../services/digest-state.js';
 import { ensureConfig, requireGuild } from './context.js';
 import { brandColor } from '../../utils/embeds.js';
+import { enabledGames } from '../../games/index.js';
 import { DIGEST_MODE_LABELS } from '../../utils/constants.js';
 
 /** Handle `/admin config`: show the guild's current digest configuration (read-only). */
@@ -39,7 +40,9 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
       },
       {
         name: 'Enabled games',
-        value: (JSON.parse(latest.enabledGames || '[]') as string[]).join(', ') || 'none',
+        value: enabledGames(serverId)
+          .map((game) => game.label)
+          .join(', '),
         inline: true,
       },
     );

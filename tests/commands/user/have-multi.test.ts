@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getDb } from '../../../src/db/index.js';
 import { servers, type NewServerRow } from '../../../src/db/schema.js';
 import { haveMultiCommand, handleHaveMultiModal } from '../../../src/commands/user/have-multi.js';
@@ -8,6 +8,13 @@ import { listings } from '../../../src/db/schema.js';
 import { encodeMultiModalId, HAVE_MULTI_MODAL_ID } from '../../../src/utils/customId.js';
 import { fakeChatInputInteraction, fakeModalSubmitInteraction } from '../../helpers/interaction.js';
 import { setupTestDb } from '../../helpers/db.js';
+import {
+  enableGames,
+  FAKE_GAME_ID,
+  registerFakeGame,
+  unregisterFakeGame,
+} from '../../helpers/games.js';
+import type { GameDefinition } from '../../../src/games/index.js';
 
 setupTestDb();
 
@@ -274,6 +281,142 @@ describe('/have-multi sealed', () => {
 
     expect(i.editReply).toHaveBeenCalledWith(
       expect.objectContaining({ content: expect.stringContaining('No products were entered') }),
+    );
+  });
+});
+
+describe('/have-multi game, language and grade', () => {
+  let fake: GameDefinition;
+
+  beforeEach(() => {
+    fake = registerFakeGame();
+    enableGames('guild-1', ['mtg', FAKE_GAME_ID]);
+  });
+
+  afterEach(() => {
+    unregisterFakeGame();
+  });
+
+  const modalId = (i: ReturnType<typeof fakeChatInputInteraction>) =>
+    (i.showModal.mock.calls[0]?.[0] as { data: { custom_id: string } }).data.custom_id;
+  const stored = () => getDb().select().from(listings).all();
+
+  it('carries a chosen game and language in the modal id, and nothing when none were chosen', async () => {
+    const chosen = fakeChatInputInteraction({
+      options: { strings: { game: FAKE_GAME_ID, language: 'ja' } },
+    });
+    await haveMultiCommand.execute(chosen);
+    expect(modalId(chosen)).toBe('lfc:havemultimodal:card:fake:ja');
+
+    const plain = fakeChatInputInteraction({});
+    await haveMultiCommand.execute(plain);
+    expect(modalId(plain)).toBe('lfc:havemultimodal:card');
+  });
+
+  it('refuses to open the modal for a game the server has disabled, or a bad language', async () => {
+    enableGames('guild-1', ['mtg']);
+    const disabled = fakeChatInputInteraction({ options: { strings: { game: FAKE_GAME_ID } } });
+    await haveMultiCommand.execute(disabled);
+    expect(disabled.showModal).not.toHaveBeenCalled();
+    expect(disabled.reply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('Fake Game is not enabled') }),
+    );
+
+    const badLanguage = fakeChatInputInteraction({ options: { strings: { language: 'klingon' } } });
+    await haveMultiCommand.execute(badLanguage);
+    expect(badLanguage.showModal).not.toHaveBeenCalled();
+  });
+
+  it('posts every line to the game and language the modal was opened with', async () => {
+    const i = fakeModalSubmitInteraction({
+      customId: 'lfc:havemultimodal:card:fake:ja',
+      fields: { card1: 'Fake Card | nm | 2.50 | 2', card2: '', card3: '', accepts: 'cash' },
+    });
+    await handleHaveMultiModal(i);
+
+    expect(fake.resolveCard).toHaveBeenCalledWith('Fake Card', {});
+    expect(resolveCard).not.toHaveBeenCalled();
+    expect(stored()).toMatchObject([
+      {
+        game: FAKE_GAME_ID,
+        language: 'ja',
+        catalogId: 'fk-7',
+        marketUrl: 'https://fake.example/product/7',
+      },
+    ]);
+  });
+
+  it('posts sealed lines to the chosen game too', async () => {
+    const i = fakeModalSubmitInteraction({
+      customId: 'lfc:havemultimodal:sealed:fake',
+      fields: { card1: 'Fake Box | 89.99 | 2', card2: '', card3: '', accepts: 'cash' },
+    });
+    await handleHaveMultiModal(i);
+    expect(fake.resolveSealed).toHaveBeenCalledWith('Fake Box', {});
+    expect(stored()).toMatchObject([{ game: FAKE_GAME_ID, kind: 'sealed', catalogId: 'fk-box' }]);
+  });
+
+  it('falls back to the server’s first game when the modal named none', async () => {
+    resolveCard.mockImplementation((name: string) => Promise.resolve(resolved(name)));
+    const i = fakeModalSubmitInteraction({
+      customId: HAVE_MULTI_MODAL_ID,
+      fields: { card1: 'Black Lotus | nm', card2: '', card3: '', accepts: 'cash' },
+    });
+    await handleHaveMultiModal(i);
+    expect(stored()).toMatchObject([{ game: 'mtg', language: 'en' }]);
+  });
+
+  it('refuses a submission whose game was disabled after the modal opened', async () => {
+    enableGames('guild-1', ['mtg']);
+    const i = fakeModalSubmitInteraction({
+      customId: 'lfc:havemultimodal:card:fake',
+      fields: { card1: 'Fake Card | nm', card2: '', card3: '', accepts: 'cash' },
+    });
+    await handleHaveMultiModal(i);
+    expect(i.editReply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('Fake Game is not enabled') }),
+    );
+    expect(stored()).toHaveLength(0);
+  });
+
+  it('reads a grade in the condition column as a graded slab', async () => {
+    resolveCard.mockImplementation((name: string) => Promise.resolve(resolved(name)));
+    const i = fakeModalSubmitInteraction({
+      customId: HAVE_MULTI_MODAL_ID,
+      fields: {
+        card1: 'Black Lotus | PSA 10 | 450.00 | 1',
+        card2: 'Lightning Bolt | graded',
+        card3: '',
+        accepts: 'cash',
+      },
+    });
+    await handleHaveMultiModal(i);
+
+    expect(stored()).toMatchObject([
+      { cardName: 'Black Lotus', condition: 'graded', gradingCompany: 'PSA', grade: '10' },
+    ]);
+    expect(followUpContent(i)).toMatch(/Card 2: Say which grade/);
+  });
+
+  it('fails only the line whose catalog language contradicts the chosen language', async () => {
+    vi.mocked(fake.resolveCard).mockImplementation((name: string) =>
+      Promise.resolve({
+        cardName: name,
+        cardNameNormalized: name.toLowerCase(),
+        cardSet: 'FK1',
+        language: name === 'Fake JP' ? 'ja' : null,
+        resolved: true,
+      }),
+    );
+    const i = fakeModalSubmitInteraction({
+      customId: 'lfc:havemultimodal:card:fake:de',
+      fields: { card1: 'Fake JP | nm', card2: 'Fake DE | nm', card3: '', accepts: 'cash' },
+    });
+    await handleHaveMultiModal(i);
+
+    expect(stored()).toMatchObject([{ cardName: 'Fake DE', language: 'de' }]);
+    expect(followUpContent(i)).toMatch(
+      /Card 1: That is the Japanese printing, but you chose German/,
     );
   });
 });

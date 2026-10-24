@@ -12,9 +12,8 @@ import type {
   ChatInputCommandInteraction,
   ModalSubmitInteraction,
 } from 'discord.js';
+import { getGame } from '../../games/index.js';
 import { getListingById, updateListing } from '../../services/listings.js';
-import { resolveCard } from '../../services/scryfall.js';
-import { resolveSealedProduct } from '../../services/sealed.js';
 import type { GuildCommand } from '../../types/index.js';
 import {
   decodeEditModalId,
@@ -24,13 +23,16 @@ import {
 } from '../../utils/customId.js';
 import { replyError, replySuccess } from '../../utils/replies.js';
 import {
-  isCardCondition,
+  formatGrade,
   isCardFinish,
   isCardVariant,
+  isListingLanguage,
+  parseConditionOrGrade,
   parsePriceToCents,
   parseQuantity,
   validateNotes,
 } from '../../utils/validation.js';
+import type { ParsedConditionOrGrade } from '../../utils/validation.js';
 
 /** Handle `/edit`: look up the listing, verify ownership, and show the edit modal. */
 async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
@@ -63,6 +65,8 @@ export function buildEditModal(
     id: number;
     kind: string;
     condition: string | null;
+    gradingCompany?: string | null;
+    grade?: string | null;
     priceCents: number | null;
     quantity: number;
     notes: string | null;
@@ -111,13 +115,19 @@ export function buildEditModal(
   // would be silently discarded. It also keeps the modal inside Discord's
   // five-row cap, which the card modal is already sitting exactly on.
   if (!isSealed) {
+    // One row for both: a raw condition (`nm`) or a grade (`PSA 10`), which
+    // means a graded slab. The modal is already at Discord's five-row cap.
     const conditionInput = new TextInputBuilder()
       .setCustomId('condition')
-      .setLabel('Condition (nm, lp, mp, hp, dmg)')
+      .setLabel('Condition or grade (e.g. nm, PSA 10)')
       .setStyle(TextInputStyle.Short)
-      .setValue(listing.condition ?? '')
+      .setValue(
+        listing.condition === 'graded'
+          ? formatGrade(listing.gradingCompany, listing.grade)
+          : (listing.condition ?? ''),
+      )
       .setRequired(false)
-      .setMaxLength(3);
+      .setMaxLength(12);
     rows.push(row(conditionInput));
   }
   rows.push(row(priceInput), row(quantityInput), row(setInput), row(notesInput));
@@ -161,28 +171,45 @@ export async function handleEditModal(interaction: ModalSubmitInteraction): Prom
     const setRaw = interaction.fields.getTextInputValue('set');
     const notesRaw = interaction.fields.getTextInputValue('notes');
 
-    const condition = conditionRaw.trim() !== '' ? conditionRaw.trim() : null;
-    if (condition && !isCardCondition(condition)) {
-      await interaction.editReply({
-        content: 'Invalid condition. Use nm, lp, mp, hp, or dmg.',
-      });
-      return;
+    let parsedCondition: ParsedConditionOrGrade | null = null;
+    if (conditionRaw.trim() !== '') {
+      try {
+        parsedCondition = parseConditionOrGrade(conditionRaw);
+      } catch (err) {
+        await interaction.editReply({
+          content: err instanceof Error ? err.message : 'Invalid condition.',
+        });
+        return;
+      }
     }
     const priceCents = priceRaw.trim() !== '' ? parsePriceToCents(priceRaw) : null;
     const quantity = quantityRaw.trim() !== '' ? parseQuantity(quantityRaw) : undefined;
     const notes = validateNotes(notesRaw);
     const cardSet = setRaw.trim() !== '' ? setRaw.trim().toUpperCase() : null;
 
-    const baseFields = { condition: condition ?? null, priceCents, quantity, notes };
+    const baseFields = {
+      condition: parsedCondition?.condition ?? null,
+      gradingCompany: parsedCondition?.gradingCompany ?? null,
+      grade: parsedCondition?.grade ?? null,
+      priceCents,
+      quantity,
+      notes,
+    };
 
     // Changing the set changes which printing (card) or which product (sealed)
     // this listing refers to, so re-resolve to keep the derived metadata and
     // the Manapool link consistent with it instead of leaving them pointing at
     // the old set. An unchanged set takes the cheap path with no lookup.
+    const game = getGame(listing.game);
     if (cardSet === listing.cardSet) {
       updateListing(id, { ...baseFields, cardSet });
+    } else if (!game) {
+      await interaction.editReply({
+        content: 'This listing is for a game the bot no longer supports, so its set cannot change.',
+      });
+      return;
     } else if (isSealed) {
-      const resolved = await resolveSealedProduct(listing.cardName, { setCode: cardSet });
+      const resolved = await game.resolveSealed(listing.cardName, { setCode: cardSet });
       // Asymmetry with the card branch below, and deliberate: an unresolved
       // product does NOT abort. The sealed catalog is not exhaustive (new
       // releases, store-only drops, custom lots), so creation accepts a
@@ -203,7 +230,15 @@ export async function handleEditModal(interaction: ModalSubmitInteraction): Prom
     } else {
       const finish = listing.finish && isCardFinish(listing.finish) ? listing.finish : null;
       const variant = listing.variant && isCardVariant(listing.variant) ? listing.variant : null;
-      const resolved = await resolveCard(listing.cardName, { cardSet, finish, variant });
+      // Language is fixed when a listing is posted, so the new set has to have
+      // the same language's printing.
+      const language = isListingLanguage(listing.language) ? listing.language : null;
+      const resolved = await game.resolveCard(listing.cardName, {
+        cardSet,
+        finish,
+        variant,
+        language,
+      });
       if (!resolved.resolved) {
         await interaction.editReply({
           content: `Could not find "${listing.cardName}" in set ${cardSet ?? '(none)'}. Check the set code and try again.`,
@@ -220,6 +255,7 @@ export async function handleEditModal(interaction: ModalSubmitInteraction): Prom
         cardImageUrl: resolved.cardImageUrl,
         collectorNumber: resolved.collectorNumber ?? null,
         marketUrl: resolved.marketUrl,
+        catalogId: resolved.catalogId ?? null,
       });
     }
 

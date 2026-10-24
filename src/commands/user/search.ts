@@ -1,11 +1,19 @@
 import { EmbedBuilder, SlashCommandBuilder } from 'discord.js';
 import type { ChatInputCommandInteraction } from 'discord.js';
+import {
+  enabledGames,
+  getGame,
+  hasMultipleGames,
+  splitGameTag,
+  type GameDefinition,
+} from '../../games/index.js';
 import { countSearchResults, searchListings } from '../../services/listings.js';
 import type { Accepts, GuildCommand, ListingIntent } from '../../types/index.js';
 import { ACCEPTS_VALUES, LISTING_INTENTS } from '../../types/index.js';
 import { ACCEPTS_LABELS, formatSealedType, INTENT_LABELS } from '../../utils/constants.js';
-import { brandColor, formatPrice } from '../../utils/embeds.js';
+import { brandColor, conditionText, formatPrice, languageTag } from '../../utils/embeds.js';
 import { handleCardAutocomplete, searchKey } from '../../utils/cards.js';
+import { addGameOption } from '../../utils/listing-options.js';
 import { replyError } from '../../utils/replies.js';
 import { SEARCH_PAGE_SIZE } from '../../utils/constants.js';
 import { isAccepts, isListingIntent, validateCardName } from '../../utils/validation.js';
@@ -21,7 +29,31 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
     return;
   }
 
-  const cardName = validateCardName(interaction.options.getString('card_name', true));
+  // A picked suggestion carries its game, and so does a `game` option; either
+  // narrows the search to that game. Otherwise every enabled game is searched.
+  const enabled = enabledGames(guild.id);
+  const tagged = splitGameTag(interaction.options.getString('card_name', true));
+  const gameOption = interaction.options.getString('game');
+  const chosen: GameDefinition | undefined =
+    tagged?.game ?? (gameOption ? getGame(gameOption) : undefined);
+  if (chosen && !enabled.some((game) => game.id === chosen.id)) {
+    await replyError(interaction, `${chosen.label} is not enabled on this server.`);
+    return;
+  }
+  const searched = chosen ? [chosen] : enabled;
+  const rawName = tagged ? tagged.payload : interaction.options.getString('card_name', true);
+  const typedName = validateCardName(rawName);
+  const target = chosen
+    ? chosen.searchTarget(typedName)
+    : { displayName: typedName, searchKey: searchKey(typedName) };
+  if (!target) {
+    await replyError(
+      interaction,
+      'I could not find that card. Pick a suggestion from the autocomplete, or type its name.',
+    );
+    return;
+  }
+  const cardName = target.displayName;
   const intentInput = interaction.options.getString('intent');
   if (intentInput && !isListingIntent(intentInput)) {
     await replyError(interaction, 'Invalid intent.');
@@ -36,9 +68,11 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
   const accepts = (acceptsInput as Accepts | undefined) ?? undefined;
   const page = Math.max(1, interaction.options.getInteger('page') ?? 1);
 
-  const key = searchKey(cardName);
-  const results = searchListings(guild.id, key, intent, accepts, page);
-  const total = countSearchResults(guild.id, key, intent, accepts);
+  const key = target.searchKey;
+  const gameIds = searched.map((game) => game.id);
+  const results = searchListings(guild.id, key, intent, accepts, page, gameIds);
+  const total = countSearchResults(guild.id, key, intent, accepts, gameIds);
+  const showGame = hasMultipleGames(guild.id);
 
   if (results.length === 0) {
     await interaction.reply({
@@ -56,7 +90,12 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
 
   for (const listing of results) {
     const parts: string[] = [];
-    if (listing.condition) parts.push(listing.condition.toUpperCase());
+    const condition = conditionText(listing);
+    if (condition) parts.push(condition);
+    const language = languageTag(listing.language);
+    if (language) parts.push(language);
+    const gameLabel = showGame ? getGame(listing.game)?.shortLabel : undefined;
+    if (gameLabel) parts.push(gameLabel);
     if (listing.kind === 'sealed') {
       const label = formatSealedType(listing.sealedCategory ?? '');
       if (label) parts.push(label);
@@ -82,31 +121,33 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
 
 export const searchCommand: GuildCommand = {
   name: 'search',
-  data: new SlashCommandBuilder()
-    .setName('search')
-    .setDescription('Search active listings for a card')
-    .addStringOption((option) =>
-      option
-        .setName('card_name')
-        .setDescription('Card name')
-        .setRequired(true)
-        .setAutocomplete(true),
-    )
-    .addStringOption((option) =>
-      option
-        .setName('intent')
-        .setDescription('Filter by have/want')
-        .addChoices(...LISTING_INTENTS.map((i) => ({ name: INTENT_LABELS[i], value: i }))),
-    )
-    .addStringOption((option) =>
-      option
-        .setName('accepts')
-        .setDescription('Filter by what they accept')
-        .addChoices(...ACCEPTS_VALUES.map((a) => ({ name: ACCEPTS_LABELS[a], value: a }))),
-    )
-    .addIntegerOption((option) =>
-      option.setName('page').setDescription('Page number').setMinValue(1),
-    ),
+  data: addGameOption(
+    new SlashCommandBuilder()
+      .setName('search')
+      .setDescription('Search active listings for a card')
+      .addStringOption((option) =>
+        option
+          .setName('card_name')
+          .setDescription('Card name')
+          .setRequired(true)
+          .setAutocomplete(true),
+      )
+      .addStringOption((option) =>
+        option
+          .setName('intent')
+          .setDescription('Filter by have/want')
+          .addChoices(...LISTING_INTENTS.map((i) => ({ name: INTENT_LABELS[i], value: i }))),
+      )
+      .addStringOption((option) =>
+        option
+          .setName('accepts')
+          .setDescription('Filter by what they accept')
+          .addChoices(...ACCEPTS_VALUES.map((a) => ({ name: ACCEPTS_LABELS[a], value: a }))),
+      )
+      .addIntegerOption((option) =>
+        option.setName('page').setDescription('Page number').setMinValue(1),
+      ),
+  ),
   execute,
   autocomplete: handleCardAutocomplete,
 };

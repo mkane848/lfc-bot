@@ -76,8 +76,21 @@ describe('/admin', () => {
     );
   });
 
-  it('no longer registers the removed games subcommand', () => {
-    const names = adminCommand.data.options.map((option) => option.toJSON().name);
-    expect(names).not.toContain('games');
+  it('registers the games subcommand, offering every registered game', () => {
+    interface SubcommandJson {
+      name: string;
+      options?: Array<{ name: string; required?: boolean; choices?: unknown[] }>;
+    }
+    const games = (adminCommand.data.toJSON().options as SubcommandJson[] | undefined)?.find(
+      (option) => option.name === 'games',
+    );
+    expect(games).toBeDefined();
+    expect(games?.options?.find((option) => option.name === 'game')).toMatchObject({
+      required: true,
+      choices: [{ name: 'Magic: The Gathering', value: 'mtg' }],
+    });
+    expect(games?.options?.find((option) => option.name === 'enabled')).toMatchObject({
+      required: true,
+    });
   });
 });

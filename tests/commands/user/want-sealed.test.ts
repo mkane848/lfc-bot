@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AutocompleteInteraction } from 'discord.js';
 import { getDb } from '../../../src/db/index.js';
 import { listings, servers, type NewServerRow } from '../../../src/db/schema.js';
@@ -7,6 +7,13 @@ import * as sealed from '../../../src/services/sealed.js';
 import type { ResolvedSealedProduct } from '../../../src/types/index.js';
 import { fakeChatInputInteraction } from '../../helpers/interaction.js';
 import { setupTestDb } from '../../helpers/db.js';
+import {
+  enableGames,
+  FAKE_GAME_ID,
+  registerFakeGame,
+  unregisterFakeGame,
+} from '../../helpers/games.js';
+import type { GameDefinition } from '../../../src/games/index.js';
 
 setupTestDb();
 
@@ -231,5 +238,43 @@ describe('/want-sealed', () => {
     expect(autocompleteSealedSets).toHaveBeenCalledWith('bl');
     expect(autocompleteSealedProducts).not.toHaveBeenCalled();
     expect(i.respond).toHaveBeenCalledWith([{ name: 'BLB', value: 'BLB' }]);
+  });
+});
+
+describe('/want-sealed across games', () => {
+  let fake: GameDefinition;
+
+  beforeEach(() => {
+    fake = registerFakeGame();
+    enableGames('guild-1', ['mtg', FAKE_GAME_ID]);
+  });
+
+  afterEach(() => {
+    unregisterFakeGame();
+  });
+
+  const wanted = () => getDb().select().from(listings).get();
+
+  it('resolves a picked suggestion through its own game and stores the language', async () => {
+    await wantSealedCommand.execute(interaction({ product_name: 'fk:id:fk-box', language: 'ja' }));
+    expect(fake.resolveSealed).toHaveBeenCalledWith('id:fk-box', { setCode: null });
+    expect(resolveSealedProduct).not.toHaveBeenCalled();
+    expect(wanted()).toMatchObject({
+      game: FAKE_GAME_ID,
+      intent: 'want',
+      kind: 'sealed',
+      catalogId: 'fk-box',
+      language: 'ja',
+    });
+  });
+
+  it('refuses a game the server has disabled', async () => {
+    enableGames('guild-1', ['mtg']);
+    const i = interaction({ product_name: 'fk:id:fk-box' });
+    await wantSealedCommand.execute(i);
+    expect((i.editReply.mock.calls.at(-1)?.[0] as { content: string }).content).toMatch(
+      /Fake Game is not enabled/,
+    );
+    expect(wanted()).toBeUndefined();
   });
 });

@@ -12,15 +12,38 @@ describe('parseHaveBatchLine', () => {
     expect(parseHaveBatchLine('Lightning Bolt | nm | 2.50 | 2')).toEqual({
       cardName: 'Lightning Bolt',
       condition: 'nm',
+      gradingCompany: null,
+      grade: null,
       priceCents: 250,
       quantity: 2,
     });
+  });
+
+  it('reads a grade in the condition column as a graded slab', () => {
+    expect(parseHaveBatchLine('Charizard | PSA 10 | 450.00 | 1')).toEqual({
+      cardName: 'Charizard',
+      condition: 'graded',
+      gradingCompany: 'PSA',
+      grade: '10',
+      priceCents: 45000,
+      quantity: 1,
+    });
+  });
+
+  it('rejects a bare "graded" with no grade', () => {
+    expect(() => parseHaveBatchLine('Charizard | graded')).toThrow(/Say which grade/);
+  });
+
+  it('rejects a grade from an unknown company', () => {
+    expect(() => parseHaveBatchLine('Charizard | XYZ 10')).toThrow(/Invalid condition/);
   });
 
   it('parses a minimal line (name and condition only), defaulting quantity to 1', () => {
     expect(parseHaveBatchLine('Lightning Bolt | nm')).toEqual({
       cardName: 'Lightning Bolt',
       condition: 'nm',
+      gradingCompany: null,
+      grade: null,
       priceCents: null,
       quantity: 1,
     });
@@ -60,7 +83,19 @@ describe('parseWantBatchLine', () => {
     expect(parseWantBatchLine('Solitude | nm | 15.00')).toEqual({
       cardName: 'Solitude',
       condition: 'nm',
+      gradingCompany: null,
+      grade: null,
       maxPriceCents: 1500,
+    });
+  });
+
+  it('reads a grade in the condition column as a graded slab', () => {
+    expect(parseWantBatchLine('Charizard | BGS 9.5 | 300')).toEqual({
+      cardName: 'Charizard',
+      condition: 'graded',
+      gradingCompany: 'BGS',
+      grade: '9.5',
+      maxPriceCents: 30000,
     });
   });
 
@@ -68,6 +103,8 @@ describe('parseWantBatchLine', () => {
     expect(parseWantBatchLine('Solitude')).toEqual({
       cardName: 'Solitude',
       condition: null,
+      gradingCompany: null,
+      grade: null,
       maxPriceCents: null,
     });
   });

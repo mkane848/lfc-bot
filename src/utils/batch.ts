@@ -1,16 +1,19 @@
-import type { Accepts, CardCondition } from '../types/index.js';
+import type { Accepts, CardCondition, GradingCompany } from '../types/index.js';
 import {
   isAccepts,
-  isCardCondition,
+  parseConditionOrGrade,
   parsePriceToCents,
   parseQuantity,
   validateCardName,
   ValidationError,
 } from './validation.js';
+import type { ParsedConditionOrGrade } from './validation.js';
 
 export interface ParsedHaveLine {
   cardName: string;
   condition: CardCondition;
+  gradingCompany: GradingCompany | null;
+  grade: string | null;
   priceCents: number | null;
   quantity: number;
 }
@@ -18,6 +21,8 @@ export interface ParsedHaveLine {
 export interface ParsedWantLine {
   cardName: string;
   condition: CardCondition | null;
+  gradingCompany: GradingCompany | null;
+  grade: string | null;
   maxPriceCents: number | null;
 }
 
@@ -36,15 +41,12 @@ function splitLine(raw: string): string[] {
   return raw.split('|').map((part) => part.trim());
 }
 
-function parseOptionalCondition(part: string | undefined): CardCondition | null {
+/** A condition column holds a raw condition (`nm`) or a grade (`PSA 10`); empty means none. */
+function parseOptionalCondition(part: string | undefined): ParsedConditionOrGrade | null {
   if (!part || part.trim() === '') {
     return null;
   }
-  const normalized = part.trim().toLowerCase();
-  if (!isCardCondition(normalized)) {
-    throw new ValidationError(`Invalid condition "${part}". Use nm, lp, mp, hp, or dmg.`);
-  }
-  return normalized;
+  return parseConditionOrGrade(part);
 }
 
 /**
@@ -61,13 +63,15 @@ export function parseHaveBatchLine(raw: string): ParsedHaveLine {
   }
   const [namePart, conditionPart, pricePart, quantityPart] = parts;
   const cardName = validateCardName(namePart ?? '');
-  const condition = parseOptionalCondition(conditionPart);
-  if (!condition) {
-    throw new ValidationError('Condition is required. Use nm, lp, mp, hp, or dmg.');
+  const parsedCondition = parseOptionalCondition(conditionPart);
+  if (!parsedCondition) {
+    throw new ValidationError(
+      'Condition is required. Use nm, lp, mp, hp, dmg, or a grade such as PSA 10.',
+    );
   }
   const priceCents = pricePart && pricePart !== '' ? parsePriceToCents(pricePart) : null;
   const quantity = quantityPart && quantityPart !== '' ? parseQuantity(quantityPart) : 1;
-  return { cardName, condition, priceCents, quantity };
+  return { cardName, ...parsedCondition, priceCents, quantity };
 }
 
 /**
@@ -83,10 +87,16 @@ export function parseWantBatchLine(raw: string): ParsedWantLine {
   }
   const [namePart, conditionPart, maxPricePart] = parts;
   const cardName = validateCardName(namePart ?? '');
-  const condition = parseOptionalCondition(conditionPart);
+  const parsedCondition = parseOptionalCondition(conditionPart);
   const maxPriceCents =
     maxPricePart && maxPricePart !== '' ? parsePriceToCents(maxPricePart) : null;
-  return { cardName, condition, maxPriceCents };
+  return {
+    cardName,
+    condition: parsedCondition?.condition ?? null,
+    gradingCompany: parsedCondition?.gradingCompany ?? null,
+    grade: parsedCondition?.grade ?? null,
+    maxPriceCents,
+  };
 }
 
 /**
