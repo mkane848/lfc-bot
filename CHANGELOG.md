@@ -18,6 +18,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now tags the commit that set the `package.json` version, and only once CI
   has passed on that commit itself.
 
+### Security
+
+- `undici` 6.28.0 → 6.29.1 in `package-lock.json`. It is a transitive
+  dependency of `discord.js` and shipped in the production image; four
+  high-severity advisories (GHSA-3wwx-pv8p-q78v, GHSA-r53p-7pc4-xj5r,
+  GHSA-rfgv-xxqx-mfg5, GHSA-4qv8-2p9j-2685) covering its WebSocket
+  handling, EventSource parser, and retry interceptor were published against
+  6.28.0. They tripped the blocking `npm audit --omit=dev` step in
+  `.github/workflows/ci.yml`, which failed every pull request until the
+  lockfile moved. No `package.json` or source change: the existing
+  `^6.27.0` range already allows the fixed version.
+
 ## [1.6.2] - 2026-09-29
 
 ### Changed
