@@ -5,6 +5,7 @@ import {
   CARD_VARIANTS,
   DIGEST_MODES,
   LISTING_INTENTS,
+  LISTING_LANGUAGES,
 } from '../types/index.js';
 
 export const PROJECT_NAME = 'LFCbot';
@@ -64,6 +65,7 @@ export const CONDITION_LABELS: Record<(typeof CARD_CONDITIONS)[number], string> 
   mp: 'MP',
   hp: 'HP',
   dmg: 'DMG',
+  graded: 'Graded',
 };
 
 export const INTENT_LABELS: Record<(typeof LISTING_INTENTS)[number], string> = {
@@ -81,6 +83,7 @@ export const FINISH_LABELS: Record<(typeof CARD_FINISHES)[number], string> = {
   nonfoil: 'Nonfoil',
   foil: 'Foil',
   etched: 'Etched',
+  reverse: 'Reverse Holo',
 };
 
 export const VARIANT_LABELS: Record<(typeof CARD_VARIANTS)[number], string> = {
@@ -91,15 +94,25 @@ export const VARIANT_LABELS: Record<(typeof CARD_VARIANTS)[number], string> = {
   full: 'Full Art',
 };
 
+export const LANGUAGE_LABELS: Record<(typeof LISTING_LANGUAGES)[number], string> = {
+  en: 'English',
+  ja: 'Japanese',
+  de: 'German',
+  fr: 'French',
+  it: 'Italian',
+  es: 'Spanish',
+  pt: 'Portuguese',
+  ko: 'Korean',
+  'zh-cn': 'Chinese (Simplified)',
+  'zh-tw': 'Chinese (Traditional)',
+  ru: 'Russian',
+};
+
 export const DIGEST_MODE_LABELS: Record<(typeof DIGEST_MODES)[number], string> = {
   disabled: 'Disabled',
   channel: 'Channel',
   dm: 'DM',
   both: 'Channel + DM',
-};
-
-export const GAME_LABELS: Record<string, string> = {
-  mtg: 'Magic: The Gathering',
 };
 
 /**
@@ -149,6 +162,3 @@ export function formatSealedType(raw: string): string {
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ');
 }
-
-export const SUPPORTED_GAMES = ['mtg'] as const;
-export type SupportedGame = (typeof SUPPORTED_GAMES)[number];

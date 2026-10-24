@@ -1,5 +1,6 @@
 import type { RepliableInteraction } from 'discord.js';
 import type { ListingRow } from '../db/schema.js';
+import { hasMultipleGames } from '../games/index.js';
 import { listingEmbed } from './embeds.js';
 
 /**
@@ -13,7 +14,10 @@ export async function replyWithListing(
   listing: ListingRow,
   warning?: string,
 ): Promise<void> {
-  const embed = listingEmbed(listing, { showUser: true });
+  const embed = listingEmbed(listing, {
+    showUser: true,
+    showGame: hasMultipleGames(listing.serverId),
+  });
   const payload = { embeds: [embed], content: warning ?? undefined };
   if (interaction.deferred) {
     await interaction.editReply({ content: 'Posted below.' });

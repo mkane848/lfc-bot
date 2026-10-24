@@ -27,7 +27,7 @@ import {
   encodeBatchSelectId,
   encodeListingActionId,
 } from '../../utils/customId.js';
-import { brandColor, formatPrice } from '../../utils/embeds.js';
+import { brandColor, conditionText, formatPrice, languageTag } from '../../utils/embeds.js';
 import { replyError } from '../../utils/replies.js';
 import { buildEditModal } from './edit.js';
 
@@ -48,7 +48,10 @@ function buildBatchSelectRow(
     .addOptions(
       rows.map((listing) => {
         const parts: string[] = [];
-        if (listing.condition) parts.push(listing.condition.toUpperCase());
+        const condition = conditionText(listing);
+        if (condition) parts.push(condition);
+        const language = languageTag(listing.language);
+        if (language) parts.push(language);
         if (listing.kind === 'sealed') {
           const label = formatSealedType(listing.sealedCategory ?? '');
           if (label) parts.push(label);
@@ -94,7 +97,10 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
 
   for (const listing of rows) {
     const parts: string[] = [];
-    if (listing.condition) parts.push(listing.condition.toUpperCase());
+    const condition = conditionText(listing);
+    if (condition) parts.push(condition);
+    const language = languageTag(listing.language);
+    if (language) parts.push(language);
     if (listing.kind === 'sealed') {
       const label = formatSealedType(listing.sealedCategory ?? '');
       if (label) parts.push(label);

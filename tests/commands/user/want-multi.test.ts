@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getDb } from '../../../src/db/index.js';
 import { servers, type NewServerRow } from '../../../src/db/schema.js';
 import { wantMultiCommand, handleWantMultiModal } from '../../../src/commands/user/want-multi.js';
@@ -8,6 +8,13 @@ import { listings } from '../../../src/db/schema.js';
 import { encodeMultiModalId, WANT_MULTI_MODAL_ID } from '../../../src/utils/customId.js';
 import { fakeChatInputInteraction, fakeModalSubmitInteraction } from '../../helpers/interaction.js';
 import { setupTestDb } from '../../helpers/db.js';
+import {
+  enableGames,
+  FAKE_GAME_ID,
+  registerFakeGame,
+  unregisterFakeGame,
+} from '../../helpers/games.js';
+import type { GameDefinition } from '../../../src/games/index.js';
 
 setupTestDb();
 
@@ -225,5 +232,62 @@ describe('/want-multi sealed', () => {
     await handleWantMultiModal(i);
 
     expect(resolveCard).not.toHaveBeenCalled();
+  });
+});
+
+describe('/want-multi game, language and grade', () => {
+  let fake: GameDefinition;
+
+  beforeEach(() => {
+    fake = registerFakeGame();
+    enableGames('guild-1', ['mtg', FAKE_GAME_ID]);
+  });
+
+  afterEach(() => {
+    unregisterFakeGame();
+  });
+
+  const stored = () => getDb().select().from(listings).all();
+
+  it('carries a chosen game and language in the modal id', async () => {
+    const i = fakeChatInputInteraction({
+      options: { strings: { type: 'sealed', game: FAKE_GAME_ID, language: 'de' } },
+    });
+    await wantMultiCommand.execute(i);
+    const modal = i.showModal.mock.calls[0]?.[0] as { data: { custom_id: string } };
+    expect(modal.data.custom_id).toBe('lfc:wantmultimodal:sealed:fake:de');
+  });
+
+  it('wants every line from the game and in the language the modal was opened with', async () => {
+    const i = fakeModalSubmitInteraction({
+      customId: 'lfc:wantmultimodal:card:fake:ja',
+      fields: { card1: 'Fake Card | PSA 9 | 80', card2: '', card3: '', accepts: 'cash' },
+    });
+    await handleWantMultiModal(i);
+    expect(fake.resolveCard).toHaveBeenCalledWith('Fake Card', {});
+    expect(stored()).toMatchObject([
+      {
+        intent: 'want',
+        game: FAKE_GAME_ID,
+        language: 'ja',
+        condition: 'graded',
+        gradingCompany: 'PSA',
+        grade: '9',
+        priceCents: 8000,
+      },
+    ]);
+  });
+
+  it('refuses a submission whose game was disabled after the modal opened', async () => {
+    enableGames('guild-1', ['mtg']);
+    const i = fakeModalSubmitInteraction({
+      customId: 'lfc:wantmultimodal:card:fake',
+      fields: { card1: 'Fake Card', card2: '', card3: '', accepts: 'cash' },
+    });
+    await handleWantMultiModal(i);
+    expect(i.editReply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('Fake Game is not enabled') }),
+    );
+    expect(stored()).toHaveLength(0);
   });
 });

@@ -1,14 +1,17 @@
 import { SlashCommandBuilder } from 'discord.js';
 import type { ChatInputCommandInteraction } from 'discord.js';
 import { createListing } from '../../services/listings.js';
-import {
-  autocompleteSealedProducts,
-  autocompleteSealedSets,
-  resolveSealedProduct,
-} from '../../services/sealed.js';
+import { resolveGameForValue } from '../../games/index.js';
 import type { Accepts, GuildCommand } from '../../types/index.js';
 import { ACCEPTS_VALUES } from '../../types/index.js';
-import { ACCEPTS_LABELS, sealedProductChoiceUuid } from '../../utils/constants.js';
+import { handleSealedAutocomplete, handleSetAutocomplete } from '../../utils/cards.js';
+import { ACCEPTS_LABELS } from '../../utils/constants.js';
+import {
+  addUniversalOptions,
+  languageFor,
+  readUniversalOptions,
+} from '../../utils/listing-options.js';
+import type { UniversalOptions } from '../../utils/listing-options.js';
 import { replyError, replyWithListing } from '../../utils/replies.js';
 import {
   isAccepts,
@@ -34,10 +37,27 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
   }
   await interaction.deferReply({ ephemeral: true });
 
+  let universal: UniversalOptions;
+  try {
+    universal = readUniversalOptions(interaction);
+  } catch (err) {
+    await replyError(interaction, err instanceof Error ? err.message : 'Invalid options.');
+    return;
+  }
   const rawProduct = interaction.options.getString('product_name', true);
+  const gameResolution = resolveGameForValue({
+    serverId: guild.id,
+    value: rawProduct,
+    gameOption: universal.gameOption,
+  });
+  if (!gameResolution.ok) {
+    await replyError(interaction, gameResolution.message);
+    return;
+  }
+  const { game } = gameResolution;
   let productName: string;
   try {
-    productName = validateCardName(rawProduct);
+    productName = validateCardName(gameResolution.value);
   } catch (err) {
     await replyError(interaction, err instanceof Error ? err.message : 'Invalid product name.');
     return;
@@ -65,8 +85,8 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
     return;
   }
 
-  const resolved = await resolveSealedProduct(productName, { setCode });
-  if (!resolved.resolved && sealedProductChoiceUuid(productName)) {
+  const resolved = await game.resolveSealed(productName, { setCode });
+  if (!resolved.resolved && game.isCatalogPick('sealed', productName)) {
     // A picked suggestion whose product left the catalog since: there is no
     // name to fall back on, only the uuid.
     await replyError(
@@ -93,7 +113,8 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
       sealedSubtype: resolved.subtype,
       priceCents: maxPrice,
       notes,
-      game: 'mtg',
+      game: game.id,
+      language: languageFor(universal.language, resolved.language),
     });
     await replyWithListing(interaction, listing, warning);
   } catch (err) {
@@ -103,42 +124,41 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
 
 export const wantSealedCommand: GuildCommand = {
   name: 'want-sealed',
-  data: new SlashCommandBuilder()
-    .setName('want-sealed')
-    .setDescription('Post sealed product you want to buy or trade for')
-    .addStringOption((option) =>
-      option
-        .setName('product_name')
-        .setDescription('Sealed product name')
-        .setRequired(true)
-        .setAutocomplete(true),
-    )
-    .addStringOption((option) =>
-      option
-        .setName('accepts')
-        .setDescription('What you can offer in return')
-        .setRequired(true)
-        .addChoices(...ACCEPTS_VALUES.map((a) => ({ name: ACCEPTS_LABELS[a], value: a }))),
-    )
-    .addStringOption((option) =>
-      option.setName('set').setDescription('Set code, e.g. BLB').setAutocomplete(true),
-    )
-    .addStringOption((option) =>
-      option.setName('max_price').setDescription('Maximum price in USD, e.g. 100.00'),
-    )
-    .addStringOption((option) =>
-      option.setName('notes').setDescription('Optional notes (max 500 characters)'),
-    ),
+  data: addUniversalOptions(
+    new SlashCommandBuilder()
+      .setName('want-sealed')
+      .setDescription('Post sealed product you want to buy or trade for')
+      .addStringOption((option) =>
+        option
+          .setName('product_name')
+          .setDescription('Sealed product name')
+          .setRequired(true)
+          .setAutocomplete(true),
+      )
+      .addStringOption((option) =>
+        option
+          .setName('accepts')
+          .setDescription('What you can offer in return')
+          .setRequired(true)
+          .addChoices(...ACCEPTS_VALUES.map((a) => ({ name: ACCEPTS_LABELS[a], value: a }))),
+      )
+      .addStringOption((option) =>
+        option.setName('set').setDescription('Set code, e.g. BLB').setAutocomplete(true),
+      )
+      .addStringOption((option) =>
+        option.setName('max_price').setDescription('Maximum price in USD, e.g. 100.00'),
+      )
+      .addStringOption((option) =>
+        option.setName('notes').setDescription('Optional notes (max 500 characters)'),
+      ),
+    { grade: false },
+  ),
   execute,
   autocomplete: async (interaction) => {
-    const focused = interaction.options.getFocused(true);
-    if (focused.name === 'set') {
-      const choices = autocompleteSealedSets(focused.value);
-      await interaction.respond(choices);
+    if (interaction.options.getFocused(true).name === 'set') {
+      await handleSetAutocomplete(interaction, 'sealed');
       return;
     }
-    const setCode = interaction.options.getString('set');
-    const choices = autocompleteSealedProducts(focused.value, setCode);
-    await interaction.respond(choices);
+    await handleSealedAutocomplete(interaction);
   },
 };

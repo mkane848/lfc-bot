@@ -62,6 +62,12 @@ is the documentation surface for environment variables.
 
 - `src/index.ts` - startup: env validation, migrations, Discord client
   (`Guilds` intent only), event wiring, health server, graceful shutdown
+- `src/games/` - the game registry: one `GameDefinition` per game (`types.ts`),
+  registration (`registry.ts`, and `index.ts`, which registers Magic from
+  `mtg.ts`), per-server enabled games (`server.ts`), game resolution and
+  autocomplete tagging (`resolve.ts`), and the merged autocomplete
+  (`autocomplete.ts`). Import from `games/index.js`, which is what registers
+  the games
 - `src/commands/user/` - member-facing listing commands
 - `src/commands/admin/` - `/admin` subcommands; require Manage Server
 - `src/events/` - Discord event handlers
@@ -69,10 +75,14 @@ is the documentation surface for environment variables.
 - `src/services/` - Scryfall client, Manapool client, card cache, listings,
   digests, scheduler, health checks, critical alerts, and admin audit logging
 - `src/utils/` - validation, embeds, permissions, logging, constants, custom
-  IDs, batch operations, and retry-with-backoff
+  IDs, batch operations, the shared listing options (`listing-options.ts`:
+  `game`, `language`, `grade`, and the rules between them), and
+  retry-with-backoff
 - `tests/` - mirrors `src`; `tests/helpers/db.ts` provides in-memory SQLite
   and `tests/helpers/interaction.ts` provides shared mock Discord
-  interactions for command tests
+  interactions for command tests; `tests/helpers/games.ts` registers a fake
+  second game for the multi-game paths, and `tests/helpers/migrations.ts`
+  replays the generated SQL up to a migration
 - `scripts/` - operational helpers, including `backup.sh` for the SQLite volume
 - `docs/` - deployment and hosting documentation
 - `Dockerfile`, `docker-compose.yml`, `docker-compose.prebuilt.yml` (GHCR image
@@ -215,8 +225,25 @@ behavior changes; do not weaken assertions to make a change pass.
   across sets. `resolveSealedProduct` resolves that value by uuid; anything
   else is treated as a typed name. `sealedProductChoiceUuid` in
   `src/utils/constants.ts` tells the two apart.
-- `/admin games` exists in `src/commands/admin/games.ts` but is intentionally
-  **not** registered in `src/commands/admin/admin.ts` — `enabledGames` isn't
-  read anywhere else (`/have`, `/want`, `/search` all hardcode `game: 'mtg'`),
-  so the subcommand would let an admin "disable" MTG without it doing
-  anything. Re-register it only once `enabledGames` is actually enforced.
+- Games are chosen per server with `/admin games`, stored in
+  `servers.enabled_games` (in the order they were enabled; the first is the
+  game a command uses when the member names none). Every listing command
+  resolves its game with `resolveGameForValue` (`src/games/resolve.ts`), in this
+  order: the game tag on a picked autocomplete suggestion (`mtg:Black Lotus`),
+  else the `game` option, else the server's first game, and rejects a game the
+  server hasn't enabled. A server with several games gets one merged
+  autocomplete whose values are all tagged; with one game the values and labels
+  are untagged and identical to what they were before games existed. A disabled
+  game's listings are kept but hidden from search and digests (a listing's own
+  game decides its link label and fallback link), and the last enabled game
+  can't be disabled. The `game` option isn't added to a command until a second
+  game is registered, and a finish no registered game has (reverse holo) isn't
+  offered. To add a game, build a `GameDefinition` and call `registerGame`; in
+  a test, register a fake one with `tests/helpers/games.ts`.
+- `language` (default English) is a listing attribute, fixed at posting, not a
+  separate catalog; a catalog entry that fixes its language decides it, and a
+  contradicting `language` option is rejected (`languageFor`). Graded slabs are
+  `condition: graded` plus `grading_company` and `grade`, required together:
+  the `grade` option (`PSA 10`, `BGS 9.5`) must be given exactly when the
+  condition is graded, and `/edit` and the batch lines take a grade where they
+  take a condition (`parseConditionOrGrade`).

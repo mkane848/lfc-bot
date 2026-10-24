@@ -1,7 +1,7 @@
 import { eq, lt } from 'drizzle-orm';
 import { getDb } from '../db/index.js';
 import { cardCache } from '../db/schema.js';
-import { cardKey } from '../utils/embeds.js';
+import { cardKey } from '../utils/card-key.js';
 import { CARD_CACHE_TTL_MS } from '../utils/constants.js';
 import { normalizeCardName } from '../utils/validation.js';
 import type { CardCacheRow, NewCardCacheRow } from '../db/schema.js';

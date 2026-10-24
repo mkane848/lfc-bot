@@ -6,7 +6,11 @@ import {
   isCardVariant,
   isDigestMode,
   isListingIntent,
+  isListingLanguage,
+  formatGrade,
   normalizeCardName,
+  parseConditionOrGrade,
+  parseGrade,
   parsePriceToCents,
   parseQuantity,
   validateCollectorNumber,
@@ -18,7 +22,19 @@ describe('condition/intent/accepts/mode guards', () => {
   it('accepts valid card conditions', () => {
     expect(isCardCondition('nm')).toBe(true);
     expect(isCardCondition('dmg')).toBe(true);
+    expect(isCardCondition('graded')).toBe(true);
     expect(isCardCondition('mint')).toBe(false);
+  });
+
+  it('accepts reverse holo as a finish', () => {
+    expect(isCardFinish('reverse')).toBe(true);
+  });
+
+  it('accepts the supported listing languages only', () => {
+    expect(isListingLanguage('en')).toBe(true);
+    expect(isListingLanguage('zh-tw')).toBe(true);
+    expect(isListingLanguage('klingon')).toBe(false);
+    expect(isListingLanguage('EN')).toBe(false);
   });
 
   it('accepts valid listing intents', () => {
@@ -115,5 +131,70 @@ describe('validateNotes', () => {
   it('rejects long notes', () => {
     expect(() => validateNotes('x'.repeat(501))).toThrow(ValidationError);
     expect(validateNotes('x'.repeat(500))).toHaveLength(500);
+  });
+});
+
+describe('parseGrade', () => {
+  it('splits a company and a grade, ignoring case and spacing', () => {
+    expect(parseGrade('PSA 10')).toEqual({ gradingCompany: 'PSA', grade: '10' });
+    expect(parseGrade('psa10')).toEqual({ gradingCompany: 'PSA', grade: '10' });
+    expect(parseGrade('  bgs   9.5 ')).toEqual({ gradingCompany: 'BGS', grade: '9.5' });
+    expect(parseGrade('CGC 9')).toEqual({ gradingCompany: 'CGC', grade: '9' });
+  });
+
+  it('accepts every supported company', () => {
+    for (const company of ['PSA', 'BGS', 'CGC', 'SGC', 'TAG', 'ACE']) {
+      expect(parseGrade(`${company} 8`).gradingCompany).toBe(company);
+    }
+  });
+
+  it('rejects an unknown company, a missing grade, and an out-of-range grade', () => {
+    expect(() => parseGrade('XYZ 10')).toThrow(/Companies: PSA, BGS, CGC, SGC, TAG, ACE/);
+    expect(() => parseGrade('PSA')).toThrow(ValidationError);
+    expect(() => parseGrade('PSA 0')).toThrow(ValidationError);
+    expect(() => parseGrade('PSA 11')).toThrow(ValidationError);
+    expect(() => parseGrade('BGS 9.7')).toThrow(ValidationError);
+    expect(() => parseGrade('BGS 10.5')).toThrow(ValidationError);
+    expect(() => parseGrade('PSA 10 black label')).toThrow(ValidationError);
+  });
+});
+
+describe('formatGrade', () => {
+  it('renders the way members type it', () => {
+    expect(formatGrade('PSA', '10')).toBe('PSA 10');
+    expect(formatGrade('BGS', '9.5')).toBe('BGS 9.5');
+  });
+
+  it('renders nothing for a missing grade', () => {
+    expect(formatGrade(null, null)).toBe('');
+    expect(formatGrade(undefined, undefined)).toBe('');
+  });
+});
+
+describe('parseConditionOrGrade', () => {
+  it('reads a raw condition, ignoring case', () => {
+    expect(parseConditionOrGrade('NM')).toEqual({
+      condition: 'nm',
+      gradingCompany: null,
+      grade: null,
+    });
+  });
+
+  it('reads a grade as a graded condition', () => {
+    expect(parseConditionOrGrade('PSA 10')).toEqual({
+      condition: 'graded',
+      gradingCompany: 'PSA',
+      grade: '10',
+    });
+  });
+
+  it('rejects a bare "graded", since a slab without its grade says nothing', () => {
+    expect(() => parseConditionOrGrade('graded')).toThrow(/Say which grade/);
+  });
+
+  it('rejects anything else, pointing at both forms', () => {
+    expect(() => parseConditionOrGrade('mint')).toThrow(
+      /Invalid condition "mint".*nm, lp, mp, hp, dmg, or a grade such as PSA 10/,
+    );
   });
 });

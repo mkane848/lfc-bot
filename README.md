@@ -7,8 +7,10 @@ search what others are offering, and admins receive configurable daily digest
 notifications of new activity.
 
 Version 1 targets **Magic: The Gathering**, resolved through the Scryfall API
-for cards and the MTGJSON catalog for sealed product. The data model keeps a
-`game` column so other games can be added later without a schema migration.
+for cards and the MTGJSON catalog for sealed product. Games sit behind a
+registry, and each server chooses which ones it has with `/admin games`, so
+other games can be added without changing the commands. Listings can also
+carry a language and, for graded slabs, a grade (`PSA 10`, `BGS 9.5`).
 
 ## Features
 
@@ -21,6 +23,8 @@ for cards and the MTGJSON catalog for sealed product. The data model keeps a
   synced MTGJSON catalog with its own autocomplete.
 - Optionally pin a listing to an exact printing (set, finish, variant,
   collector number), and link out to it on Manapool.
+- Say what language a card or product is in, and post graded slabs with their
+  company and grade (`PSA 10`, `BGS 9.5`, `CGC 9`).
 - Search active listings by card with filtered, paginated results.
 - Manage your own listings with `/mylistings`, `/edit`, `/fulfill`, and
   `/delete`. `/mylistings` also offers dropdowns to delete, fulfill, or edit

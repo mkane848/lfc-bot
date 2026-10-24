@@ -3,6 +3,7 @@ import { getDb } from '../db/index.js';
 import { digestLog, type ListingRow, type ServerRow } from '../db/schema.js';
 import { DIGEST_SECTION_CAP, DISCORD_MESSAGE_MAX_LENGTH } from '../utils/constants.js';
 import type { DigestTrigger } from '../types/index.js';
+import { enabledGameIdsFromConfig } from '../games/index.js';
 import { digestLine } from '../utils/embeds.js';
 import { prepareDigestListings, setServerWatermark } from './digest-state.js';
 import { sendCriticalAlert } from './alerts.js';
@@ -21,7 +22,10 @@ export interface DigestResult {
  * Format a digest message body from the collected listings, grouped by type.
  * Each section is capped and overflows are noted.
  */
-export function formatDigest(listingsToShow: ListingRow[]): string {
+export function formatDigest(
+  listingsToShow: ListingRow[],
+  options: { showGame?: boolean } = {},
+): string {
   const groups = {
     have: listingsToShow.filter((l) => l.intent === 'have'),
     want: listingsToShow.filter((l) => l.intent === 'want'),
@@ -33,7 +37,7 @@ export function formatDigest(listingsToShow: ListingRow[]): string {
       return;
     }
     const shown = rows.slice(0, DIGEST_SECTION_CAP);
-    const lines = shown.map(digestLine).join('\n');
+    const lines = shown.map((listing) => digestLine(listing, options)).join('\n');
     const overflow =
       rows.length > DIGEST_SECTION_CAP ? `\n+${rows.length - DIGEST_SECTION_CAP} more` : '';
     sections.push(`${title} (${rows.length})\n${lines}${overflow}`);
@@ -106,7 +110,8 @@ export async function runDigest(
     month: 'long',
     day: 'numeric',
   })}`;
-  const messages = splitDigestMessage(`${heading}\n\n${formatDigest(collected)}`);
+  const showGame = enabledGameIdsFromConfig(server.enabledGames).length > 1;
+  const messages = splitDigestMessage(`${heading}\n\n${formatDigest(collected, { showGame })}`);
 
   let channelOk = false;
   let dmOk = false;

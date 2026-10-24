@@ -1,6 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getDb } from '../../../src/db/index.js';
-import { servers, type NewServerRow } from '../../../src/db/schema.js';
+import { listings, servers, type NewServerRow } from '../../../src/db/schema.js';
 import { wantCommand } from '../../../src/commands/user/want.js';
 import * as scryfall from '../../../src/services/scryfall.js';
 import {
@@ -8,6 +8,13 @@ import {
   fakeChatInputInteraction,
 } from '../../helpers/interaction.js';
 import { setupTestDb } from '../../helpers/db.js';
+import {
+  enableGames,
+  FAKE_GAME_ID,
+  registerFakeGame,
+  unregisterFakeGame,
+} from '../../helpers/games.js';
+import type { GameDefinition } from '../../../src/games/index.js';
 
 setupTestDb();
 
@@ -168,5 +175,82 @@ describe('/want autocomplete', () => {
     await wantCommand.autocomplete?.(i);
 
     expect(i.respond.mock.calls[0][0]).toHaveLength(25);
+  });
+});
+
+function wantedListing() {
+  return getDb().select().from(listings).get();
+}
+
+function wantError(i: ReturnType<typeof interaction>): string {
+  return (i.editReply.mock.calls.at(-1)?.[0] as { content: string }).content;
+}
+
+describe('/want language, grade and game', () => {
+  let fake: GameDefinition;
+
+  beforeEach(() => {
+    fake = registerFakeGame();
+  });
+
+  afterEach(() => {
+    unregisterFakeGame();
+  });
+
+  it('stores Magic and English by default, with a condition that stays optional', async () => {
+    await wantCommand.execute(interaction());
+    expect(wantedListing()).toMatchObject({
+      game: 'mtg',
+      language: 'en',
+      condition: null,
+      gradingCompany: null,
+      grade: null,
+    });
+  });
+
+  it('wants a graded slab: the condition is graded and the grade is required', async () => {
+    await wantCommand.execute(interaction({ condition: 'graded', grade: 'BGS 9.5' }));
+    expect(wantedListing()).toMatchObject({
+      condition: 'graded',
+      gradingCompany: 'BGS',
+      grade: '9.5',
+    });
+
+    const missing = interaction({ condition: 'graded' });
+    await wantCommand.execute(missing);
+    expect(wantError(missing)).toMatch(/graded card needs its grade/);
+  });
+
+  it('rejects a grade without the graded condition, even when no condition was given', async () => {
+    const i = interaction({ grade: 'PSA 10' });
+    await wantCommand.execute(i);
+    expect(wantError(i)).toMatch(/only applies when the condition is Graded/);
+    expect(wantedListing()).toBeUndefined();
+  });
+
+  it('wants a card in another language', async () => {
+    await wantCommand.execute(interaction({ language: 'de' }));
+    expect(wantedListing()?.language).toBe('de');
+  });
+
+  it('posts a picked suggestion to its game, and refuses a disabled one', async () => {
+    enableGames('guild-1', ['mtg', FAKE_GAME_ID]);
+    await wantCommand.execute(interaction({ card_name: 'fk:fk-7' }));
+    expect(fake.resolveCard).toHaveBeenCalledWith('fk-7', expect.any(Object));
+    expect(wantedListing()).toMatchObject({ game: FAKE_GAME_ID, intent: 'want' });
+
+    getDb().delete(listings).run();
+    enableGames('guild-1', ['mtg']);
+    const i = interaction({ card_name: 'fk:fk-7' });
+    await wantCommand.execute(i);
+    expect(wantError(i)).toMatch(/Fake Game is not enabled/);
+    expect(wantedListing()).toBeUndefined();
+  });
+
+  it('applies the chosen game’s finish rules', async () => {
+    enableGames('guild-1', ['mtg', FAKE_GAME_ID]);
+    const i = interaction({ card_name: 'fk:fk-7', finish: 'etched' });
+    await wantCommand.execute(i);
+    expect(wantError(i)).toMatch(/Fake Game cards don't come in Etched/);
   });
 });

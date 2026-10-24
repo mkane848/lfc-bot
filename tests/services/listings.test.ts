@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { getDb } from '../../src/db/index.js';
 import { listings, servers, type NewServerRow } from '../../src/db/schema.js';
 import {
@@ -512,5 +512,138 @@ describe('updateListing', () => {
     expect(updated?.catalogId).toBeNull();
     expect(updated?.sealedCategory).toBeNull();
     expect(updated?.sealedSubtype).toBeNull();
+  });
+});
+
+describe('language and grade columns', () => {
+  it('stores English with no grade when none is given', () => {
+    seedServer();
+    const { listing } = createListing({ ...baseInput(), intent: 'have', accepts: 'cash' });
+    expect(listing).toMatchObject({ language: 'en', gradingCompany: null, grade: null });
+  });
+
+  it('stores the language and the graded slab’s company and grade', () => {
+    seedServer();
+    const { listing } = createListing({
+      ...baseInput(),
+      intent: 'have',
+      accepts: 'cash',
+      language: 'ja',
+      condition: 'graded',
+      gradingCompany: 'PSA',
+      grade: '10',
+    });
+    expect(listing).toMatchObject({
+      language: 'ja',
+      condition: 'graded',
+      gradingCompany: 'PSA',
+      grade: '10',
+    });
+  });
+
+  it('updates the condition and grade together, and leaves them alone when not included', () => {
+    seedServer();
+    const { listing } = createListing({
+      ...baseInput(),
+      intent: 'have',
+      accepts: 'cash',
+      condition: 'graded',
+      gradingCompany: 'PSA',
+      grade: '10',
+    });
+    expect(updateListing(listing.id, { priceCents: 5 })).toMatchObject({
+      condition: 'graded',
+      gradingCompany: 'PSA',
+      grade: '10',
+    });
+    expect(
+      updateListing(listing.id, { condition: 'lp', gradingCompany: null, grade: null }),
+    ).toMatchObject({ condition: 'lp', gradingCompany: null, grade: null });
+  });
+});
+
+describe('duplicate warnings across language, grade and game', () => {
+  beforeEach(() => {
+    seedServer();
+  });
+
+  /**
+   * Post `first` then `second` in one batch, so the cooldown doesn't get in the
+   * way, and return the warning on the second. Starts from no listings, so one
+   * test can ask several times.
+   */
+  function secondWarning(
+    first: Partial<Parameters<typeof createListing>[0]>,
+    second: Partial<Parameters<typeof createListing>[0]>,
+  ): string | undefined {
+    getDb().delete(listings).run();
+    const base = { ...baseInput(), intent: 'have', accepts: 'cash' } as const;
+    return createListingsBatch([
+      { ...base, ...first },
+      { ...base, ...second },
+    ])[1]?.warning;
+  }
+
+  const psa = (grade: string) => ({ condition: 'graded', gradingCompany: 'PSA', grade }) as const;
+
+  it('warns when the same slab is posted twice', () => {
+    expect(secondWarning(psa('10'), psa('10'))).toMatch(/already have an active matching listing/);
+  });
+
+  it('does not warn for the same card at a different grade, or a different company', () => {
+    expect(secondWarning(psa('10'), psa('9'))).toBeUndefined();
+    expect(
+      secondWarning(psa('10'), { condition: 'graded', gradingCompany: 'BGS', grade: '10' }),
+    ).toBeUndefined();
+  });
+
+  it('does not warn for a graded slab against the raw card', () => {
+    expect(secondWarning({ condition: 'nm' }, psa('10'))).toBeUndefined();
+  });
+
+  it('warns for the same card in the same language, but not in a different one', () => {
+    expect(secondWarning({ language: 'ja' }, { language: 'ja' })).toMatch(/already have/);
+    expect(secondWarning({ language: 'ja' }, { language: 'en' })).toBeUndefined();
+    expect(secondWarning({}, { language: 'de' })).toBeUndefined();
+  });
+
+  it('does not warn for a same-named card in a different game', () => {
+    expect(secondWarning({ game: 'mtg' }, { game: 'fake' })).toBeUndefined();
+    expect(secondWarning({ game: 'fake' }, { game: 'fake' })).toMatch(/already have/);
+  });
+});
+
+describe('search limited to games', () => {
+  function seedTwoGames(): void {
+    seedServer();
+    const base = { ...baseInput(), intent: 'have', accepts: 'cash' } as const;
+    createListingsBatch([
+      { ...base, game: 'mtg' },
+      { ...base, game: 'fake', userId: 'u2', username: 'bob' },
+    ]);
+  }
+
+  it('searches every game when none are given', () => {
+    seedTwoGames();
+    expect(searchListings('200', 'black lotus', undefined, undefined, 1)).toHaveLength(2);
+    expect(countSearchResults('200', 'black lotus', undefined, undefined)).toBe(2);
+  });
+
+  it('searches only the games it is given, results and count alike', () => {
+    seedTwoGames();
+    const only = (games: string[]) => ({
+      rows: searchListings('200', 'black lotus', undefined, undefined, 1, games),
+      total: countSearchResults('200', 'black lotus', undefined, undefined, games),
+    });
+    expect(only(['mtg']).rows.map((row) => row.game)).toEqual(['mtg']);
+    expect(only(['mtg']).total).toBe(1);
+    expect(only(['fake']).rows.map((row) => row.game)).toEqual(['fake']);
+    expect(only(['mtg', 'fake']).total).toBe(2);
+  });
+
+  it('finds nothing for an empty list of games', () => {
+    seedTwoGames();
+    expect(searchListings('200', 'black lotus', undefined, undefined, 1, [])).toEqual([]);
+    expect(countSearchResults('200', 'black lotus', undefined, undefined, [])).toBe(0);
   });
 });

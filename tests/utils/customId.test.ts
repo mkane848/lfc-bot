@@ -8,6 +8,7 @@ import {
   encodeEditModalId,
   encodeEditNextId,
   encodeListingActionId,
+  decodeMultiModal,
   decodeMultiModalKind,
   encodeMultiModalId,
   HAVE_MULTI_MODAL_ID,
@@ -116,5 +117,44 @@ describe('batch-create modal ids', () => {
   it('defaults a kind-less id to card', () => {
     expect(decodeMultiModalKind(HAVE_MULTI_MODAL_ID)).toBe('card');
     expect(decodeMultiModalKind('lfc:havemultimodal:nonsense')).toBe('card');
+  });
+
+  it('adds nothing to the id when the member chose neither a game nor a language', () => {
+    expect(encodeMultiModalId(HAVE_MULTI_MODAL_ID, 'card')).toBe('lfc:havemultimodal:card');
+    expect(encodeMultiModalId(HAVE_MULTI_MODAL_ID, 'card', { game: null, language: null })).toBe(
+      'lfc:havemultimodal:card',
+    );
+  });
+
+  it('round-trips the kind, the chosen game and the chosen language', () => {
+    const id = encodeMultiModalId(WANT_MULTI_MODAL_ID, 'sealed', {
+      game: 'pokemon',
+      language: 'ja',
+    });
+    expect(id).toBe('lfc:wantmultimodal:sealed:pokemon:ja');
+    expect(decodeMultiModal(id)).toEqual({ kind: 'sealed', gameId: 'pokemon', language: 'ja' });
+    expect(decodeMultiModalKind(id)).toBe('sealed');
+  });
+
+  it('round-trips a language chosen without a game', () => {
+    const id = encodeMultiModalId(HAVE_MULTI_MODAL_ID, 'card', { language: 'de' });
+    expect(decodeMultiModal(id)).toEqual({ kind: 'card', gameId: null, language: 'de' });
+  });
+
+  it('decodes an id from before the game and language segments as card, default game, no language', () => {
+    expect(decodeMultiModal('lfc:havemultimodal:sealed')).toEqual({
+      kind: 'sealed',
+      gameId: null,
+      language: null,
+    });
+    expect(decodeMultiModal(HAVE_MULTI_MODAL_ID)).toEqual({
+      kind: 'card',
+      gameId: null,
+      language: null,
+    });
+  });
+
+  it('ignores a language it does not support', () => {
+    expect(decodeMultiModal('lfc:havemultimodal:card::klingon').language).toBeNull();
   });
 });

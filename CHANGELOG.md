@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- A `language` option on `/have`, `/want`, `/have-sealed`, `/want-sealed`,
+  `/have-multi` and `/want-multi` (English by default; Japanese, German,
+  French, Italian, Spanish, Portuguese, Korean, Chinese in two scripts, and
+  Russian). Anything other than English shows on the listing, in `/search` and
+  in the digest as `JA`, `DE`, and so on. Language is set when you post and
+  can't be edited afterwards.
+- Graded cards. Set `condition` to Graded on `/have` or `/want` and give the
+  `grade` (`PSA 10`, `BGS 9.5`, `CGC 9`; PSA, BGS, CGC, SGC, TAG and ACE are
+  accepted). The listing shows the grade instead of a condition, and a grade
+  with any other condition is rejected. In `/have-multi` and `/want-multi` the
+  condition column takes a grade, and so does the condition row of `/edit`.
+- `/admin games` lets an admin enable or disable a game for the server. A
+  disabled game's listings are kept but hidden from search and digests until it
+  is enabled again, and the last enabled game can't be disabled. Magic is the
+  only game today, so for now this changes nothing, but it is the switch for
+  the games that follow. `/admin config` now names the enabled games.
+- Groundwork for more than one game: the listing commands and `/search` take an
+  optional `game`, autocomplete merges every enabled game and tags its
+  suggestions, and listings, digests and links follow their own game. None of it
+  appears until a second game exists, so a Magic-only server sees no
+  difference.
+
 ### Fixed
 
 - Automatic release tagging could put the tag on a commit merged after the

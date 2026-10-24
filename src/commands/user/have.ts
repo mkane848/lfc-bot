@@ -1,19 +1,31 @@
 import { SlashCommandBuilder } from 'discord.js';
 import type { ChatInputCommandInteraction } from 'discord.js';
 import { createListing } from '../../services/listings.js';
-import type { Accepts, CardFinish, CardVariant, GuildCommand } from '../../types/index.js';
-import {
-  ACCEPTS_VALUES,
-  CARD_CONDITIONS,
-  CARD_FINISHES,
-  CARD_VARIANTS,
+import type {
+  Accepts,
+  CardFinish,
+  CardVariant,
+  GradingCompany,
+  GuildCommand,
 } from '../../types/index.js';
-import { ACCEPTS_LABELS, FINISH_LABELS, VARIANT_LABELS } from '../../utils/constants.js';
+import { ACCEPTS_VALUES, CARD_CONDITIONS, CARD_VARIANTS } from '../../types/index.js';
+import { resolveGameForValue } from '../../games/index.js';
+import { ACCEPTS_LABELS, CONDITION_LABELS, VARIANT_LABELS } from '../../utils/constants.js';
 import {
   handleCardAutocomplete,
   handleSetAutocomplete,
   resolveCardForCommand,
 } from '../../utils/cards.js';
+import {
+  addUniversalOptions,
+  checkFinishForGame,
+  checkVariantForGame,
+  finishChoices,
+  gradeFields,
+  languageFor,
+  readUniversalOptions,
+} from '../../utils/listing-options.js';
+import type { UniversalOptions } from '../../utils/listing-options.js';
 import { replyError, replyWithListing } from '../../utils/replies.js';
 import {
   isAccepts,
@@ -38,10 +50,27 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
   }
   await interaction.deferReply({ ephemeral: true });
 
+  let universal: UniversalOptions;
+  try {
+    universal = readUniversalOptions(interaction);
+  } catch (err) {
+    await replyError(interaction, err instanceof Error ? err.message : 'Invalid options.');
+    return;
+  }
   const rawCard = interaction.options.getString('card_name', true);
+  const gameResolution = resolveGameForValue({
+    serverId: guild.id,
+    value: rawCard,
+    gameOption: universal.gameOption,
+  });
+  if (!gameResolution.ok) {
+    await replyError(interaction, gameResolution.message);
+    return;
+  }
+  const { game } = gameResolution;
   let cardName: string;
   try {
-    cardName = validateCardName(rawCard);
+    cardName = validateCardName(gameResolution.value);
   } catch (err) {
     await replyError(interaction, err instanceof Error ? err.message : 'Invalid card name.');
     return;
@@ -76,6 +105,16 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
     }
     variant = variantInput;
   }
+  let gradingCompany: GradingCompany | null;
+  let grade: string | null;
+  try {
+    checkFinishForGame(game, finish);
+    checkVariantForGame(game, variant);
+    ({ gradingCompany, grade } = gradeFields(conditionInput, universal.grade));
+  } catch (err) {
+    await replyError(interaction, err instanceof Error ? err.message : 'Invalid options.');
+    return;
+  }
   const collectorNumberInput = interaction.options.getString('collector_number');
   let collectorNumber: string | null;
   try {
@@ -101,7 +140,7 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
     return;
   }
 
-  const resolved = await resolveCardForCommand(interaction, cardName, {
+  const resolved = await resolveCardForCommand(interaction, game, cardName, {
     cardSet,
     finish,
     variant,
@@ -127,10 +166,14 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
       collectorNumber: resolved.collectorNumber ?? collectorNumber,
       marketUrl: resolved.marketUrl,
       condition: conditionInput,
+      gradingCompany,
+      grade,
       priceCents,
       quantity,
       notes,
-      game: 'mtg',
+      game: game.id,
+      language: languageFor(universal.language, resolved.language),
+      catalogId: resolved.catalogId ?? null,
     });
     await replyWithListing(interaction, listing, warning);
   } catch (err) {
@@ -140,57 +183,60 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
 
 export const haveCommand: GuildCommand = {
   name: 'have',
-  data: new SlashCommandBuilder()
-    .setName('have')
-    .setDescription('Post a card you have to sell or trade away')
-    .addStringOption((option) =>
-      option
-        .setName('card_name')
-        .setDescription('Card name')
-        .setRequired(true)
-        .setAutocomplete(true),
-    )
-    .addStringOption((option) =>
-      option
-        .setName('accepts')
-        .setDescription('What you accept in return')
-        .setRequired(true)
-        .addChoices(...ACCEPTS_VALUES.map((a) => ({ name: ACCEPTS_LABELS[a], value: a }))),
-    )
-    .addStringOption((option) =>
-      option
-        .setName('condition')
-        .setDescription('Card condition')
-        .setRequired(true)
-        .addChoices(...CARD_CONDITIONS.map((c) => ({ name: c.toUpperCase(), value: c }))),
-    )
-    .addStringOption((option) =>
-      option.setName('set').setDescription('Card set code, e.g. MH3').setAutocomplete(true),
-    )
-    .addStringOption((option) =>
-      option
-        .setName('finish')
-        .setDescription('Card finish')
-        .addChoices(...CARD_FINISHES.map((f) => ({ name: FINISH_LABELS[f], value: f }))),
-    )
-    .addStringOption((option) =>
-      option
-        .setName('variant')
-        .setDescription('Printing variant')
-        .addChoices(...CARD_VARIANTS.map((v) => ({ name: VARIANT_LABELS[v], value: v }))),
-    )
-    .addStringOption((option) =>
-      option.setName('collector_number').setDescription('Collector number, e.g. 89'),
-    )
-    .addStringOption((option) =>
-      option.setName('price').setDescription('Price in USD, e.g. 2.50 (optional)'),
-    )
-    .addIntegerOption((option) =>
-      option.setName('quantity').setDescription('Quantity (1-99)').setMinValue(1).setMaxValue(99),
-    )
-    .addStringOption((option) =>
-      option.setName('notes').setDescription('Optional notes (max 500 characters)'),
-    ),
+  data: addUniversalOptions(
+    new SlashCommandBuilder()
+      .setName('have')
+      .setDescription('Post a card you have to sell or trade away')
+      .addStringOption((option) =>
+        option
+          .setName('card_name')
+          .setDescription('Card name')
+          .setRequired(true)
+          .setAutocomplete(true),
+      )
+      .addStringOption((option) =>
+        option
+          .setName('accepts')
+          .setDescription('What you accept in return')
+          .setRequired(true)
+          .addChoices(...ACCEPTS_VALUES.map((a) => ({ name: ACCEPTS_LABELS[a], value: a }))),
+      )
+      .addStringOption((option) =>
+        option
+          .setName('condition')
+          .setDescription('Card condition')
+          .setRequired(true)
+          .addChoices(...CARD_CONDITIONS.map((c) => ({ name: CONDITION_LABELS[c], value: c }))),
+      )
+      .addStringOption((option) =>
+        option.setName('set').setDescription('Card set code, e.g. MH3').setAutocomplete(true),
+      )
+      .addStringOption((option) =>
+        option
+          .setName('finish')
+          .setDescription('Card finish')
+          .addChoices(...finishChoices()),
+      )
+      .addStringOption((option) =>
+        option
+          .setName('variant')
+          .setDescription('Printing variant')
+          .addChoices(...CARD_VARIANTS.map((v) => ({ name: VARIANT_LABELS[v], value: v }))),
+      )
+      .addStringOption((option) =>
+        option.setName('collector_number').setDescription('Collector number, e.g. 89'),
+      )
+      .addStringOption((option) =>
+        option.setName('price').setDescription('Price in USD, e.g. 2.50 (optional)'),
+      )
+      .addIntegerOption((option) =>
+        option.setName('quantity').setDescription('Quantity (1-99)').setMinValue(1).setMaxValue(99),
+      )
+      .addStringOption((option) =>
+        option.setName('notes').setDescription('Optional notes (max 500 characters)'),
+      ),
+    { grade: true },
+  ),
   execute,
   autocomplete: async (interaction) => {
     if (interaction.options.getFocused(true).name === 'set') {

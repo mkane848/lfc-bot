@@ -5,10 +5,11 @@ import {
   FINISH_LABELS,
   formatSealedType,
   INTENT_LABELS,
+  LANGUAGE_LABELS,
   VARIANT_LABELS,
 } from './constants.js';
-import { buildManapoolUrl } from './manapool.js';
-import { normalizeCardName } from './validation.js';
+import { formatGrade } from './validation.js';
+import { getGame } from '../games/index.js';
 import type { ListingRow } from '../db/schema.js';
 
 const BRAND_COLOR: ColorResolvable = 0x8f1d2c; // Liverpool red
@@ -42,16 +43,30 @@ export function formatListingTitle(listing: {
   return `${intent} · ${accepts} — ${listing.cardName}${set}`;
 }
 
-/** Resolve the Manapool link for a listing, falling back to a locally-built URL. */
+/**
+ * A listing's marketplace link: the one stored when it was posted, else its
+ * game's locally-built fallback (Manapool, for Magic), else none.
+ */
 function listingMarketUrl(listing: ListingRow): string | null {
-  return (
-    listing.marketUrl ??
-    buildManapoolUrl({
-      cardName: listing.cardName,
-      cardSet: listing.cardSet,
-      collectorNumber: listing.collectorNumber,
-    })
-  );
+  return listing.marketUrl ?? getGame(listing.game)?.fallbackMarketUrl(listing) ?? null;
+}
+
+/** What a listing's condition reads as: `NM`, or `PSA 10` for a graded slab. */
+export function conditionText(
+  listing: Pick<ListingRow, 'condition' | 'gradingCompany' | 'grade'>,
+): string | null {
+  if (!listing.condition) {
+    return null;
+  }
+  if (listing.condition === 'graded') {
+    return formatGrade(listing.gradingCompany, listing.grade) || CONDITION_LABELS.graded;
+  }
+  return CONDITION_LABELS[listing.condition as keyof typeof CONDITION_LABELS] ?? listing.condition;
+}
+
+/** `JA`, or null for English, the language a listing has unless it says otherwise. */
+export function languageTag(language: string | null | undefined): string | null {
+  return language && language !== 'en' ? language.toUpperCase() : null;
 }
 
 /**
@@ -61,12 +76,14 @@ function listingMarketUrl(listing: ListingRow): string | null {
  */
 export function listingEmbed(
   listing: ListingRow,
-  options: { showUser?: boolean } = {},
+  options: { showUser?: boolean; showGame?: boolean } = {},
 ): EmbedBuilder {
+  // The game only earns a place when the server has more than one.
+  const gameLabel = options.showGame ? getGame(listing.game)?.shortLabel : undefined;
   const embed = new EmbedBuilder()
     .setColor(BRAND_COLOR)
     .setTitle(formatListingTitle(listing))
-    .setFooter({ text: `Listing #${listing.id}` })
+    .setFooter({ text: `Listing #${listing.id}${gameLabel ? ` · ${gameLabel}` : ''}` })
     .setTimestamp(new Date(listing.createdAt));
 
   const marketUrl = listingMarketUrl(listing);
@@ -75,10 +92,15 @@ export function listingEmbed(
   }
 
   const fields: Array<{ name: string; value: string; inline: boolean }> = [];
-  if (listing.condition) {
+  if (listing.condition === 'graded') {
+    fields.push({ name: 'Grade', value: conditionText(listing) ?? '', inline: true });
+  } else if (listing.condition) {
+    fields.push({ name: 'Condition', value: conditionText(listing) ?? '', inline: true });
+  }
+  if (listing.language && listing.language !== 'en') {
     const label =
-      CONDITION_LABELS[listing.condition as keyof typeof CONDITION_LABELS] ?? listing.condition;
-    fields.push({ name: 'Condition', value: label, inline: true });
+      LANGUAGE_LABELS[listing.language as keyof typeof LANGUAGE_LABELS] ?? listing.language;
+    fields.push({ name: 'Language', value: label, inline: true });
   }
   if (listing.priceCents !== null && listing.priceCents !== undefined) {
     fields.push({ name: 'Price', value: formatPrice(listing.priceCents), inline: true });
@@ -119,37 +141,26 @@ export function listingEmbed(
   return embed;
 }
 
-/** Build a compact single-line description used inside digests. */
-export function digestLine(listing: ListingRow): string {
+/**
+ * Build a compact single-line description used inside digests. `showGame` adds
+ * the game's short name, for a server with more than one.
+ */
+export function digestLine(listing: ListingRow, options: { showGame?: boolean } = {}): string {
+  const game = getGame(listing.game);
   const set = listing.cardSet ? ` (${listing.cardSet})` : '';
-  const condition = listing.condition
-    ? ` — ${CONDITION_LABELS[listing.condition as keyof typeof CONDITION_LABELS] ?? listing.condition}`
-    : '';
+  const condition = [
+    conditionText(listing),
+    languageTag(listing.language),
+    options.showGame ? game?.shortLabel : null,
+  ]
+    .filter(Boolean)
+    .map((part) => ` — ${part}`)
+    .join('');
   const price =
     listing.priceCents !== null && listing.priceCents !== undefined
       ? ` — ${formatPrice(listing.priceCents)}`
       : '';
   const marketUrl = listingMarketUrl(listing);
-  const link = marketUrl ? ` — [View on Manapool](${marketUrl})` : '';
+  const link = marketUrl ? ` — [View on ${game?.marketLabel ?? 'Market'}](${marketUrl})` : '';
   return `- ${listing.cardName}${set}${condition}${price} — @${listing.username}${link}`;
-}
-
-/**
- * Build the card-cache key from a card name plus its printing details.
- * `services/card-cache.ts`'s `buildCacheKey` is a thin wrapper around this.
- */
-export function cardKey(
-  cardName: string,
-  cardSet?: string | null,
-  finish?: string | null,
-  variant?: string | null,
-  collectorNumber?: string | null,
-): string {
-  const base = normalizeCardName(cardName);
-  const parts = [base];
-  if (cardSet) parts.push(cardSet.toUpperCase());
-  if (collectorNumber) parts.push(`CN${collectorNumber.toUpperCase()}`);
-  if (finish) parts.push(finish);
-  if (variant) parts.push(variant);
-  return parts.join('::');
 }

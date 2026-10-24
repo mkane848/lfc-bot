@@ -199,6 +199,8 @@ const FINISH_PREDICATES: Record<CardFinish, string> = {
   nonfoil: '',
   foil: ' is:foil',
   etched: ' is:etched',
+  // Not an MTG finish: the game rules reject it before a lookup is made.
+  reverse: '',
 };
 
 const VARIANT_PREDICATES: Record<CardVariant, string> = {

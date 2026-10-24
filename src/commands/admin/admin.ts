@@ -13,6 +13,8 @@ import { execute as executeDmTarget } from './dm-target.js';
 import { execute as executeMode } from './mode.js';
 import { execute as executeRemove } from './remove.js';
 import { execute as executeHistory } from './history.js';
+import { execute as executeGames } from './games.js';
+import { listGames } from '../../games/index.js';
 
 const subcommands: Record<string, AdminSubcommand> = {
   config: { name: 'config', execute: executeConfig },
@@ -24,6 +26,7 @@ const subcommands: Record<string, AdminSubcommand> = {
   mode: { name: 'mode', execute: executeMode },
   remove: { name: 'remove', execute: executeRemove },
   history: { name: 'history', execute: executeHistory },
+  games: { name: 'games', execute: executeGames },
 };
 
 /** Flatten a subcommand's options into a plain { name: value } record for the audit log. */
@@ -142,6 +145,24 @@ function build(): SlashCommandBuilder {
   );
   builder.addSubcommand((sub) =>
     sub.setName('history').setDescription('Show recent admin command activity'),
+  );
+  builder.addSubcommand((sub) =>
+    sub
+      .setName('games')
+      .setDescription('Enable or disable a game for this server')
+      .addStringOption((option) =>
+        option
+          .setName('game')
+          .setDescription('The game')
+          .setRequired(true)
+          .addChoices(...listGames().map((game) => ({ name: game.label, value: game.id }))),
+      )
+      .addBooleanOption((option) =>
+        option
+          .setName('enabled')
+          .setDescription('Enable (true) or disable (false)')
+          .setRequired(true),
+      ),
   );
   return builder;
 }
