@@ -9,6 +9,11 @@ vi.mock('../../src/services/scheduler.js', () => ({
   scheduleAllDigests: vi.fn(),
   startMaintenance: vi.fn(),
   startSealedCatalogSync: vi.fn(),
+  startGameCatalogSync: vi.fn(),
+}));
+
+vi.mock('../../src/services/game-catalogs.js', () => ({
+  warmUpGameCatalogs: vi.fn(),
 }));
 
 // Only `syncSealedCatalog` is stubbed, so nothing reaches the network. The real
@@ -20,8 +25,9 @@ vi.mock('../../src/services/sealed.js', async (importOriginal) => {
   return { ...actual, syncSealedCatalog: vi.fn() };
 });
 
-const { scheduleAllDigests, startMaintenance, startSealedCatalogSync } =
+const { scheduleAllDigests, startMaintenance, startSealedCatalogSync, startGameCatalogSync } =
   await import('../../src/services/scheduler.js');
+const { warmUpGameCatalogs } = await import('../../src/services/game-catalogs.js');
 const { syncSealedCatalog } = await import('../../src/services/sealed.js');
 
 setupTestDb();
@@ -31,6 +37,8 @@ beforeEach(() => {
   vi.mocked(scheduleAllDigests).mockReset();
   vi.mocked(startMaintenance).mockReset();
   vi.mocked(startSealedCatalogSync).mockReset();
+  vi.mocked(startGameCatalogSync).mockReset();
+  vi.mocked(warmUpGameCatalogs).mockReset();
   vi.mocked(syncSealedCatalog).mockReset().mockResolvedValue({ imported: 0, removed: 0 });
 });
 
@@ -58,6 +66,13 @@ describe('handleReady', () => {
     expect(scheduleAllDigests).toHaveBeenCalledTimes(1);
     expect(startMaintenance).toHaveBeenCalledTimes(1);
     expect(startSealedCatalogSync).toHaveBeenCalledTimes(1);
+    expect(startGameCatalogSync).toHaveBeenCalledTimes(1);
+  });
+
+  it('warms the catalogs of other games once, after the scheduled jobs are set up', () => {
+    handleReady(fakeClient());
+
+    expect(warmUpGameCatalogs).toHaveBeenCalledTimes(1);
   });
 
   it('seeds a config row for every guild the bot is in', () => {

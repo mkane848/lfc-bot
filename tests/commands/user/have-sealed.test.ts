@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AutocompleteInteraction } from 'discord.js';
 import { getDb } from '../../../src/db/index.js';
 import { listings, servers, type NewServerRow } from '../../../src/db/schema.js';
@@ -7,6 +7,13 @@ import * as sealed from '../../../src/services/sealed.js';
 import type { ResolvedSealedProduct } from '../../../src/types/index.js';
 import { fakeChatInputInteraction } from '../../helpers/interaction.js';
 import { setupTestDb } from '../../helpers/db.js';
+import {
+  enableGames,
+  FAKE_GAME_ID,
+  registerFakeGame,
+  unregisterFakeGame,
+} from '../../helpers/games.js';
+import type { GameDefinition } from '../../../src/games/index.js';
 
 setupTestDb();
 
@@ -233,5 +240,103 @@ describe('/have-sealed', () => {
     expect(autocompleteSealedSets).toHaveBeenCalledWith('bl');
     expect(autocompleteSealedProducts).not.toHaveBeenCalled();
     expect(i.respond).toHaveBeenCalledWith([{ name: 'BLB', value: 'BLB' }]);
+  });
+});
+
+describe('/have-sealed across games', () => {
+  let fake: GameDefinition;
+
+  beforeEach(() => {
+    fake = registerFakeGame();
+    enableGames('guild-1', ['mtg', FAKE_GAME_ID]);
+  });
+
+  afterEach(() => {
+    unregisterFakeGame();
+  });
+
+  const sealedListing = () => getDb().select().from(listings).get();
+  const errorText = (i: ReturnType<typeof interaction>) =>
+    (i.editReply.mock.calls.at(-1)?.[0] as { content: string }).content;
+
+  it('resolves a picked suggestion through its own game, not the Magic catalog', async () => {
+    await haveSealedCommand.execute(interaction({ product_name: 'fk:id:fk-box', set: 'FK1' }));
+
+    expect(fake.resolveSealed).toHaveBeenCalledWith('id:fk-box', { setCode: 'FK1' });
+    expect(resolveSealedProduct).not.toHaveBeenCalled();
+    expect(sealedListing()).toMatchObject({
+      game: FAKE_GAME_ID,
+      kind: 'sealed',
+      cardName: 'Fake Box',
+      catalogId: 'fk-box',
+      marketUrl: 'https://fake.example/product/box',
+    });
+  });
+
+  it('refuses a picked suggestion that has left its game’s catalog, instead of posting its id', async () => {
+    vi.mocked(fake.resolveSealed).mockResolvedValue({
+      productName: 'id:gone',
+      productNameNormalized: 'id gone',
+      setCode: null,
+      uuid: null,
+      category: null,
+      subtype: null,
+      marketUrl: null,
+      resolved: false,
+    });
+    const i = interaction({ product_name: 'fk:id:gone' });
+    await haveSealedCommand.execute(i);
+    expect(errorText(i)).toMatch(/no longer in the catalog/);
+    expect(sealedListing()).toBeUndefined();
+  });
+
+  it('still posts a typed name that is not in the catalog as free text', async () => {
+    vi.mocked(fake.resolveSealed).mockResolvedValue({
+      productName: 'Homebrew Box',
+      productNameNormalized: 'homebrew box',
+      setCode: null,
+      uuid: null,
+      category: null,
+      subtype: null,
+      marketUrl: null,
+      resolved: false,
+    });
+    await haveSealedCommand.execute(
+      interaction({ product_name: 'Homebrew Box', game: FAKE_GAME_ID }),
+    );
+    expect(sealedListing()).toMatchObject({ game: FAKE_GAME_ID, cardName: 'Homebrew Box' });
+  });
+
+  it('stores the language, and refuses a game the server has disabled', async () => {
+    await haveSealedCommand.execute(interaction({ language: 'ja' }));
+    expect(sealedListing()).toMatchObject({ game: 'mtg', language: 'ja' });
+
+    getDb().delete(listings).run();
+    enableGames('guild-1', ['mtg']);
+    const i = interaction({ product_name: 'fk:id:fk-box' });
+    await haveSealedCommand.execute(i);
+    expect(errorText(i)).toMatch(/Fake Game is not enabled/);
+    expect(sealedListing()).toBeUndefined();
+  });
+
+  it('takes the language from a product the catalog fixes, and rejects a clashing option', async () => {
+    vi.mocked(fake.resolveSealed).mockResolvedValue({
+      productName: 'Fake Box JP',
+      productNameNormalized: 'fake box jp',
+      setCode: 'FK1',
+      uuid: 'fk-box-jp',
+      category: 'booster_box',
+      subtype: null,
+      marketUrl: null,
+      language: 'ja',
+      resolved: true,
+    });
+    await haveSealedCommand.execute(interaction({ product_name: 'fk:id:fk-box-jp' }));
+    expect(sealedListing()?.language).toBe('ja');
+
+    getDb().delete(listings).run();
+    const i = interaction({ product_name: 'fk:id:fk-box-jp', language: 'en' });
+    await haveSealedCommand.execute(i);
+    expect(errorText(i)).toMatch(/Japanese printing, but you chose English/);
   });
 });

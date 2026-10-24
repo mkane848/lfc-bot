@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getDb } from '../../../src/db/index.js';
-import { servers, type NewServerRow } from '../../../src/db/schema.js';
+import { listings, servers, type NewServerRow } from '../../../src/db/schema.js';
+import type { EmbedBuilder } from 'discord.js';
 import { haveCommand } from '../../../src/commands/user/have.js';
 import * as scryfall from '../../../src/services/scryfall.js';
 import {
@@ -8,6 +9,13 @@ import {
   fakeChatInputInteraction,
 } from '../../helpers/interaction.js';
 import { setupTestDb } from '../../helpers/db.js';
+import {
+  enableGames,
+  FAKE_GAME_ID,
+  registerFakeGame,
+  unregisterFakeGame,
+} from '../../helpers/games.js';
+import type { GameDefinition } from '../../../src/games/index.js';
 
 setupTestDb();
 
@@ -251,5 +259,226 @@ describe('/have autocomplete', () => {
 
       expect(i.respond).not.toHaveBeenCalled();
     });
+  });
+});
+
+function postedListing() {
+  return getDb().select().from(listings).get();
+}
+
+function postedEmbed(i: ReturnType<typeof interaction>) {
+  const call = i.followUp.mock.calls[0]?.[0] as { embeds: EmbedBuilder[] };
+  return call.embeds[0]!.toJSON();
+}
+
+function errorText(i: ReturnType<typeof interaction>): string {
+  return (i.editReply.mock.calls.at(-1)?.[0] as { content: string }).content;
+}
+
+describe('/have language and grade', () => {
+  it('stores Magic, English and no grade by default', async () => {
+    await haveCommand.execute(interaction());
+    expect(postedListing()).toMatchObject({
+      game: 'mtg',
+      language: 'en',
+      condition: 'nm',
+      gradingCompany: null,
+      grade: null,
+    });
+  });
+
+  it('stores the language the member chose and shows it on the embed', async () => {
+    const i = interaction({ language: 'ja' });
+    await haveCommand.execute(i);
+    expect(postedListing()?.language).toBe('ja');
+    expect(postedEmbed(i).fields?.find((f) => f.name === 'Language')?.value).toBe('Japanese');
+  });
+
+  it('rejects a language it does not support', async () => {
+    const i = interaction({ language: 'klingon' });
+    await haveCommand.execute(i);
+    expect(errorText(i)).toBe('Invalid language.');
+    expect(postedListing()).toBeUndefined();
+  });
+
+  it('posts a graded slab with its company and grade, shown as a Grade rather than a Condition', async () => {
+    const i = interaction({ condition: 'graded', grade: 'psa 10' });
+    await haveCommand.execute(i);
+    expect(postedListing()).toMatchObject({
+      condition: 'graded',
+      gradingCompany: 'PSA',
+      grade: '10',
+    });
+    const fields = postedEmbed(i).fields ?? [];
+    expect(fields.find((f) => f.name === 'Grade')?.value).toBe('PSA 10');
+    expect(fields.find((f) => f.name === 'Condition')).toBeUndefined();
+  });
+
+  it('requires a grade when the condition is graded', async () => {
+    const i = interaction({ condition: 'graded' });
+    await haveCommand.execute(i);
+    expect(errorText(i)).toMatch(/graded card needs its grade/);
+    expect(resolveCard).not.toHaveBeenCalled();
+    expect(postedListing()).toBeUndefined();
+  });
+
+  it('rejects a grade on a raw card', async () => {
+    const i = interaction({ condition: 'nm', grade: 'PSA 10' });
+    await haveCommand.execute(i);
+    expect(errorText(i)).toMatch(/only applies when the condition is Graded/);
+    expect(postedListing()).toBeUndefined();
+  });
+
+  it('rejects a malformed grade, naming the companies it knows', async () => {
+    const i = interaction({ condition: 'graded', grade: 'XYZ 10' });
+    await haveCommand.execute(i);
+    expect(errorText(i)).toMatch(/Companies: PSA, BGS, CGC, SGC, TAG, ACE/);
+  });
+});
+
+describe('/have finish and variant per game', () => {
+  it('accepts etched for Magic and rejects reverse holo, naming the finishes Magic has', async () => {
+    await haveCommand.execute(interaction({ finish: 'etched' }));
+    expect(postedListing()?.finish).toBe('etched');
+
+    const i = interaction({ finish: 'reverse' });
+    await haveCommand.execute(i);
+    expect(errorText(i)).toBe(
+      "Magic: The Gathering cards don't come in Reverse Holo. Choose Nonfoil, Foil, Etched.",
+    );
+    expect(resolveCard).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('/have across games', () => {
+  let fake: GameDefinition;
+
+  beforeEach(() => {
+    fake = registerFakeGame();
+    enableGames('guild-1', ['mtg', FAKE_GAME_ID]);
+  });
+
+  afterEach(() => {
+    unregisterFakeGame();
+  });
+
+  it('posts a picked suggestion to the game in its tag, with that game’s link and catalog id', async () => {
+    const i = interaction({ card_name: 'fk:fk-7' });
+    await haveCommand.execute(i);
+
+    expect(fake.resolveCard).toHaveBeenCalledWith('fk-7', expect.any(Object));
+    expect(resolveCard).not.toHaveBeenCalled();
+    expect(postedListing()).toMatchObject({
+      game: FAKE_GAME_ID,
+      cardName: 'Fake Card',
+      marketUrl: 'https://fake.example/product/7',
+      catalogId: 'fk-7',
+    });
+  });
+
+  it('shows the game on the embed only because the server has more than one', async () => {
+    const i = interaction({ card_name: 'fk:fk-7' });
+    await haveCommand.execute(i);
+    expect(postedEmbed(i).footer?.text).toMatch(/ · FKG$/);
+
+    enableGames('guild-1', [FAKE_GAME_ID]);
+    getDb().update(listings).set({ createdAt: 1, updatedAt: 1 }).run();
+    const single = interaction({ card_name: 'fk:fk-7' });
+    await haveCommand.execute(single);
+    expect(postedEmbed(single).footer?.text).not.toContain('FKG');
+  });
+
+  it('uses the game option for a name that was typed rather than picked', async () => {
+    await haveCommand.execute(interaction({ card_name: 'Some Card', game: FAKE_GAME_ID }));
+    expect(fake.resolveCard).toHaveBeenCalledWith('Some Card', expect.any(Object));
+    expect(postedListing()?.game).toBe(FAKE_GAME_ID);
+  });
+
+  it('prefers the tag over the game option', async () => {
+    await haveCommand.execute(interaction({ card_name: 'fk:fk-7', game: 'mtg' }));
+    expect(postedListing()?.game).toBe(FAKE_GAME_ID);
+  });
+
+  it('defaults a typed name to the first game the server enabled', async () => {
+    await haveCommand.execute(interaction({ card_name: 'Black Lotus' }));
+    expect(resolveCard).toHaveBeenCalled();
+    expect(postedListing()?.game).toBe('mtg');
+
+    enableGames('guild-1', [FAKE_GAME_ID, 'mtg']);
+    getDb().update(listings).set({ createdAt: 1, updatedAt: 1 }).run();
+    await haveCommand.execute(interaction({ card_name: 'Anything' }));
+    expect(fake.resolveCard).toHaveBeenCalledWith('Anything', expect.any(Object));
+  });
+
+  it('rejects a game the server has disabled, before looking the card up', async () => {
+    enableGames('guild-1', ['mtg']);
+    const i = interaction({ card_name: 'fk:fk-7' });
+    await haveCommand.execute(i);
+    expect(errorText(i)).toMatch(/Fake Game is not enabled.*\/admin games/);
+    expect(fake.resolveCard).not.toHaveBeenCalled();
+    expect(postedListing()).toBeUndefined();
+  });
+
+  it('applies the chosen game’s finishes: no etched here, reverse holo fine', async () => {
+    const etched = interaction({ card_name: 'fk:fk-7', finish: 'etched' });
+    await haveCommand.execute(etched);
+    expect(errorText(etched)).toMatch(
+      /Fake Game cards don't come in Etched. Choose Nonfoil, Reverse Holo/,
+    );
+
+    await haveCommand.execute(interaction({ card_name: 'fk:fk-7', finish: 'reverse' }));
+    expect(postedListing()).toMatchObject({ game: FAKE_GAME_ID, finish: 'reverse' });
+  });
+
+  it('rejects a printing variant for a game that has none', async () => {
+    const i = interaction({ card_name: 'fk:fk-7', variant: 'showcase' });
+    await haveCommand.execute(i);
+    expect(errorText(i)).toMatch(/variants only apply to Magic/i);
+    expect(fake.resolveCard).not.toHaveBeenCalled();
+  });
+
+  it('takes the language from a catalog entry that fixes it', async () => {
+    vi.mocked(fake.resolveCard).mockResolvedValue({
+      cardName: 'Fake Card JP',
+      cardNameNormalized: 'fake card jp',
+      cardSet: 'FK1',
+      language: 'ja',
+      resolved: true,
+    });
+    await haveCommand.execute(interaction({ card_name: 'fk:fk-9' }));
+    expect(postedListing()?.language).toBe('ja');
+  });
+
+  it('rejects a language option that contradicts the catalog entry', async () => {
+    vi.mocked(fake.resolveCard).mockResolvedValue({
+      cardName: 'Fake Card JP',
+      cardNameNormalized: 'fake card jp',
+      cardSet: 'FK1',
+      language: 'ja',
+      resolved: true,
+    });
+    const i = interaction({ card_name: 'fk:fk-9', language: 'de' });
+    await haveCommand.execute(i);
+    expect(errorText(i)).toMatch(/Japanese printing, but you chose German/);
+    expect(postedListing()).toBeUndefined();
+  });
+});
+
+describe('/have options now that a second game is registered', () => {
+  type Option = { name: string; choices?: Array<{ value: string }> };
+  const option = (name: string) =>
+    (haveCommand.data.toJSON().options as Option[]).find((candidate) => candidate.name === name);
+
+  it('offers reverse holo, since Pokémon has it', () => {
+    expect(option('finish')?.choices?.map((choice) => choice.value)).toEqual([
+      'nonfoil',
+      'foil',
+      'etched',
+      'reverse',
+    ]);
+  });
+
+  it('offers a game option with every registered game', () => {
+    expect(option('game')?.choices?.map((choice) => choice.value)).toEqual(['mtg', 'pokemon']);
   });
 });

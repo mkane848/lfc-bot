@@ -15,10 +15,14 @@ and `/want-sealed` extend the same have/want model to sealed product —
 booster boxes, bundles, prerelease kits, and Commander decks — as listings in
 the same table, distinguished only by a `kind` column.
 
-Magic: The Gathering is the only supported game, resolved through the
-Scryfall API (singles) and the MTGJSON catalog (sealed product). The data
-model keeps a `game` column so other games could be added later without a
-schema migration, but no other game is selectable.
+Two games are registered. Magic: The Gathering is resolved through the Scryfall
+API (singles) and the MTGJSON catalog (sealed product). Pokémon singles (English
+and Japanese) are resolved against a local catalog a daily TCGCSV sync fills;
+Pokémon sealed product is in that catalog's tables but isn't offered yet. Games
+sit behind a registry (`src/games/`): every command resolves a game and calls
+through its `GameDefinition`, each server chooses which games it has with
+`/admin games` (new servers have Magic only), and `listings.game` records which
+one a listing belongs to. Adding a game means registering another definition.
 
 **Open source (MIT), designed for small game stores and friend groups.**
 
@@ -32,6 +36,7 @@ schema migration, but no other game is selectable.
 | Database | better-sqlite3 |
 | Card data | Scryfall API |
 | Sealed product catalog | MTGJSON (daily sync, `sealed_cache` table) |
+| Pokémon catalog | TCGCSV (daily sync, `catalog_sets` / `catalog_items` tables) |
 | Product links | Manapool API (optional) — exact printings for cards, matched products for sealed |
 | Scheduler | node-cron |
 | Testing | Vitest |
@@ -56,7 +61,7 @@ Source of truth: `src/db/schema.ts`. All timestamps are Unix milliseconds.
 | `digest_cron` | TEXT, default `0 9 * * *` | Five-field cron expression |
 | `digest_timezone` | TEXT, default `UTC` | IANA timezone name |
 | `last_digest_at` | INTEGER, nullable | Watermark used to select new listings |
-| `enabled_games` | TEXT, default `["mtg"]` | JSON array |
+| `enabled_games` | TEXT, default `["mtg"]` | JSON array of game ids, in the order they were enabled; the first is the game a command uses when the member names none. Managed with `/admin games`; read through `enabledGameIds` in `src/games/server.ts` |
 | `removed_at` | INTEGER, nullable | Set when the bot is removed from the guild; row is purged after 30 days |
 | `created_at` / `updated_at` | INTEGER | |
 
@@ -70,16 +75,19 @@ Source of truth: `src/db/schema.ts`. All timestamps are Unix milliseconds.
 | `username` | TEXT | Display name at time of posting |
 | `intent` | TEXT, not null | `have` or `want` |
 | `accepts` | TEXT, not null | `cash`, `trade`, or `both` — what the poster will take in return |
-| `game` | TEXT, default `mtg` | |
+| `game` | TEXT, default `mtg` | Id of a registered game (`src/games/`). A listing of a game the server has since disabled is kept but hidden from search and digests |
+| `language` | TEXT, not null, default `en` | `en`, `ja`, `de`, `fr`, `it`, `es`, `pt`, `ko`, `zh-cn`, `zh-tw` or `ru` (`LISTING_LANGUAGES`). Fixed when the listing is posted |
 | `card_name` | TEXT | Canonical name from Scryfall, or raw input on resolution failure |
 | `card_name_normalized` | TEXT | Search key (see Search Logic) |
 | `card_set` | TEXT, nullable | Scryfall set code |
 | `card_image_url` | TEXT, nullable | |
-| `finish` | TEXT, nullable | `nonfoil`, `foil`, or `etched` |
+| `finish` | TEXT, nullable | `nonfoil`, `foil`, `etched` or `reverse` (Reverse Holo). Which of these a card can have depends on its game (`GameDefinition.finishes`) |
 | `variant` | TEXT, nullable | `extended`, `showcase`, `borderless`, `retro`, or `full` |
 | `collector_number` | TEXT, nullable | |
 | `market_url` | TEXT, nullable | Link to this printing (card) or product (sealed) on the game's marketplace (Manapool for MTG). Renamed from `manapool_url` in migration 0005 |
-| `condition` | TEXT, nullable | `nm`, `lp`, `mp`, `hp`, or `dmg`. Always null for a sealed listing (`kind: sealed`) |
+| `condition` | TEXT, nullable | `nm`, `lp`, `mp`, `hp`, `dmg` or `graded`. Always null for a sealed listing (`kind: sealed`) |
+| `grading_company` | TEXT, nullable | `PSA`, `BGS`, `CGC`, `SGC`, `TAG` or `ACE`; set exactly when `condition` is `graded` |
+| `grade` | TEXT, nullable | The grade without the company (`10`, `9.5`); set exactly when `condition` is `graded` |
 | `price_cents` | INTEGER, nullable | Asking price for `have`, max price for `want` |
 | `kind` | TEXT, not null, default `card` | `card` or `sealed` — see `ListingKind`/`LISTING_KINDS` in `src/types/index.ts` |
 | `catalog_id` | TEXT, nullable | Source-catalog id of the matched sealed product (MTGJSON `sealed_cache.uuid` for MTG); null if `kind: card` or the product wasn't in the catalog. Renamed from `sealed_uuid` in migration 0005 |
@@ -180,6 +188,52 @@ outcome, so the boot warm-up (`isSealedCatalogStale`) doesn't re-check a
 catalog that's already current on every restart. Only a failed run leaves the
 row untouched, so a failure can't convince the next run the catalog is fresh.
 
+### `catalog_sets`
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `game`, `language`, `id` | TEXT, composite PK | `id` is the source's set id (a TCGCSV `groupId`) as text; set codes are not unique, sometimes empty and can contain spaces, so nothing keys on them |
+| `name` | TEXT | Set name with the source's `SV01:`-style prefix removed |
+| `code` | TEXT, default `''` | Abbreviation members see and type (`OBF`); empty when the source has none |
+| `release_date` | TEXT, nullable | Only a real `T00:00:00` date is kept; the source's build-stamped placeholders become null |
+| `supplemental` | INTEGER | 1 for a supplemental set, which a typed set code prefers not to land on |
+| `etag` | TEXT, nullable | ETag of the set's product list at the last import, for `If-None-Match` |
+| `updated_at` | INTEGER | |
+
+Index: `(game, code)`.
+
+### `catalog_items`
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `game`, `kind`, `language`, `id` | TEXT, composite PK | `kind` is `card` or `sealed`; `id` is the source's product id (a TCGCSV `productId`) |
+| `name` | TEXT | Display name, with a printing qualifier such as `(Poke Ball Pattern)` kept and the product's own ` - 058/078` suffix removed |
+| `name_normalized` | TEXT | Search key for the full name |
+| `base_normalized` | TEXT | The name without its trailing parenthetical, normalized; what `listings.card_name_normalized` holds and `/search` matches on, so every printing of a card finds the others |
+| `set_id` | TEXT | `catalog_sets.id` |
+| `number` | TEXT, nullable | Collector number numerator as printed (`125`, `H25`, `TG01`); null for sealed |
+| `category` | TEXT, nullable | Reserved for the sealed product classifier; null for cards |
+| `updated_at` | INTEGER | |
+
+Holds identity only. Prices and stock are never requested or stored, and a
+product's image and TCGplayer link are derived from `id` (`src/utils/tcgplayer.ts`)
+rather than stored. Indexes: `(game, kind, name_normalized)`,
+`(game, kind, base_normalized)`, `(game, kind, set_id)`. `listings.catalog_id`
+holds the product id for a Pokémon listing, `listings.market_url` its TCGplayer
+link, frozen at posting like Magic's.
+
+### `catalog_sync_meta`
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `source` | TEXT PK | `tcgcsv:pokemon` |
+| `fingerprint` | TEXT, nullable | TCGCSV's `last-updated.txt` value at the last clean run |
+| `synced_at` | INTEGER | Last time a run completed cleanly (import, or nothing to import) |
+
+Written only after a run in which every group imported or came back `304`; a
+partial run leaves it alone, so the next run retries instead of trusting a
+half-filled catalog.
+
 ### `admin_audit_log`
 
 | Column | Type | Notes |
@@ -205,15 +259,15 @@ are public. `/mylistings`, `/edit`, `/fulfill`, `/delete`, `/help`, and every
 
 | Command | Parameters | Behavior |
 |---------|-----------|----------|
-| `/have` | `card_name`*, `accepts`*, `condition`*, `set?`, `finish?`, `variant?`, `collector_number?`, `price?`, `quantity?` (1–99, default 1), `notes?` | Posts one card you have. Resolves via Scryfall; rejects with an ephemeral error if unresolvable. |
-| `/want` | `card_name`*, `accepts`*, `set?`, `condition?`, `finish?`, `variant?`, `collector_number?`, `max_price?`, `notes?` | Posts one card you want. `condition` is the desired condition and is optional. |
-| `/have-sealed` | `product_name`*, `accepts`*, `set?`, `price?`, `quantity?` (1–99, default 1), `notes?` | Posts sealed product you have. Resolves against the local MTGJSON catalog; unlike `/have`, an unresolved product still posts — with the raw typed name and no Manapool link — rather than being rejected. No `condition`, `finish`, `variant`, or `collector_number` option. |
-| `/want-sealed` | `product_name`*, `accepts`*, `set?`, `max_price?`, `notes?` | Posts sealed product you want. Same catalog-miss behavior as `/have-sealed`. No `quantity` option (defaults to 1). |
-| `/have-multi` | modal, up to 3 lines `Card Name \| condition \| price \| qty` + `accepts` | Opens a modal to post up to 3 "have" listings in one submission. Each line is resolved and inserted independently; failures are reported per line. |
-| `/want-multi` | modal, up to 3 lines `Card Name \| condition \| max_price` + `accepts` | Same as above for "want" listings. |
-| `/search` | `card_name`*, `intent?` (`have`/`want`), `accepts?` (`cash`/`trade`/`both`), `page?` | Searches active listings, 10 per page, newest first. |
+| `/have` | `card_name`*, `accepts`*, `condition`*, `set?`, `finish?`, `variant?`, `collector_number?`, `price?`, `quantity?` (1–99, default 1), `notes?`, `game?`, `language?`, `grade?` | Posts one card you have. Resolves through the card's game (Scryfall for Magic); rejects with an ephemeral error if unresolvable. `condition: graded` requires `grade` (`PSA 10`, `BGS 9.5`, …), and `grade` is rejected with any other condition. `game` appears only once more than one game is registered. |
+| `/want` | `card_name`*, `accepts`*, `set?`, `condition?`, `finish?`, `variant?`, `collector_number?`, `max_price?`, `notes?`, `game?`, `language?`, `grade?` | Posts one card you want. `condition` is the desired condition and is optional; `grade` follows the same rule as `/have`. |
+| `/have-sealed` | `product_name`*, `accepts`*, `set?`, `price?`, `quantity?` (1–99, default 1), `notes?`, `game?`, `language?` | Posts sealed product you have. Resolves against the local MTGJSON catalog; unlike `/have`, an unresolved product still posts — with the raw typed name and no Manapool link — rather than being rejected. No `condition`, `finish`, `variant`, or `collector_number` option. |
+| `/want-sealed` | `product_name`*, `accepts`*, `set?`, `max_price?`, `notes?`, `game?`, `language?` | Posts sealed product you want. Same catalog-miss behavior as `/have-sealed`. No `quantity` option (defaults to 1). |
+| `/have-multi` | `type?`, `game?`, `language?`, then a modal: up to 3 lines `Card Name \| condition \| price \| qty` + `accepts` | Opens a modal to post up to 3 "have" listings in one submission. Each line is resolved and inserted independently; failures are reported per line. The condition column takes a grade (`PSA 10`) for a graded slab. A chosen `game` and `language` ride in the modal's custom ID and apply to every line. |
+| `/want-multi` | `type?`, `game?`, `language?`, then a modal: up to 3 lines `Card Name \| condition \| max_price` + `accepts` | Same as above for "want" listings. |
+| `/search` | `card_name`*, `intent?` (`have`/`want`), `accepts?` (`cash`/`trade`/`both`), `game?`, `page?` | Searches active listings, 10 per page, newest first. Searches every game the server has enabled; a picked suggestion's game or `game` narrows it to one. |
 | `/mylistings` | `page?` | Shows the caller's own active listings (2 per page) with per-listing Fulfill/Delete buttons, plus batch-delete, batch-fulfill, and batch-edit select menus covering their most recent 25 active listings. |
-| `/edit` | `listing_id`*, then a modal (`condition`, `price`, `quantity`, `set`, `notes`, all optional) | Owner-only. If `set` changes, re-resolves the listing against Scryfall (card) or the sealed catalog (`kind: sealed`) and updates the resulting fields (`card_name`, `card_image_url`, `collector_number`, `market_url` for a card; `card_name`, `market_url`, and the three `sealed_*` columns for sealed product) to match. The modal for a sealed listing omits the `condition` row entirely — sealed product is NM by definition. A card set-resolution failure aborts the edit with an error; a sealed catalog miss does not — it writes the free-text result, matching how `/have-sealed`/`/want-sealed` creation behaves. |
+| `/edit` | `listing_id`*, then a modal (`condition`, `price`, `quantity`, `set`, `notes`, all optional) | Owner-only. The `condition` row takes a raw condition or a grade (`PSA 10`, meaning graded); language can't be edited. If `set` changes, re-resolves the listing through its own game's catalog (Scryfall for a Magic card, the sealed catalog for `kind: sealed`) and updates the resulting fields (`card_name`, `card_image_url`, `collector_number`, `market_url` for a card; `card_name`, `market_url`, and the three `sealed_*` columns for sealed product) to match. The modal for a sealed listing omits the `condition` row entirely — sealed product is NM by definition. A card set-resolution failure aborts the edit with an error; a sealed catalog miss does not — it writes the free-text result, matching how `/have-sealed`/`/want-sealed` creation behaves. |
 | `/fulfill` | `listing_id`* | Owner-only. Sets `status: fulfilled`. |
 | `/delete` | `listing_id`* | Owner-only. Sets `status: deleted`. |
 | `/help` | — | Static command summary. |
@@ -249,6 +303,7 @@ Every invocation is written to `admin_audit_log`.
 | `/admin mode` | `mode`* | `disabled`, `channel`, `dm`, or `both`. |
 | `/admin remove` | `listing_id`* | Moderator removal of any listing in the guild (no ownership check, only same-server). |
 | `/admin history` | — | Shows the 10 most recent admin actions for the guild. |
+| `/admin games` | `game`* (a registered game), `enabled`* (boolean) | Enables or disables a game for the server. A disabled game's listings are kept but hidden from search and digests, and the last enabled game can't be disabled. |
 
 Any change to `schedule`, `timezone`, or a `mode` transition into an active
 mode re-creates that server's cron job (`refreshServerDigest`); `mode:
@@ -267,7 +322,7 @@ exactly that kind of mismatch.
 | `lfc:editmodal:{id}[:q1,q2,...]` | `encodeEditModalId` / `decodeEditModalId` | Opening the edit modal, optionally with a queue of remaining listing IDs for a batch edit |
 | `lfc:editnext:{id}[:q1,q2,...]` | `encodeEditNextId` / `decodeEditNextId` | The "Edit next" button shown after a queued edit modal submits (a modal submission can't itself open another modal, but a button interaction can) |
 | `lfc:batchdelete` / `lfc:batchfulfill` / `lfc:batchedit` | `encodeBatchSelectId` / `decodeBatchSelectId` | The three select menus on `/mylistings` |
-| `lfc:havemultimodal` / `lfc:wantmultimodal` | fixed constants, no dynamic segment | `/have-multi`, `/want-multi` |
+| `lfc:havemultimodal:{kind}[:{game}:{language}]` / `lfc:wantmultimodal:{kind}[:{game}:{language}]` | `encodeMultiModalId` / `decodeMultiModal` (`decodeMultiModalKind` for just the kind) | `/have-multi`, `/want-multi`. `kind` is `card` or `sealed`; `game` and `language` are present only when the member chose them, and either may be empty (`…:card::ja`). An id without them decodes as a card modal for the server's default game, no language |
 
 A batch-edit queue is carried entirely in the custom ID string as a
 comma-joined list of listing IDs — no server-side session state is needed.
@@ -304,6 +359,20 @@ Service: `src/services/sealed.ts`. Backs `/have-sealed`, `/want-sealed`, and `/e
 - **Autocomplete** (`autocompleteSealedProducts`, `autocompleteSealedSets`): both query `sealed_cache` directly, so — unlike Scryfall card autocomplete — no external request happens per keystroke. The set option only offers codes with sealed product on record.
 - Display: `formatSealedType` (`src/utils/constants.ts`) renders MTGJSON `category`/`subtype` values (`booster_box` → "Booster Box"), with a manual override map for values plain title-casing gets wrong and an empty-string result for MTGJSON's placeholder values (`unknown`/`default`/`other`) so callers omit the field.
 
+## Pokémon Catalog
+
+Services: `src/services/tcgcsv.ts` (sync), `src/services/catalog.ts` (search and
+resolution), `src/services/game-catalogs.ts` (which catalogs to keep fresh), game
+definition `src/games/pokemon.ts`, name parsing `src/utils/catalog-names.ts`.
+
+- **Source**: TCGCSV (tcgcsv.com) alone, English (category 3) and Japan (category 85). TCGdex and pokemontcg.io aren't used (`docs/MULTI_GAME_PLAN.md` §11 has the probes that led here).
+- **Sync** (`syncPokemonCatalog`): follows TCGCSV's usage guidelines. Reads `last-updated.txt` first and stops if it matches the stored fingerprint; otherwise lists each category's groups and fetches each group's products with `If-None-Match`, so an unchanged group is a `304`. Requests carry `User-Agent: LFCbot/<version> (+<repository>)` and are at least 150 ms apart. Each group imports in its own transaction; groups TCGCSV no longer lists are pruned; a `404` group is an empty one; five groups failing in a row abort the run. `catalog_sync_meta` is stamped only on a fully clean run. An in-flight guard keeps two syncs from overlapping. A first sync is about 681 requests and 74 MB and takes several minutes; steady state is one request. No prices are requested or stored.
+- **When it runs**: only while some server has Pokémon enabled (`catalogGamesInUse` in `game-catalogs.ts`). Daily at 21:00 UTC (`startGameCatalogSync` in `scheduler.ts`), at boot when the catalog is missing or a day old (`warmUpGameCatalogs` in `ready.ts`), and when an admin enables a game whose catalog is stale (`refreshCatalogIfStale`, called by `/admin games`). All swallow rejections; the sync logs its own failures.
+- **Names**: TCGCSV product names embed the number (`Pikachu - 058/078`), sometimes redundantly (`(58)`) or with leading zeros. `cleanProductName` strips those, `baseProductName` drops a trailing printing parenthetical, `normalizeCardName` folds `♀`/`♂` to `f`/`m` so Nidoran♀ is findable. A set's label is its code uppercased, or its name cut to 10 characters, so the edit modal's `set` field round-trips.
+- **Resolution** (`resolveCatalogCard`): a picked suggestion's value is `id:<product id>` and resolves to exactly that product; a typed name resolves by `base_normalized`, preferring an exact base match, then names containing every token, then shorter names, English before Japanese, non-supplemental sets, then newest. A typed `set` matches by code or name prefix (LIKE metacharacters escaped), a `collector_number` by `number`. A language the catalog fixes (Japanese) decides the listing's language and a contradicting `language` option is rejected.
+- **Links and images** come from the product id: `https://www.tcgplayer.com/product/<id>` and `https://tcgplayer-cdn.tcgplayer.com/product/<id>_200w.jpg`. Neither host is reachable from the development environment, so both URL shapes are unverified; Discord and members fetch them, not the bot.
+- **Autocomplete**: local queries only, so no external request per keystroke. A server with Pokémon and Magic gets one merged, tagged list (`pkm:id:<product id>`); a game that misses the 2.5 s deadline is dropped from it.
+
 ## Digest System
 
 Services: `src/services/digest.ts`, `src/services/digest-state.ts`, `src/services/scheduler.ts`.
@@ -336,11 +405,11 @@ NEW WANTS (2)
 Service: `src/services/listings.ts`, command: `src/commands/user/search.ts`.
 
 1. Normalize the input card name (`normalizeCardName`: NFKD-normalize, strip diacritics, lowercase, collapse non-alphanumerics) and match against `card_name_normalized`.
-2. Always filter by `server_id` and `status = active`.
+2. Always filter by `server_id` and `status = active`, and to the games the search covers: every game the server has enabled, or the one a picked suggestion's tag or the `game` option names.
 3. Optionally filter by `intent` (exact match).
 4. Optionally filter by `accepts` — see "Accepts both" semantics above.
 5. Order `created_at DESC`, 10 per page.
-6. No results → ephemeral "No active listings found for that card." Otherwise a public embed, one field per listing: `#{id} · {Intent} · {Accepts} · @{username}`, value line `CONDITION · price · qty N` (fields omitted when null). A sealed listing has no `condition`, so its value line substitutes the MTGJSON category (via `formatSealedType`) in that slot when one is known.
+6. No results → ephemeral "No active listings found for that card." Otherwise a public embed, one field per listing: `#{id} · {Intent} · {Accepts} · @{username}`, value line `CONDITION · language · game · price · qty N` (fields omitted when null; a graded slab shows its grade, e.g. `PSA 10`, in place of the condition; the language shows only when it isn't English and the game only when the server has several). A sealed listing has no `condition`, so its value line substitutes the MTGJSON category (via `formatSealedType`) in that slot when one is known.
 
 Search itself needed no changes for sealed listings — they're ordinary `listings` rows keyed on the same `card_name_normalized` column as card listings, so `/search`, `/mylistings`, and digest collection find them without any `kind`-specific query logic. Rendering (`/search`, `/mylistings`, and `listingEmbed`'s "Product" field on the full listing embed) is the only place that branches on `kind`.
 
@@ -420,6 +489,9 @@ lfc-bot/
       scryfall.ts
       manapool.ts
       sealed.ts
+      tcgcsv.ts
+      catalog.ts
+      game-catalogs.ts
       digest.ts
       digest-state.ts
       scheduler.ts
@@ -496,13 +568,13 @@ DISCORD_ALERT_WEBHOOK_URL=
 - All database access uses Drizzle parameter binding.
 - Admin commands require Manage Server permission, enforced both declaratively and at runtime.
 - Users can only edit, fulfill, or delete their own listings; `/admin remove` is the only moderation override, scoped to the same server.
-- Stored data is limited to Discord user IDs, display names, listing content, and Scryfall/MTGJSON/Manapool card and sealed-product metadata. Manapool pricing data is cached transiently for card printings only (`card_cache.manapool_price_cents`, 24h TTL); sealed listings never store or display any Manapool pricing data.
+- Stored data is limited to Discord user IDs, display names, listing content, and Scryfall/MTGJSON/Manapool/TCGCSV card and sealed-product metadata (TCGCSV: names, sets and numbers only, never prices). Manapool pricing data is cached transiently for card printings only (`card_cache.manapool_price_cents`, 24h TTL); sealed listings never store or display any Manapool pricing data.
 - When the bot is removed from a guild, that guild's data is marked for deletion and purged after 30 days.
 - The bot does not send unsolicited DMs outside configured digests.
 
 ## Assumptions and Defaults
 
-- Magic: The Gathering is the only supported game.
+- Magic: The Gathering and Pokémon are registered; a server has only Magic enabled until an admin changes `/admin games`. Pokémon sealed product isn't offered yet.
 - SQLite is the database; a future PostgreSQL migration would require type and migration adjustments, not just a driver swap.
 - Digest cron defaults to `0 9 * * *`; timezone defaults to `UTC`; mode defaults to `disabled` until an admin configures delivery.
 - Active listings expire after 30 days.

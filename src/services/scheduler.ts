@@ -9,11 +9,13 @@ import { runDigest } from './digest.js';
 import { expireListings, purgeMarkedServers } from './listing-expiry.js';
 import { pruneExpiredCardCache } from './card-cache.js';
 import { syncSealedCatalog } from './sealed.js';
+import { syncEnabledGameCatalogs } from './game-catalogs.js';
 import { GUILD_RETENTION_MS } from '../utils/constants.js';
 
 const jobs = new Map<string, ScheduledTask>();
 let maintenanceTask: ScheduledTask | null = null;
 let sealedTask: ScheduledTask | null = null;
+let gameCatalogTask: ScheduledTask | null = null;
 
 /**
  * Schedule digest jobs for every server with an active delivery mode. Called
@@ -91,6 +93,30 @@ export function startSealedCatalogSync(): void {
   );
 }
 
+/**
+ * Start the daily sync of the catalogs of games a server has enabled
+ * (Pokémon's, from TCGCSV).
+ *
+ * Runs at 21:00 UTC: TCGCSV rebuilds around 20:00 UTC and its last build was
+ * observed finishing about six minutes after, so this leaves a wide margin.
+ * Even a run that lands before the rebuild is harmless, since the sync checks
+ * `last-updated.txt` first and a day with nothing new is a single request.
+ */
+export function startGameCatalogSync(): void {
+  if (gameCatalogTask) {
+    return;
+  }
+  gameCatalogTask = cron.schedule(
+    '0 21 * * *',
+    () => {
+      // The sync catches and logs its own failures; guard the rejection anyway,
+      // since an unhandled one would fire a critical alert over a skipped refresh.
+      void syncEnabledGameCatalogs().catch(() => undefined);
+    },
+    { timezone: 'UTC' },
+  );
+}
+
 /** Cancel all cron jobs. Called during graceful shutdown. */
 export function stopAllJobs(): void {
   for (const id of [...jobs.keys()]) {
@@ -103,6 +129,10 @@ export function stopAllJobs(): void {
   if (sealedTask) {
     void sealedTask.stop();
     sealedTask = null;
+  }
+  if (gameCatalogTask) {
+    void gameCatalogTask.stop();
+    gameCatalogTask = null;
   }
 }
 

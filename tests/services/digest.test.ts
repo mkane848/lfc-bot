@@ -1,5 +1,5 @@
 import type { Client } from 'discord.js';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getDb } from '../../src/db/index.js';
 import {
   listings,
@@ -12,6 +12,12 @@ import { formatDigest, runDigest, splitDigestMessage } from '../../src/services/
 import { getServerConfig } from '../../src/services/digest-state.js';
 import { DIGEST_SECTION_CAP, DISCORD_MESSAGE_MAX_LENGTH } from '../../src/utils/constants.js';
 import { setupTestDb } from '../helpers/db.js';
+import {
+  enableGames,
+  FAKE_GAME_ID,
+  registerFakeGame,
+  unregisterFakeGame,
+} from '../helpers/games.js';
 
 setupTestDb();
 
@@ -24,6 +30,7 @@ function listing(overrides: Partial<ListingRow> = {}): ListingRow {
     intent: 'have',
     accepts: 'cash',
     game: 'mtg',
+    language: 'en',
     cardName: 'Black Lotus',
     cardNameNormalized: 'black lotus',
     cardSet: 'LEA',
@@ -33,6 +40,8 @@ function listing(overrides: Partial<ListingRow> = {}): ListingRow {
     collectorNumber: null,
     marketUrl: null,
     condition: 'nm',
+    gradingCompany: null,
+    grade: null,
     priceCents: 4500000,
     quantity: 1,
     notes: null,
@@ -277,4 +286,131 @@ describe('runDigest on a busy day', () => {
     expect(result.channelOk).toBe(false);
     expect(getServerConfig('500')!.lastDigestAt).toBe(0);
   }, 10_000);
+});
+
+describe('formatDigest language, grade and game', () => {
+  it('shows a graded slab as its grade instead of "Graded"', () => {
+    const text = formatDigest([
+      listing({ condition: 'graded', gradingCompany: 'PSA', grade: '10' }),
+    ]);
+    expect(text).toContain('- Black Lotus (LEA) — PSA 10 — $45,000.00 — @alice');
+  });
+
+  it('shows a non-English listing’s language after its condition, and nothing for English', () => {
+    expect(formatDigest([listing({ language: 'ja' })])).toContain('(LEA) — NM — JA — $45,000.00');
+    expect(formatDigest([listing()])).not.toMatch(/ — EN\b/);
+  });
+
+  it('adds the game’s short name only when asked, for a server with several games', () => {
+    expect(formatDigest([listing()], { showGame: true })).toContain('(LEA) — NM — MTG —');
+    expect(formatDigest([listing()])).not.toContain('MTG');
+  });
+});
+
+describe('formatDigest across games', () => {
+  beforeEach(() => {
+    registerFakeGame({
+      fallbackMarketUrl: () => 'https://fake.example/fallback',
+    });
+  });
+
+  afterEach(() => {
+    unregisterFakeGame();
+  });
+
+  it('labels the link with the listing’s own marketplace', () => {
+    const text = formatDigest([
+      listing({ id: 1, marketUrl: 'https://manapool.com/card/lea/232/black-lotus' }),
+      listing({ id: 2, game: FAKE_GAME_ID, marketUrl: 'https://fake.example/product/7' }),
+    ]);
+    expect(text).toContain('[View on Manapool](https://manapool.com/card/lea/232/black-lotus)');
+    expect(text).toContain('[View on FakeMarket](https://fake.example/product/7)');
+  });
+
+  it('falls back to the listing’s own game for a link it never stored, never another game’s', () => {
+    const text = formatDigest([
+      listing({ id: 1, collectorNumber: '232' }),
+      listing({ id: 2, game: FAKE_GAME_ID, cardName: 'Fake Card' }),
+      listing({ id: 3, cardName: 'No Number' }),
+    ]);
+    expect(text).toContain('[View on Manapool](https://manapool.com/card/lea/232/black-lotus)');
+    expect(text).toContain(
+      'Fake Card (LEA) — NM — $45,000.00 — @alice — [View on FakeMarket](https://fake.example/fallback)',
+    );
+    expect(text.endsWith('- No Number (LEA) — NM — $45,000.00 — @alice')).toBe(true);
+  });
+
+  it('keeps a stored link, with a generic label, when the listing’s game is no longer registered', () => {
+    unregisterFakeGame();
+    const text = formatDigest([
+      listing({ game: FAKE_GAME_ID, marketUrl: 'https://fake.example/product/7' }),
+    ]);
+    expect(text).toContain('[View on Market](https://fake.example/product/7)');
+  });
+});
+
+describe('runDigest across games', () => {
+  beforeEach(() => {
+    registerFakeGame();
+  });
+
+  afterEach(() => {
+    unregisterFakeGame();
+  });
+
+  async function digestText(): Promise<string> {
+    const send = vi.fn().mockResolvedValue(undefined);
+    await runDigest(fakeClientWithChannelSend(send), getServerConfig('500')!, 'scheduled');
+    return (send.mock.calls as Array<[{ content: string }]>).map(([o]) => o.content).join('\n');
+  }
+
+  it('leaves out the listings of a game the server has disabled, and keeps them stored', async () => {
+    getDb().insert(servers).values(serverRow).run();
+    addListing({ cardName: 'Magic Card', cardNameNormalized: 'magic card' });
+    addListing({
+      game: FAKE_GAME_ID,
+      cardName: 'Fake Card',
+      cardNameNormalized: 'fake card',
+    });
+
+    const text = await digestText();
+
+    expect(text).toContain('Magic Card');
+    expect(text).not.toContain('Fake Card');
+    expect(getDb().select().from(listings).all()).toHaveLength(2);
+  });
+
+  it('includes them again, tagged with their game, once the game is enabled', async () => {
+    getDb().insert(servers).values(serverRow).run();
+    enableGames('500', ['mtg', FAKE_GAME_ID]);
+    addListing({ cardName: 'Magic Card', cardNameNormalized: 'magic card' });
+    addListing({ game: FAKE_GAME_ID, cardName: 'Fake Card', cardNameNormalized: 'fake card' });
+
+    const text = await digestText();
+
+    expect(text).toContain('Magic Card — NM — MTG');
+    expect(text).toContain('Fake Card — NM — FKG');
+  });
+
+  it('does not tag the game on a server that only has one', async () => {
+    getDb().insert(servers).values(serverRow).run();
+    addListing();
+    expect(await digestText()).not.toContain('MTG');
+  });
+
+  it('sends nothing, and keeps the watermark, when the only new listings belong to a disabled game', async () => {
+    getDb().insert(servers).values(serverRow).run();
+    addListing({ game: FAKE_GAME_ID });
+    const send = vi.fn().mockResolvedValue(undefined);
+
+    const result = await runDigest(
+      fakeClientWithChannelSend(send),
+      getServerConfig('500')!,
+      'scheduled',
+    );
+
+    expect(result.sent).toBe(false);
+    expect(send).not.toHaveBeenCalled();
+    expect(getServerConfig('500')!.lastDigestAt).toBe(0);
+  });
 });

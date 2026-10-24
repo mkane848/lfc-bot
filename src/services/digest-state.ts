@@ -1,6 +1,7 @@
-import { and, asc, eq, gte, lte, ne } from 'drizzle-orm';
+import { and, asc, eq, gte, inArray, lte, ne } from 'drizzle-orm';
 import { getDb } from '../db/index.js';
 import { listings, servers, type ListingRow, type ServerRow } from '../db/schema.js';
+import { enabledGameIdsFromConfig } from '../games/index.js';
 import {
   DEFAULT_DIGEST_CRON,
   DEFAULT_DIGEST_MODE,
@@ -22,7 +23,8 @@ export function listScheduledServers(): ServerRow[] {
  * Select the active listings that belong in a digest for this server using the
  * `last_digest_at` watermark. On the very first digest the watermark is the
  * value set when digest config completed, so only listings created afterward
- * are included.
+ * are included. Listings of a game the server has since disabled are left out;
+ * they are kept, and appear again if the game is re-enabled.
  */
 export function prepareDigestListings(server: ServerRow): ListingRow[] {
   const db = getDb();
@@ -34,6 +36,7 @@ export function prepareDigestListings(server: ServerRow): ListingRow[] {
       and(
         eq(listings.serverId, server.id),
         eq(listings.status, 'active'),
+        inArray(listings.game, enabledGameIdsFromConfig(server.enabledGames)),
         gte(listings.createdAt, from),
         lte(listings.createdAt, now()),
       ),

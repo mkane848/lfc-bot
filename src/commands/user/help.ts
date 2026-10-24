@@ -14,7 +14,7 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
     {
       name: 'Post a listing',
       value:
-        '`/have` posts a card you have (accepting cash, trade, or both); `/want` posts a card you want; `/have-sealed` and `/want-sealed` do the same for sealed product (boxes, bundles, decks)',
+        '`/have` posts a card you have (accepting cash, trade, or both); `/want` posts a card you want; `/have-sealed` and `/want-sealed` do the same for sealed product (boxes, bundles, decks). Set `language` for a non-English card or product, and for a graded slab set `condition` to Graded with a `grade` such as `PSA 10`',
       inline: false,
     },
     {

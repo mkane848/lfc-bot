@@ -6,7 +6,8 @@
  * count for the same customId).
  */
 
-import type { ListingKind } from '../types/index.js';
+import type { ListingKind, ListingLanguage } from '../types/index.js';
+import { isListingLanguage } from './validation.js';
 
 const PREFIX = 'lfc';
 
@@ -113,8 +114,16 @@ export const WANT_MULTI_MODAL_ID = `${PREFIX}:wantmultimodal`;
  * other way to know which format the lines were entered in, since a modal
  * submission carries nothing but its custom id and field values.
  */
-export function encodeMultiModalId(baseId: string, kind: ListingKind): string {
-  return `${baseId}:${kind}`;
+export function encodeMultiModalId(
+  baseId: string,
+  kind: ListingKind,
+  extra: { game?: string | null; language?: ListingLanguage | null } = {},
+): string {
+  if (!extra.game && !extra.language) {
+    return `${baseId}:${kind}`;
+  }
+  // Empty trailing segments are dropped (`…:card:pokemon`, not `…:card:pokemon:`).
+  return `${baseId}:${kind}:${extra.game ?? ''}:${extra.language ?? ''}`.replace(/:+$/, '');
 }
 
 /**
@@ -125,4 +134,23 @@ export function encodeMultiModalId(baseId: string, kind: ListingKind): string {
  */
 export function decodeMultiModalKind(customId: string): ListingKind {
   return customId.split(':')[2] === 'sealed' ? 'sealed' : 'card';
+}
+
+/**
+ * Everything a batch-create modal id carries: the listing kind, the `game`
+ * option the member chose when opening it (null for the server's default), and
+ * the `language` option (null for English). Ids from before the game and
+ * language segments existed decode as `card`, default game, no language.
+ */
+export function decodeMultiModal(customId: string): {
+  kind: ListingKind;
+  gameId: string | null;
+  language: ListingLanguage | null;
+} {
+  const [, , kind, game, language] = customId.split(':');
+  return {
+    kind: kind === 'sealed' ? 'sealed' : 'card',
+    gameId: game ? game : null,
+    language: language && isListingLanguage(language) ? language : null,
+  };
 }

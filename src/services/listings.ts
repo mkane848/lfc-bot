@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gte, or, sql } from 'drizzle-orm';
+import { and, count, desc, eq, gte, inArray, or, sql } from 'drizzle-orm';
 import { getDb } from '../db/index.js';
 import { listings, type ListingRow, type NewListingRow } from '../db/schema.js';
 import {
@@ -26,6 +26,7 @@ function insertListingRow(input: ListingCreateInput, created: number): ListingRo
     intent: input.intent,
     accepts: input.accepts,
     game: input.game ?? 'mtg',
+    language: input.language ?? 'en',
     cardName: input.cardName,
     cardNameNormalized: input.cardNameNormalized,
     cardSet: input.cardSet ?? null,
@@ -35,6 +36,8 @@ function insertListingRow(input: ListingCreateInput, created: number): ListingRo
     collectorNumber: input.collectorNumber ?? null,
     marketUrl: input.marketUrl ?? null,
     condition: input.condition ?? null,
+    gradingCompany: input.gradingCompany ?? null,
+    grade: input.grade ?? null,
     priceCents: input.priceCents ?? null,
     kind: input.kind ?? 'card',
     catalogId: input.catalogId ?? null,
@@ -116,10 +119,14 @@ function duplicateWarning(input: ListingCreateInput, at: number): string | undef
         eq(listings.intent, input.intent),
         eq(listings.accepts, input.accepts),
         eq(listings.kind, input.kind ?? 'card'),
+        eq(listings.game, input.game ?? 'mtg'),
+        eq(listings.language, input.language ?? 'en'),
         sql`${listings.finish} IS ${input.finish ?? null}`,
         sql`${listings.variant} IS ${input.variant ?? null}`,
         sql`${listings.collectorNumber} IS ${input.collectorNumber ?? null}`,
         sql`${listings.condition} IS ${input.condition ?? null}`,
+        sql`${listings.gradingCompany} IS ${input.gradingCompany ?? null}`,
+        sql`${listings.grade} IS ${input.grade ?? null}`,
         sql`${listings.priceCents} IS ${input.priceCents ?? null}`,
         gte(listings.createdAt, windowStart),
       ),
@@ -131,16 +138,20 @@ function duplicateWarning(input: ListingCreateInput, at: number): string | undef
   return undefined;
 }
 
-/** Search active listings in a server with pagination, newest first. */
+/**
+ * Search active listings in a server with pagination, newest first. `games`
+ * limits the search to those games' listings; leave it out to search every game.
+ */
 export function searchListings(
   serverId: string,
   cardNameNormalized: string,
   intent: ListingIntent | undefined,
   accepts: Accepts | undefined,
   page: number,
+  games?: readonly string[],
 ): ListingRow[] {
   const db = getDb();
-  const conditions = searchConditions(serverId, cardNameNormalized, intent, accepts);
+  const conditions = searchConditions(serverId, cardNameNormalized, intent, accepts, games);
   const offset = Math.max(0, page - 1) * SEARCH_PAGE_SIZE;
   return db
     .select()
@@ -158,9 +169,10 @@ export function countSearchResults(
   cardNameNormalized: string,
   intent: ListingIntent | undefined,
   accepts: Accepts | undefined,
+  games?: readonly string[],
 ): number {
   const db = getDb();
-  const conditions = searchConditions(serverId, cardNameNormalized, intent, accepts);
+  const conditions = searchConditions(serverId, cardNameNormalized, intent, accepts, games);
   const row = db
     .select({ value: count() })
     .from(listings)
@@ -174,12 +186,17 @@ function searchConditions(
   cardNameNormalized: string,
   intent?: ListingIntent,
   accepts?: Accepts,
+  games?: readonly string[],
 ) {
   const conditions = [
     eq(listings.serverId, serverId),
     eq(listings.status, 'active'),
     eq(listings.cardNameNormalized, cardNameNormalized),
   ];
+  if (games) {
+    // No games at all matches nothing; `inArray` rejects an empty list.
+    conditions.push(games.length > 0 ? inArray(listings.game, [...games]) : sql`0`);
+  }
   if (intent) {
     conditions.push(eq(listings.intent, intent));
   }
@@ -250,6 +267,8 @@ export function updateListing(
   id: number,
   fields: {
     condition?: string | null;
+    gradingCompany?: string | null;
+    grade?: string | null;
     priceCents?: number | null;
     quantity?: number;
     notes?: string | null;
@@ -267,6 +286,8 @@ export function updateListing(
   const db = getDb();
   const update: Partial<NewListingRow> = { updatedAt: now() };
   if (fields.condition !== undefined) update.condition = fields.condition;
+  if (fields.gradingCompany !== undefined) update.gradingCompany = fields.gradingCompany;
+  if (fields.grade !== undefined) update.grade = fields.grade;
   if (fields.priceCents !== undefined) update.priceCents = fields.priceCents;
   if (fields.quantity !== undefined) update.quantity = fields.quantity;
   if (fields.notes !== undefined) update.notes = fields.notes;

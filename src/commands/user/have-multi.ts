@@ -7,19 +7,25 @@ import {
 } from 'discord.js';
 import type { ChatInputCommandInteraction, ModalSubmitInteraction } from 'discord.js';
 import { createListingsBatch, type CreateListingResult } from '../../services/listings.js';
-import { resolveCard } from '../../services/scryfall.js';
-import { resolveSealedProduct } from '../../services/sealed.js';
-import type { GuildCommand, ListingCreateInput, ListingKind } from '../../types/index.js';
+import { resolveGameForValue } from '../../games/index.js';
+import type {
+  GuildCommand,
+  ListingCreateInput,
+  ListingKind,
+  ListingLanguage,
+} from '../../types/index.js';
 import {
   parseBatchAccepts,
   parseHaveBatchLine,
   parseHaveSealedBatchLine,
 } from '../../utils/batch.js';
+import { decodeMultiModal, encodeMultiModalId, HAVE_MULTI_MODAL_ID } from '../../utils/customId.js';
 import {
-  decodeMultiModalKind,
-  encodeMultiModalId,
-  HAVE_MULTI_MODAL_ID,
-} from '../../utils/customId.js';
+  addUniversalOptions,
+  languageFor,
+  readUniversalOptions,
+} from '../../utils/listing-options.js';
+import type { UniversalOptions } from '../../utils/listing-options.js';
 import { replyError, replyPublicText } from '../../utils/replies.js';
 
 const CARD_SLOTS = 3;
@@ -34,10 +40,37 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
     return;
   }
   const kind: ListingKind = interaction.options.getString('type') === 'sealed' ? 'sealed' : 'card';
-  await interaction.showModal(buildHaveMultiModal(kind));
+  let universal: UniversalOptions;
+  try {
+    universal = readUniversalOptions(interaction);
+  } catch (err) {
+    await replyError(interaction, err instanceof Error ? err.message : 'Invalid options.');
+    return;
+  }
+  const resolution = resolveGameForValue({
+    serverId: interaction.guildId,
+    value: '',
+    gameOption: universal.gameOption,
+    kind,
+  });
+  if (!resolution.ok) {
+    await replyError(interaction, resolution.message);
+    return;
+  }
+  // Only a game the member chose is carried in the modal; otherwise it is
+  // whichever the server has first when the modal is submitted.
+  await interaction.showModal(
+    buildHaveMultiModal(kind, {
+      game: universal.gameOption ? resolution.game.id : null,
+      language: universal.language,
+    }),
+  );
 }
 
-function buildHaveMultiModal(kind: ListingKind): ModalBuilder {
+function buildHaveMultiModal(
+  kind: ListingKind,
+  extra: { game: string | null; language: ListingLanguage | null },
+): ModalBuilder {
   const sealed = kind === 'sealed';
   const noun = sealed ? 'Product' : 'Card';
   const format = sealed ? 'name | price | qty' : 'name | condition | price | qty';
@@ -66,7 +99,7 @@ function buildHaveMultiModal(kind: ListingKind): ModalBuilder {
       .setMaxLength(12),
   );
   return new ModalBuilder()
-    .setCustomId(encodeMultiModalId(HAVE_MULTI_MODAL_ID, kind))
+    .setCustomId(encodeMultiModalId(HAVE_MULTI_MODAL_ID, kind, extra))
     .setTitle(sealed ? 'Post multiple sealed products you have' : 'Post multiple cards you have')
     .addComponents(...lineRows, acceptsRow);
 }
@@ -88,7 +121,18 @@ export async function handleHaveMultiModal(interaction: ModalSubmitInteraction):
   }
   await interaction.deferReply({ ephemeral: true });
 
-  const kind = decodeMultiModalKind(interaction.customId);
+  const { kind, gameId, language } = decodeMultiModal(interaction.customId);
+  const resolution = resolveGameForValue({
+    serverId: guild.id,
+    value: '',
+    gameOption: gameId,
+    kind,
+  });
+  if (!resolution.ok) {
+    await replyError(interaction, resolution.message);
+    return;
+  }
+  const { game } = resolution;
   const noun = kind === 'sealed' ? 'Product' : 'Card';
 
   let accepts;
@@ -115,7 +159,7 @@ export async function handleHaveMultiModal(interaction: ModalSubmitInteraction):
         // miss returns a free-text result and still posts, matching
         // `/have-sealed`. A product too new to be in the catalog is exactly
         // what that path is for.
-        const resolved = await resolveSealedProduct(parsed.productName);
+        const resolved = await game.resolveSealed(parsed.productName, {});
         readyInputs.push({
           serverId: guild.id,
           userId: interaction.user.id,
@@ -132,13 +176,14 @@ export async function handleHaveMultiModal(interaction: ModalSubmitInteraction):
           sealedSubtype: resolved.subtype,
           priceCents: parsed.priceCents,
           quantity: parsed.quantity,
-          game: 'mtg',
+          game: game.id,
+          language: languageFor(language, resolved.language),
         });
         readySlots.push(slot);
         continue;
       }
       const parsed = parseHaveBatchLine(raw);
-      const resolved = await resolveCard(parsed.cardName, {});
+      const resolved = await game.resolveCard(parsed.cardName, {});
       if (!resolved.resolved) {
         failures.push({
           slot,
@@ -159,9 +204,13 @@ export async function handleHaveMultiModal(interaction: ModalSubmitInteraction):
         marketUrl: resolved.marketUrl,
         collectorNumber: resolved.collectorNumber,
         condition: parsed.condition,
+        gradingCompany: parsed.gradingCompany,
+        grade: parsed.grade,
+        catalogId: resolved.catalogId ?? null,
         priceCents: parsed.priceCents,
         quantity: parsed.quantity,
-        game: 'mtg',
+        game: game.id,
+        language: languageFor(language, resolved.language),
       });
       readySlots.push(slot);
     } catch (err) {
@@ -215,14 +264,21 @@ export async function handleHaveMultiModal(interaction: ModalSubmitInteraction):
 
 export const haveMultiCommand: GuildCommand = {
   name: 'have-multi',
-  data: new SlashCommandBuilder()
-    .setName('have-multi')
-    .setDescription('Post up to 3 cards or sealed products you have in one go')
-    .addStringOption((option) =>
-      option
-        .setName('type')
-        .setDescription('What you are posting (default: cards)')
-        .addChoices({ name: 'Cards', value: 'card' }, { name: 'Sealed product', value: 'sealed' }),
-    ),
+  data: addUniversalOptions(
+    new SlashCommandBuilder()
+      .setName('have-multi')
+      .setDescription('Post up to 3 cards or sealed products you have in one go')
+      .addStringOption((option) =>
+        option
+          .setName('type')
+          .setDescription('What you are posting (default: cards)')
+          .addChoices(
+            { name: 'Cards', value: 'card' },
+            { name: 'Sealed product', value: 'sealed' },
+          ),
+      ),
+    // `grade` has no home here: a batch line carries its own condition or grade.
+    { grade: false },
+  ),
   execute,
 };

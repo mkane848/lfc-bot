@@ -1,4 +1,4 @@
-> **Status: Phase 0 done, implementation in progress.** Written 2026-10-23 against `main` at
+> **Status: Phase 0 done; PRs 1–4 implemented (PR 5, Pokémon sealed product, is next).** Written 2026-10-23 against `main` at
 > `9060ae9` (v1.6.2); Phase 0 ran on 2026-10-24 and its results are in §11. **Phase 0 changed the
 > plan:** TCGCSV alone is the source of record for Pokémon singles and sealed product (English
 > and Japanese), and TCGdex is no longer used. Sections amended after Phase 0 are marked

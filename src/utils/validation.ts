@@ -11,12 +11,17 @@ import {
   CARD_FINISHES,
   CARD_VARIANTS,
   DIGEST_MODES,
+  GRADING_COMPANIES,
   LISTING_INTENTS,
   LISTING_KINDS,
+  LISTING_LANGUAGES,
 } from '../types/index.js';
+import type { CardCondition, GradingCompany, ListingLanguage } from '../types/index.js';
 
 const COLLECTOR_NUMBER_PATTERN = /^[A-Za-z0-9★-]+$/;
 const MAX_COLLECTOR_NUMBER_LENGTH = 20;
+// A grading company then a grade: 1 to 10, with half grades below 10 (BGS 9.5).
+const GRADE_PATTERN = new RegExp(`^(${GRADING_COMPANIES.join('|')})\\s*(10|[1-9](?:\\.5)?)$`, 'i');
 
 /** Thrown by every `validate*`/`parse*` helper here on user-facing invalid input. */
 export class ValidationError extends Error {}
@@ -44,6 +49,11 @@ export function isCardFinish(value: string): value is (typeof CARD_FINISHES)[num
 /** Type guard for a raw string against the printing-variant enum (extended/showcase/etc.). */
 export function isCardVariant(value: string): value is (typeof CARD_VARIANTS)[number] {
   return (CARD_VARIANTS as readonly string[]).includes(value);
+}
+
+/** Type guard for a raw string against the supported listing languages (`en`, `ja`, …). */
+export function isListingLanguage(value: string): value is ListingLanguage {
+  return (LISTING_LANGUAGES as readonly string[]).includes(value);
 }
 
 /** Type guard for a raw string against the `disabled`/`channel`/`dm`/`both` digest mode enum. */
@@ -136,14 +146,84 @@ export function validateCardName(input: string): string {
 
 /**
  * Normalize a string into a stable search key: lowercase, trim whitespace, and
- * strip punctuation and diacritics.
+ * strip punctuation and diacritics. The gender signs are spelled out first, so
+ * `Nidoran♀` and `Nidoran♂` stay two keys (`nidoran f`, `nidoran m`), matching
+ * the "Nidoran F" the catalog uses, instead of collapsing to one. No Magic card
+ * name has either sign, so existing keys are unchanged.
  */
 export function normalizeCardName(input: string): string {
   return input
+    .replace(/♀/g, ' f')
+    .replace(/♂/g, ' m')
     .normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+/** A graded slab's company and grade, split for storage. */
+export interface ParsedGrade {
+  gradingCompany: GradingCompany;
+  /** The grade as written without the company: `10`, `9.5`. */
+  grade: string;
+}
+
+const GRADE_EXAMPLES = 'PSA 10, BGS 9.5, or CGC 9';
+
+/**
+ * Parse a grade such as `PSA 10`, `psa10` or `BGS 9.5` into its company and
+ * grade. Throws `ValidationError` for an unknown company or an out-of-range grade.
+ */
+export function parseGrade(input: string): ParsedGrade {
+  const match = GRADE_PATTERN.exec(input.trim());
+  if (!match) {
+    throw new ValidationError(
+      `Grade must be a grading company and a grade, such as ${GRADE_EXAMPLES}. ` +
+        `Companies: ${GRADING_COMPANIES.join(', ')}.`,
+    );
+  }
+  return {
+    gradingCompany: (match[1] as string).toUpperCase() as GradingCompany,
+    grade: match[2] as string,
+  };
+}
+
+/** Render a stored company and grade the way members type it: `PSA 10`. */
+export function formatGrade(
+  gradingCompany: string | null | undefined,
+  grade: string | null | undefined,
+): string {
+  return [gradingCompany, grade].filter(Boolean).join(' ');
+}
+
+/** What a free-text "condition or grade" field (a batch line, the `/edit` modal) holds. */
+export interface ParsedConditionOrGrade {
+  condition: CardCondition;
+  gradingCompany: GradingCompany | null;
+  grade: string | null;
+}
+
+/**
+ * Parse a field that takes either a raw condition (`nm`, `lp`, …) or a grade
+ * (`PSA 10`), the latter meaning a `graded` condition. A bare `graded` is
+ * rejected: a graded card without its grade isn't a listing.
+ */
+export function parseConditionOrGrade(input: string): ParsedConditionOrGrade {
+  const trimmed = input.trim();
+  const lowered = trimmed.toLowerCase();
+  if (lowered === 'graded') {
+    throw new ValidationError(`Say which grade, such as ${GRADE_EXAMPLES}.`);
+  }
+  if (isCardCondition(lowered)) {
+    return { condition: lowered, gradingCompany: null, grade: null };
+  }
+  if (GRADE_PATTERN.test(trimmed)) {
+    const { gradingCompany, grade } = parseGrade(trimmed);
+    return { condition: 'graded', gradingCompany, grade };
+  }
+  throw new ValidationError(
+    `Invalid condition "${trimmed}". Use nm, lp, mp, hp, dmg, or a grade such as ${GRADE_EXAMPLES}.`,
+  );
 }

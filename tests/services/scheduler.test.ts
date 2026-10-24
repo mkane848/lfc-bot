@@ -8,9 +8,11 @@ import {
   refreshServerDigest,
   removeServerDigest,
   scheduleAllDigests,
+  startGameCatalogSync,
   startSealedCatalogSync,
   stopAllJobs,
 } from '../../src/services/scheduler.js';
+import { syncEnabledGameCatalogs } from '../../src/services/game-catalogs.js';
 import { syncSealedCatalog } from '../../src/services/sealed.js';
 import { setupTestDb } from '../helpers/db.js';
 
@@ -19,13 +21,20 @@ vi.mock('../../src/services/sealed.js', () => ({
   isSealedCatalogStale: vi.fn(),
 }));
 
+vi.mock('../../src/services/game-catalogs.js', () => ({
+  syncEnabledGameCatalogs: vi.fn(),
+}));
+
 setupTestDb();
 
 const mockSyncSealedCatalog = vi.mocked(syncSealedCatalog);
+const mockSyncGameCatalogs = vi.mocked(syncEnabledGameCatalogs);
 
 beforeEach(() => {
   mockSyncSealedCatalog.mockReset();
   mockSyncSealedCatalog.mockResolvedValue({ imported: 0, removed: 0 });
+  mockSyncGameCatalogs.mockReset();
+  mockSyncGameCatalogs.mockResolvedValue(undefined);
 });
 
 // `createJob`/`cancelJob` are internal to the scheduler module (not exported);
@@ -188,6 +197,66 @@ describe('startSealedCatalogSync', () => {
     startSealedCatalogSync();
     stopAllJobs();
     startSealedCatalogSync();
+
+    expect(scheduleSpy).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('startGameCatalogSync', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('registers a daily 21:00 UTC cron job, after TCGCSV’s ~20:00 UTC rebuild', () => {
+    const scheduleSpy = vi.spyOn(cron, 'schedule');
+
+    startGameCatalogSync();
+
+    expect(scheduleSpy).toHaveBeenCalledTimes(1);
+    expect(scheduleSpy).toHaveBeenCalledWith('0 21 * * *', expect.any(Function), {
+      timezone: 'UTC',
+    });
+  });
+
+  it('is idempotent: a second call does not register another job', () => {
+    const scheduleSpy = vi.spyOn(cron, 'schedule');
+
+    startGameCatalogSync();
+    startGameCatalogSync();
+
+    expect(scheduleSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('syncs the enabled games’ catalogs from the scheduled callback without throwing', () => {
+    const scheduleSpy = vi.spyOn(cron, 'schedule');
+
+    startGameCatalogSync();
+
+    const callback = scheduleSpy.mock.calls[0]?.[1] as () => void;
+    expect(() => callback()).not.toThrow();
+    expect(mockSyncGameCatalogs).toHaveBeenCalledTimes(1);
+  });
+
+  it('turns a rejected sync into nothing, so the process-level handler is not alerted', async () => {
+    const unhandled = vi.fn();
+    process.once('unhandledRejection', unhandled);
+    mockSyncGameCatalogs.mockRejectedValue(new Error('boom'));
+    const scheduleSpy = vi.spyOn(cron, 'schedule');
+
+    startGameCatalogSync();
+    (scheduleSpy.mock.calls[0]?.[1] as () => void)();
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(unhandled).not.toHaveBeenCalled();
+    process.off('unhandledRejection', unhandled);
+  });
+
+  it('stopAllJobs clears the job so a subsequent call registers a fresh one', () => {
+    const scheduleSpy = vi.spyOn(cron, 'schedule');
+
+    startGameCatalogSync();
+    stopAllJobs();
+    startGameCatalogSync();
 
     expect(scheduleSpy).toHaveBeenCalledTimes(2);
   });

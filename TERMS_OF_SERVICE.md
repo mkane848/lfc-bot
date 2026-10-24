@@ -1,6 +1,6 @@
 # Terms of Service
 
-**Effective Date:** August 29, 2026
+**Effective Date:** October 24, 2026
 
 These Terms of Service ("Terms") govern your use of LFCbot ("the Bot"). By using the Bot, you agree to these Terms. If you do not agree, please do not use the Bot.
 
@@ -10,7 +10,7 @@ LFCbot is provided as-is for personal, non-commercial use on Discord servers. Yo
 - Use the Bot only in compliance with Discord's Terms of Service and Community Guidelines
 - Not reverse-engineer, decompile, or attempt to discover the source code (except where permitted by the MIT License)
 - Not use the Bot for illegal activities or to facilitate illegal transactions
-- Respect intellectual property rights, including Wizards of the Coast's Magic: The Gathering IP
+- Respect intellectual property rights, including Wizards of the Coast's Magic: The Gathering IP and the owners of the Pokémon IP
 
 ## 2. Acceptable Use
 
@@ -77,7 +77,8 @@ To report violations of these Terms or illegal activity:
 - **Bot Source Code**: Licensed under the MIT License. See [LICENSE](LICENSE) for details.
 - **Card Data**: Magic: The Gathering card information is provided by Scryfall. All card names, images, and data are the property of Wizards of the Coast.
 - **Sealed Product Data**: Sealed product catalog information (booster boxes, bundles, and similar products) is provided by [MTGJSON](https://mtgjson.com), used under the MIT License, which requires its copyright notice (Copyright © 2018 – Present, Zach Halpern) to accompany redistribution.
-- **Product Links**: Listings link out to [Mana Pool](https://manapool.com) for the exact card printing or sealed product being offered.
+- **Pokémon Data**: Pokémon card information is provided by [TCGCSV](https://tcgcsv.com), a mirror of TCGplayer's catalog. All card names, images, and data are the property of their respective owners. Pokémon and Pokémon character names are trademarks of Nintendo, Creatures Inc. and GAME FREAK inc. This Bot is not affiliated with or endorsed by them, or by TCGplayer.
+- **Product Links**: Listings link out to [Mana Pool](https://manapool.com) (Magic) or [TCGplayer](https://www.tcgplayer.com) (Pokémon) for the exact card printing or sealed product being offered.
 - **Fan Content**: LFCbot is unofficial Fan Content permitted under Wizards of the Coast's [Fan Content Policy](https://company.wizards.com/en/legal/fancontentpolicy) and is not approved or endorsed by Wizards.
 - **Discord**: Discord is a trademark of Discord Inc. This Bot is not affiliated with or endorsed by Discord.
 
@@ -117,4 +118,4 @@ For questions about these Terms, please:
 
 ---
 
-**Last Updated:** August 29, 2026
+**Last Updated:** October 24, 2026
