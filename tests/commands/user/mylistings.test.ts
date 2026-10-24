@@ -51,7 +51,7 @@ function seedListing(overrides: Partial<NewListingRow> = {}): number {
     finish: null,
     variant: null,
     collectorNumber: null,
-    manapoolUrl: null,
+    marketUrl: null,
     condition: 'nm',
     priceCents: 100,
     quantity: 1,

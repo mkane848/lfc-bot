@@ -52,7 +52,7 @@ function seedListing(overrides: Partial<NewListingRow> = {}): number {
     finish: null,
     variant: null,
     collectorNumber: null,
-    manapoolUrl: null,
+    marketUrl: null,
     condition: 'nm',
     priceCents: 100,
     quantity: 1,
@@ -152,7 +152,7 @@ describe('/search', () => {
       cardNameNormalized: 'bloomburrow bundle',
       cardSet: 'BLB',
       condition: null,
-      sealedUuid: 'ec99d990-704c-5ad3-ae7f-f1dbc5fd5ceb',
+      catalogId: 'ec99d990-704c-5ad3-ae7f-f1dbc5fd5ceb',
       sealedCategory: 'bundle',
       sealedSubtype: 'default',
     });

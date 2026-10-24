@@ -109,6 +109,17 @@ generated SQL and meta files under `src/db/migrations/`. Do not use
 automatically at startup and the database file's parent directory is created on
 boot.
 
+To rename a column, change it in `schema.ts` and run `npm run db:generate`:
+drizzle-kit asks, per column, whether it was created or renamed, and needs a
+TTY to ask (in a non-interactive shell it exits with "Interactive prompts
+require a TTY"; drive it through a pseudo-terminal and pick the rename option).
+Choosing "create" emits DROP + ADD, which loses the data, so read the generated
+SQL: it must be `ALTER TABLE … RENAME COLUMN`. See
+`src/db/migrations/0005_rename_market_columns.sql` and its test in
+`tests/db/migrations.test.ts`, which builds a database at the old schema, loads
+rows, applies the migration, and checks the rows survived (`applyMigrations` in
+`tests/helpers/migrations.ts` replays the generated SQL up to a given tag).
+
 To add a `NOT NULL` column backed by existing data (SQLite can't add a
 `NOT NULL` column without a constant default, and can't backfill from another
 column in the same `ALTER TABLE`), generate in two passes: first add the
@@ -142,7 +153,7 @@ behavior changes; do not weaken assertions to make a change pass.
   `src/services/scryfall.ts`, with a 24-hour cache in the `card_cache` table
   keyed by name plus set/finish/variant/collector number.
 - Each listing's Manapool link is resolved once, at card-resolution time, and
-  frozen onto the row (`listings.manapool_url`) and the card cache — it is
+  frozen onto the row (`listings.market_url`) and the card cache — it is
   not re-fetched live when rendering embeds or digests. `src/utils/manapool.ts`
   builds the local fallback URL; `src/services/manapool.ts` does the live
   lookup and is a no-op (no network call) when `MANAPOOL_API_KEY` is unset.

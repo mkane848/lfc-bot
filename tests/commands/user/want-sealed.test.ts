@@ -41,7 +41,7 @@ const hitResult: ResolvedSealedProduct = {
   uuid: 'ec99d990-704c-5ad3-ae7f-f1dbc5fd5ceb',
   category: 'bundle',
   subtype: null,
-  manapoolUrl: 'https://manapool.com/sealed/blb/bundle',
+  marketUrl: 'https://manapool.com/sealed/blb/bundle',
   resolved: true,
 };
 
@@ -52,7 +52,7 @@ const missResult: ResolvedSealedProduct = {
   uuid: null,
   category: null,
   subtype: null,
-  manapoolUrl: null,
+  marketUrl: null,
   resolved: false,
 };
 
@@ -91,10 +91,10 @@ describe('/want-sealed', () => {
     expect(inserted).toBeDefined();
     expect(inserted?.intent).toBe('want');
     expect(inserted?.kind).toBe('sealed');
-    expect(inserted?.sealedUuid).toBe(hitResult.uuid);
+    expect(inserted?.catalogId).toBe(hitResult.uuid);
     expect(inserted?.sealedCategory).toBe(hitResult.category);
     expect(inserted?.sealedSubtype).toBe(hitResult.subtype);
-    expect(inserted?.manapoolUrl).toBe(hitResult.manapoolUrl);
+    expect(inserted?.marketUrl).toBe(hitResult.marketUrl);
     expect(inserted?.cardName).toBe(hitResult.productName);
     expect(inserted?.cardNameNormalized).toBe(hitResult.productNameNormalized);
     expect(inserted?.cardSet).toBe(hitResult.setCode);
@@ -118,8 +118,8 @@ describe('/want-sealed', () => {
     expect(inserted).toBeDefined();
     expect(inserted?.kind).toBe('sealed');
     expect(inserted?.cardName).toBe(missResult.productName);
-    expect(inserted?.sealedUuid).toBeNull();
-    expect(inserted?.manapoolUrl).toBeNull();
+    expect(inserted?.catalogId).toBeNull();
+    expect(inserted?.marketUrl).toBeNull();
   });
 
   it('replies with an error instead of posting when a picked product has left the catalog', async () => {
@@ -139,16 +139,16 @@ describe('/want-sealed', () => {
     expect(getDb().select().from(listings).all()).toHaveLength(0);
   });
 
-  it('still creates a listing when enrichment returns a null manapoolUrl', async () => {
-    resolveSealedProduct.mockResolvedValue({ ...hitResult, manapoolUrl: null });
+  it('still creates a listing when enrichment returns a null marketUrl', async () => {
+    resolveSealedProduct.mockResolvedValue({ ...hitResult, marketUrl: null });
     const i = interaction();
 
     await wantSealedCommand.execute(i);
 
     const inserted = getDb().select().from(listings).all()[0];
     expect(inserted).toBeDefined();
-    expect(inserted?.manapoolUrl).toBeNull();
-    expect(inserted?.sealedUuid).toBe(hitResult.uuid);
+    expect(inserted?.marketUrl).toBeNull();
+    expect(inserted?.catalogId).toBe(hitResult.uuid);
   });
 
   it('rejects outside a guild before deferring', async () => {

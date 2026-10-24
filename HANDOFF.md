@@ -78,11 +78,11 @@ Source of truth: `src/db/schema.ts`. All timestamps are Unix milliseconds.
 | `finish` | TEXT, nullable | `nonfoil`, `foil`, or `etched` |
 | `variant` | TEXT, nullable | `extended`, `showcase`, `borderless`, `retro`, or `full` |
 | `collector_number` | TEXT, nullable | |
-| `manapool_url` | TEXT, nullable | Link to this printing (card) or product (sealed) on manapool.com |
+| `market_url` | TEXT, nullable | Link to this printing (card) or product (sealed) on the game's marketplace (Manapool for MTG). Renamed from `manapool_url` in migration 0005 |
 | `condition` | TEXT, nullable | `nm`, `lp`, `mp`, `hp`, or `dmg`. Always null for a sealed listing (`kind: sealed`) |
 | `price_cents` | INTEGER, nullable | Asking price for `have`, max price for `want` |
 | `kind` | TEXT, not null, default `card` | `card` or `sealed` — see `ListingKind`/`LISTING_KINDS` in `src/types/index.ts` |
-| `sealed_uuid` | TEXT, nullable | MTGJSON `sealed_cache.uuid` of the matched product; null if `kind: card` or the product wasn't in the catalog |
+| `catalog_id` | TEXT, nullable | Source-catalog id of the matched sealed product (MTGJSON `sealed_cache.uuid` for MTG); null if `kind: card` or the product wasn't in the catalog. Renamed from `sealed_uuid` in migration 0005 |
 | `sealed_category` | TEXT, nullable | MTGJSON category (e.g. `booster_box`, `bundle`), rendered for display via `formatSealedType` |
 | `sealed_subtype` | TEXT, nullable | MTGJSON subtype, same rendering as `sealed_category` |
 | `quantity` | INTEGER, default 1 | 1–99 |
@@ -213,7 +213,7 @@ are public. `/mylistings`, `/edit`, `/fulfill`, `/delete`, `/help`, and every
 | `/want-multi` | modal, up to 3 lines `Card Name \| condition \| max_price` + `accepts` | Same as above for "want" listings. |
 | `/search` | `card_name`*, `intent?` (`have`/`want`), `accepts?` (`cash`/`trade`/`both`), `page?` | Searches active listings, 10 per page, newest first. |
 | `/mylistings` | `page?` | Shows the caller's own active listings (2 per page) with per-listing Fulfill/Delete buttons, plus batch-delete, batch-fulfill, and batch-edit select menus covering their most recent 25 active listings. |
-| `/edit` | `listing_id`*, then a modal (`condition`, `price`, `quantity`, `set`, `notes`, all optional) | Owner-only. If `set` changes, re-resolves the listing against Scryfall (card) or the sealed catalog (`kind: sealed`) and updates the resulting fields (`card_name`, `card_image_url`, `collector_number`, `manapool_url` for a card; `card_name`, `manapool_url`, and the three `sealed_*` columns for sealed product) to match. The modal for a sealed listing omits the `condition` row entirely — sealed product is NM by definition. A card set-resolution failure aborts the edit with an error; a sealed catalog miss does not — it writes the free-text result, matching how `/have-sealed`/`/want-sealed` creation behaves. |
+| `/edit` | `listing_id`*, then a modal (`condition`, `price`, `quantity`, `set`, `notes`, all optional) | Owner-only. If `set` changes, re-resolves the listing against Scryfall (card) or the sealed catalog (`kind: sealed`) and updates the resulting fields (`card_name`, `card_image_url`, `collector_number`, `market_url` for a card; `card_name`, `market_url`, and the three `sealed_*` columns for sealed product) to match. The modal for a sealed listing omits the `condition` row entirely — sealed product is NM by definition. A card set-resolution failure aborts the edit with an error; a sealed catalog miss does not — it writes the free-text result, matching how `/have-sealed`/`/want-sealed` creation behaves. |
 | `/fulfill` | `listing_id`* | Owner-only. Sets `status: fulfilled`. |
 | `/delete` | `listing_id`* | Owner-only. Sets `status: deleted`. |
 | `/help` | — | Static command summary. |
@@ -289,7 +289,7 @@ Service: `src/services/scryfall.ts`.
 
 Service: `src/services/manapool.ts`. Two independent lookups sharing one rate limiter, one for card printings and one for sealed products.
 
-- Card printings: `GET /api/v1/products/singles?scryfall_ids={id}` (`lookupManapoolPrinting`), returning a URL and `priceCents`. When no live Manapool match exists, `resolveCard` falls back to a locally-built manapool.com URL from card name/set/collector number. `manapool_price_cents` is stored only in `card_cache`; `listings.manapool_url` is copied from the resolved card at listing-creation or edit time.
+- Card printings: `GET /api/v1/products/singles?scryfall_ids={id}` (`lookupManapoolPrinting`), returning a URL and `priceCents`. When no live Manapool match exists, `resolveCard` falls back to a locally-built manapool.com URL from card name/set/collector number. `manapool_price_cents` is stored only in `card_cache`; `listings.market_url` is copied from the resolved card at listing-creation or edit time.
 - Sealed product: `GET /api/v1/products/sealed?mtgjson_uuids={uuid}` (`lookupManapoolSealedProduct`), returning **only** a URL — the endpoint also returns `low_price`/`price_market`, and those fields are deliberately never read or stored; no marketplace pricing exists anywhere for a sealed listing. One call per listing, made only when a member posts or edits that exact product — Mana Pool's Terms of Use prohibit cataloging/bulk-storing their content, so there is no nightly harvest of the ~4,000-product catalog and there must not be one added later.
 - Both requests use header `X-ManaPool-Access-Token`, gated on the optional `MANAPOOL_API_KEY` env var — with no key set, both are a no-op (no network call) and a sealed listing gets no link at all.
 - Own 100ms rate limiter mirroring Scryfall's; a 15s timeout, failures return `null` rather than surfacing an error. Neither lookup is retried — an optional enrichment sitting in front of a user-facing command is not worth a retry.

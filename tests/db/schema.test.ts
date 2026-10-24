@@ -60,7 +60,7 @@ describe('database schema', () => {
       finish: null,
       variant: null,
       collectorNumber: null,
-      manapoolUrl: null,
+      marketUrl: null,
       condition: 'nm',
       priceCents: 1000,
       quantity: 1,
@@ -96,7 +96,7 @@ describe('database schema', () => {
       finish: null,
       variant: null,
       collectorNumber: null,
-      manapoolUrl: null,
+      marketUrl: null,
       condition: 'nm',
       priceCents: 1000,
       quantity: 1,
@@ -110,7 +110,7 @@ describe('database schema', () => {
 
     const row = db.select().from(listings).where(eq(listings.serverId, '103')).get();
     expect(row?.kind).toBe('card');
-    expect(row?.sealedUuid).toBeNull();
+    expect(row?.catalogId).toBeNull();
     expect(row?.sealedCategory).toBeNull();
     expect(row?.sealedSubtype).toBeNull();
   });
@@ -134,14 +134,14 @@ describe('database schema', () => {
       finish: null,
       variant: null,
       collectorNumber: null,
-      manapoolUrl: 'https://manapool.com/sealed/blb/bundle',
+      marketUrl: 'https://manapool.com/sealed/blb/bundle',
       condition: null,
       priceCents: 4000,
       quantity: 1,
       notes: null,
       status: 'active',
       kind: 'sealed',
-      sealedUuid: 'ec99d990-704c-5ad3-ae7f-f1dbc5fd5ceb',
+      catalogId: 'ec99d990-704c-5ad3-ae7f-f1dbc5fd5ceb',
       sealedCategory: 'bundle',
       sealedSubtype: 'default',
       expiresAt: 200,
@@ -152,7 +152,7 @@ describe('database schema', () => {
 
     const row = db.select().from(listings).where(eq(listings.serverId, '104')).get();
     expect(row?.kind).toBe('sealed');
-    expect(row?.sealedUuid).toBe('ec99d990-704c-5ad3-ae7f-f1dbc5fd5ceb');
+    expect(row?.catalogId).toBe('ec99d990-704c-5ad3-ae7f-f1dbc5fd5ceb');
     expect(row?.sealedCategory).toBe('bundle');
     expect(row?.sealedSubtype).toBe('default');
     expect(row?.condition).toBeNull();

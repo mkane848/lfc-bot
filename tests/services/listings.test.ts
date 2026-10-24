@@ -45,7 +45,7 @@ function baseInput() {
     finish: null,
     variant: null,
     collectorNumber: null,
-    manapoolUrl: null,
+    marketUrl: null,
     condition: 'nm',
     priceCents: 1000,
     quantity: 1,
@@ -91,7 +91,7 @@ describe('createListing', () => {
         finish: null,
         variant: null,
         collectorNumber: null,
-        manapoolUrl: null,
+        marketUrl: null,
         condition: 'nm',
         priceCents: 1000,
         quantity: 1,
@@ -126,7 +126,7 @@ describe('createListing', () => {
         finish: null,
         variant: null,
         collectorNumber: null,
-        manapoolUrl: null,
+        marketUrl: null,
         condition: 'nm',
         priceCents: 1000,
         quantity: 1,
@@ -167,11 +167,11 @@ describe('createListing', () => {
         finish: null,
         variant: null,
         collectorNumber: null,
-        manapoolUrl: null,
+        marketUrl: null,
         condition: 'nm',
         priceCents: 1000,
         kind: 'sealed',
-        sealedUuid: 'uuid-1',
+        catalogId: 'uuid-1',
         sealedCategory: 'booster_box',
         sealedSubtype: null,
         quantity: 1,
@@ -198,12 +198,12 @@ describe('sealed listing columns', () => {
       intent: 'have',
       accepts: 'cash',
       kind: 'sealed',
-      sealedUuid: 'uuid-123',
+      catalogId: 'uuid-123',
       sealedCategory: 'booster_box',
       sealedSubtype: 'default',
     });
     expect(listing.kind).toBe('sealed');
-    expect(listing.sealedUuid).toBe('uuid-123');
+    expect(listing.catalogId).toBe('uuid-123');
     expect(listing.sealedCategory).toBe('booster_box');
     expect(listing.sealedSubtype).toBe('default');
   });
@@ -212,7 +212,7 @@ describe('sealed listing columns', () => {
     seedServer();
     const { listing } = createListing({ ...baseInput(), intent: 'have', accepts: 'cash' });
     expect(listing.kind).toBe('card');
-    expect(listing.sealedUuid).toBeNull();
+    expect(listing.catalogId).toBeNull();
     expect(listing.sealedCategory).toBeNull();
     expect(listing.sealedSubtype).toBeNull();
   });
@@ -306,7 +306,7 @@ describe('activeListingsForUser', () => {
         finish: null,
         variant: null,
         collectorNumber: null,
-        manapoolUrl: null,
+        marketUrl: null,
         condition: 'nm',
         priceCents: 1000,
         quantity: 1,
@@ -333,7 +333,7 @@ describe('activeListingsForUser', () => {
         finish: null,
         variant: null,
         collectorNumber: null,
-        manapoolUrl: null,
+        marketUrl: null,
         condition: 'nm',
         priceCents: 1000,
         quantity: 1,
@@ -412,12 +412,12 @@ describe('updateListing', () => {
       accepts: 'cash',
       cardSet: 'LEA',
       collectorNumber: '232',
-      manapoolUrl: 'https://manapool.com/card/lea/232/black-lotus',
+      marketUrl: 'https://manapool.com/card/lea/232/black-lotus',
     });
     const updated = updateListing(listing.id, { priceCents: 2000 });
     expect(updated?.cardSet).toBe('LEA');
     expect(updated?.collectorNumber).toBe('232');
-    expect(updated?.manapoolUrl).toBe('https://manapool.com/card/lea/232/black-lotus');
+    expect(updated?.marketUrl).toBe('https://manapool.com/card/lea/232/black-lotus');
     expect(updated?.priceCents).toBe(2000);
   });
 
@@ -430,18 +430,18 @@ describe('updateListing', () => {
       cardSet: 'LEA',
       collectorNumber: '232',
       cardImageUrl: 'http://img/lea-lotus.png',
-      manapoolUrl: 'https://manapool.com/card/lea/232/black-lotus',
+      marketUrl: 'https://manapool.com/card/lea/232/black-lotus',
     });
     const updated = updateListing(listing.id, {
       cardSet: '2ED',
       collectorNumber: '233',
       cardImageUrl: 'http://img/2ed-lotus.png',
-      manapoolUrl: 'https://manapool.com/card/2ed/233/black-lotus',
+      marketUrl: 'https://manapool.com/card/2ed/233/black-lotus',
     });
     expect(updated?.cardSet).toBe('2ED');
     expect(updated?.collectorNumber).toBe('233');
     expect(updated?.cardImageUrl).toBe('http://img/2ed-lotus.png');
-    expect(updated?.manapoolUrl).toBe('https://manapool.com/card/2ed/233/black-lotus');
+    expect(updated?.marketUrl).toBe('https://manapool.com/card/2ed/233/black-lotus');
   });
 
   it('can clear the collector number and Manapool link (e.g. when the set is cleared)', () => {
@@ -452,16 +452,16 @@ describe('updateListing', () => {
       accepts: 'cash',
       cardSet: 'LEA',
       collectorNumber: '232',
-      manapoolUrl: 'https://manapool.com/card/lea/232/black-lotus',
+      marketUrl: 'https://manapool.com/card/lea/232/black-lotus',
     });
     const updated = updateListing(listing.id, {
       cardSet: null,
       collectorNumber: null,
-      manapoolUrl: null,
+      marketUrl: null,
     });
     expect(updated?.cardSet).toBeNull();
     expect(updated?.collectorNumber).toBeNull();
-    expect(updated?.manapoolUrl).toBeNull();
+    expect(updated?.marketUrl).toBeNull();
   });
 
   // Regression guard: the sealed columns must be in updateListing's
@@ -478,16 +478,16 @@ describe('updateListing', () => {
       cardName: 'Bloomburrow Bundle',
       cardNameNormalized: 'bloomburrow bundle',
       cardSet: 'BLB',
-      sealedUuid: 'uuid-old',
+      catalogId: 'uuid-old',
       sealedCategory: 'bundle',
       sealedSubtype: 'default',
     });
     const updated = updateListing(listing.id, {
-      sealedUuid: 'uuid-new',
+      catalogId: 'uuid-new',
       sealedCategory: 'booster_box',
       sealedSubtype: 'collector',
     });
-    expect(updated?.sealedUuid).toBe('uuid-new');
+    expect(updated?.catalogId).toBe('uuid-new');
     expect(updated?.sealedCategory).toBe('booster_box');
     expect(updated?.sealedSubtype).toBe('collector');
     expect(updated?.kind).toBe('sealed');
@@ -500,16 +500,16 @@ describe('updateListing', () => {
       intent: 'have',
       accepts: 'cash',
       kind: 'sealed',
-      sealedUuid: 'uuid-old',
+      catalogId: 'uuid-old',
       sealedCategory: 'bundle',
       sealedSubtype: 'default',
     });
     const updated = updateListing(listing.id, {
-      sealedUuid: null,
+      catalogId: null,
       sealedCategory: null,
       sealedSubtype: null,
     });
-    expect(updated?.sealedUuid).toBeNull();
+    expect(updated?.catalogId).toBeNull();
     expect(updated?.sealedCategory).toBeNull();
     expect(updated?.sealedSubtype).toBeNull();
   });

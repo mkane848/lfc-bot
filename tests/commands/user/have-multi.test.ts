@@ -34,7 +34,7 @@ function resolvedProduct(name: string, hit = true) {
     uuid: hit ? `${name}-uuid` : null,
     category: hit ? 'bundle' : null,
     subtype: hit ? 'default' : null,
-    manapoolUrl: hit ? 'https://manapool.com/sealed/blb/bundle' : null,
+    marketUrl: hit ? 'https://manapool.com/sealed/blb/bundle' : null,
     resolved: hit,
   };
 }
@@ -66,7 +66,7 @@ function resolved(name: string, ok = true) {
     cardSet: ok ? 'LEA' : null,
     cardImageUrl: ok ? 'http://img/x.png' : null,
     collectorNumber: ok ? '1' : null,
-    manapoolUrl: null,
+    marketUrl: null,
     manapoolPriceCents: null,
     resolved: ok,
   };
@@ -208,7 +208,7 @@ describe('/have-multi sealed', () => {
     expect(followUpContent(i)).toContain('Product 1: posted');
     const row = getDb().select().from(listings).all()[0];
     expect(row?.kind).toBe('sealed');
-    expect(row?.sealedUuid).toBe('Bloomburrow Bundle-uuid');
+    expect(row?.catalogId).toBe('Bloomburrow Bundle-uuid');
     expect(row?.sealedCategory).toBe('bundle');
     expect(row?.cardSet).toBe('BLB');
     expect(row?.priceCents).toBe(8999);
@@ -234,7 +234,7 @@ describe('/have-multi sealed', () => {
     expect(message).not.toContain('could not resolve');
     const row = getDb().select().from(listings).all()[0];
     expect(row?.kind).toBe('sealed');
-    expect(row?.manapoolUrl).toBeNull();
+    expect(row?.marketUrl).toBeNull();
   });
 
   it('never calls the card resolver on a sealed submission', async () => {

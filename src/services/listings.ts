@@ -33,11 +33,11 @@ function insertListingRow(input: ListingCreateInput, created: number): ListingRo
     finish: input.finish ?? null,
     variant: input.variant ?? null,
     collectorNumber: input.collectorNumber ?? null,
-    manapoolUrl: input.manapoolUrl ?? null,
+    marketUrl: input.marketUrl ?? null,
     condition: input.condition ?? null,
     priceCents: input.priceCents ?? null,
     kind: input.kind ?? 'card',
-    sealedUuid: input.sealedUuid ?? null,
+    catalogId: input.catalogId ?? null,
     sealedCategory: input.sealedCategory ?? null,
     sealedSubtype: input.sealedSubtype ?? null,
     quantity: input.quantity ?? 1,
@@ -258,8 +258,8 @@ export function updateListing(
     cardNameNormalized?: string;
     cardImageUrl?: string | null;
     collectorNumber?: string | null;
-    manapoolUrl?: string | null;
-    sealedUuid?: string | null;
+    marketUrl?: string | null;
+    catalogId?: string | null;
     sealedCategory?: string | null;
     sealedSubtype?: string | null;
   },
@@ -276,8 +276,8 @@ export function updateListing(
     update.cardNameNormalized = fields.cardNameNormalized;
   if (fields.cardImageUrl !== undefined) update.cardImageUrl = fields.cardImageUrl;
   if (fields.collectorNumber !== undefined) update.collectorNumber = fields.collectorNumber;
-  if (fields.manapoolUrl !== undefined) update.manapoolUrl = fields.manapoolUrl;
-  if (fields.sealedUuid !== undefined) update.sealedUuid = fields.sealedUuid;
+  if (fields.marketUrl !== undefined) update.marketUrl = fields.marketUrl;
+  if (fields.catalogId !== undefined) update.catalogId = fields.catalogId;
   if (fields.sealedCategory !== undefined) update.sealedCategory = fields.sealedCategory;
   if (fields.sealedSubtype !== undefined) update.sealedSubtype = fields.sealedSubtype;
   db.update(listings).set(update).where(eq(listings.id, id)).run();

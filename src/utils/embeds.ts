@@ -43,9 +43,9 @@ export function formatListingTitle(listing: {
 }
 
 /** Resolve the Manapool link for a listing, falling back to a locally-built URL. */
-function listingManapoolUrl(listing: ListingRow): string | null {
+function listingMarketUrl(listing: ListingRow): string | null {
   return (
-    listing.manapoolUrl ??
+    listing.marketUrl ??
     buildManapoolUrl({
       cardName: listing.cardName,
       cardSet: listing.cardSet,
@@ -69,9 +69,9 @@ export function listingEmbed(
     .setFooter({ text: `Listing #${listing.id}` })
     .setTimestamp(new Date(listing.createdAt));
 
-  const manapoolUrl = listingManapoolUrl(listing);
-  if (manapoolUrl) {
-    embed.setURL(manapoolUrl);
+  const marketUrl = listingMarketUrl(listing);
+  if (marketUrl) {
+    embed.setURL(marketUrl);
   }
 
   const fields: Array<{ name: string; value: string; inline: boolean }> = [];
@@ -129,8 +129,8 @@ export function digestLine(listing: ListingRow): string {
     listing.priceCents !== null && listing.priceCents !== undefined
       ? ` — ${formatPrice(listing.priceCents)}`
       : '';
-  const manapoolUrl = listingManapoolUrl(listing);
-  const link = manapoolUrl ? ` — [View on Manapool](${manapoolUrl})` : '';
+  const marketUrl = listingMarketUrl(listing);
+  const link = marketUrl ? ` — [View on Manapool](${marketUrl})` : '';
   return `- ${listing.cardName}${set}${condition}${price} — @${listing.username}${link}`;
 }
 

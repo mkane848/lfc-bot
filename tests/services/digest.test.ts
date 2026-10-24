@@ -31,7 +31,7 @@ function listing(overrides: Partial<ListingRow> = {}): ListingRow {
     finish: null,
     variant: null,
     collectorNumber: null,
-    manapoolUrl: null,
+    marketUrl: null,
     condition: 'nm',
     priceCents: 4500000,
     quantity: 1,
@@ -66,7 +66,7 @@ describe('formatDigest', () => {
       listing({
         id: 1,
         intent: 'have',
-        manapoolUrl: 'https://manapool.com/card/lea/232/black-lotus',
+        marketUrl: 'https://manapool.com/card/lea/232/black-lotus',
       }),
     ]);
     expect(text).toContain('[View on Manapool](https://manapool.com/card/lea/232/black-lotus)');
@@ -97,7 +97,7 @@ describe('splitDigestMessage', () => {
         id: i + 1,
         intent: i % 2 === 0 ? 'have' : 'want',
         cardName: `Ragavan, Nimble Pilferer ${i + 1}`,
-        manapoolUrl: `https://manapool.com/card/mh2/${i + 1}/ragavan-nimble-pilferer`,
+        marketUrl: `https://manapool.com/card/mh2/${i + 1}/ragavan-nimble-pilferer`,
       }),
     );
     const text = `Daily Listing Digest\n\n${formatDigest(rows)}`;
@@ -160,7 +160,7 @@ function addListing(overrides: Partial<NewListingRow> = {}): void {
       finish: null,
       variant: null,
       collectorNumber: null,
-      manapoolUrl: null,
+      marketUrl: null,
       condition: 'nm',
       priceCents: 100,
       quantity: 1,
@@ -183,7 +183,7 @@ function addBusyDaysListings(count: number): void {
       cardNameNormalized: 'ragavan nimble pilferer',
       cardSet: 'MH2',
       collectorNumber: String(100 + i),
-      manapoolUrl: `https://manapool.com/card/mh2/${100 + i}/ragavan-nimble-pilferer`,
+      marketUrl: `https://manapool.com/card/mh2/${100 + i}/ragavan-nimble-pilferer`,
     });
   }
 }

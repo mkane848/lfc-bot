@@ -43,7 +43,7 @@ function addListing(at: number, id = 1): void {
       finish: null,
       variant: null,
       collectorNumber: null,
-      manapoolUrl: null,
+      marketUrl: null,
       condition: 'nm',
       priceCents: 100,
       quantity: 1,

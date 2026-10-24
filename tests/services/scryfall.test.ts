@@ -98,7 +98,7 @@ describe('scryfall service', () => {
     expect(resolved.cardImageUrl).toBe('http://img/lotus.png');
     expect(resolved.collectorNumber).toBe('232');
     // No MANAPOOL_API_KEY configured, so it falls back to a locally-built link.
-    expect(resolved.manapoolUrl).toBe('https://manapool.com/card/lea/232/black-lotus');
+    expect(resolved.marketUrl).toBe('https://manapool.com/card/lea/232/black-lotus');
 
     const fetchMock = vi.mocked(fetch);
     const callsBefore = fetchMock.mock.calls.length;
@@ -144,7 +144,7 @@ describe('scryfall service', () => {
 
     const resolved = await resolveCard('Black Lotus');
     expect(resolved.cardSet).toBe('2ed');
-    expect(resolved.manapoolUrl).toBe('https://manapool.com/card/2ed/233/black-lotus');
+    expect(resolved.marketUrl).toBe('https://manapool.com/card/2ed/233/black-lotus');
     expect(fetchMock.mock.calls.some((call) => String(call[0]).includes('/cards/named'))).toBe(
       false,
     );
@@ -171,7 +171,7 @@ describe('scryfall service', () => {
 
     const resolved = await resolveCard('Some Arena Card');
     expect(resolved.resolved).toBe(true);
-    expect(resolved.manapoolUrl).toBeNull();
+    expect(resolved.marketUrl).toBeNull();
     expect(fetchMock.mock.calls.some((call) => isManapoolUrl(String(call[0])))).toBe(false);
   });
 
@@ -181,7 +181,7 @@ describe('scryfall service', () => {
     expect(resolved.resolved).toBe(false);
     expect(resolved.cardName).toBe('Totally Fake Card');
     expect(resolved.cardImageUrl).toBeNull();
-    expect(resolved.manapoolUrl).toBeNull();
+    expect(resolved.marketUrl).toBeNull();
   });
 
   it('does not retry a 404 (definitive not-found)', async () => {
@@ -283,7 +283,7 @@ describe('scryfall service', () => {
       cardSet: 'MH3',
       collectorNumber: '128',
     });
-    expect(resolved.manapoolUrl).toBe('https://manapool.com/card/mh3/128/lightning-bolt');
+    expect(resolved.marketUrl).toBe('https://manapool.com/card/mh3/128/lightning-bolt');
     expect(resolved.manapoolPriceCents).toBe(199);
     expect(manapoolCalls).toHaveLength(1);
     expect(manapoolCalls[0]).toContain('scryfall_ids=bolt-id');
@@ -312,7 +312,7 @@ describe('scryfall service', () => {
       cardSet: 'MH3',
       collectorNumber: '128',
     });
-    expect(resolved.manapoolUrl).toBe('https://manapool.com/card/mh3/128/lightning-bolt');
+    expect(resolved.marketUrl).toBe('https://manapool.com/card/mh3/128/lightning-bolt');
     expect(resolved.manapoolPriceCents).toBeNull();
   });
 

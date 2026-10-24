@@ -398,7 +398,7 @@ export async function resolveSealedProduct(
       uuid: null,
       category: null,
       subtype: null,
-      manapoolUrl: null,
+      marketUrl: null,
       resolved: false,
     };
   }
@@ -410,7 +410,7 @@ export async function resolveSealedProduct(
     uuid: row.uuid,
     category: row.category,
     subtype: row.subtype,
-    manapoolUrl: await lookupManapoolSealedProduct(row.uuid),
+    marketUrl: await lookupManapoolSealedProduct(row.uuid),
     resolved: true,
   };
 }

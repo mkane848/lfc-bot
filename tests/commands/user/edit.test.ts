@@ -68,7 +68,7 @@ function seedListing(overrides: Partial<NewListingRow> = {}): number {
     finish: null,
     variant: null,
     collectorNumber: null,
-    manapoolUrl: null,
+    marketUrl: null,
     condition: 'nm',
     priceCents: 100,
     quantity: 1,
@@ -99,10 +99,10 @@ function seedSealedListing(overrides: Partial<NewListingRow> = {}): number {
     cardNameNormalized: 'bloomburrow bundle',
     cardSet: 'BLB',
     condition: null,
-    sealedUuid: 'uuid-blb-bundle',
+    catalogId: 'uuid-blb-bundle',
     sealedCategory: 'bundle',
     sealedSubtype: 'default',
-    manapoolUrl: 'https://manapool.com/sealed/blb/bundle',
+    marketUrl: 'https://manapool.com/sealed/blb/bundle',
     ...overrides,
   });
 }
@@ -145,7 +145,7 @@ const resolvedProduct = {
   uuid: 'uuid-mkm-bundle',
   category: 'bundle',
   subtype: 'gift_edition',
-  manapoolUrl: 'https://manapool.com/sealed/mkm/bundle',
+  marketUrl: 'https://manapool.com/sealed/mkm/bundle',
   resolved: true,
 };
 
@@ -255,7 +255,7 @@ describe('handleEditModal', () => {
       cardSet: null,
       cardImageUrl: null,
       collectorNumber: null,
-      manapoolUrl: null,
+      marketUrl: null,
       manapoolPriceCents: null,
       resolved: false,
     });
@@ -305,8 +305,8 @@ describe('handleEditModal', () => {
     expect(row.cardSet).toBe('MKM');
     expect(row.cardName).toBe('Murders at Karlov Manor Bundle');
     expect(row.cardNameNormalized).toBe('murders at karlov manor bundle');
-    expect(row.manapoolUrl).toBe('https://manapool.com/sealed/mkm/bundle');
-    expect(row.sealedUuid).toBe('uuid-mkm-bundle');
+    expect(row.marketUrl).toBe('https://manapool.com/sealed/mkm/bundle');
+    expect(row.catalogId).toBe('uuid-mkm-bundle');
     expect(row.sealedCategory).toBe('bundle');
     expect(row.sealedSubtype).toBe('gift_edition');
     expect(i.editReply).toHaveBeenCalledWith(
@@ -323,7 +323,7 @@ describe('handleEditModal', () => {
       uuid: null,
       category: null,
       subtype: null,
-      manapoolUrl: null,
+      marketUrl: null,
       resolved: false,
     });
     const i = withStrictFields(
@@ -342,10 +342,10 @@ describe('handleEditModal', () => {
     const row = getListingById(id)!;
     expect(row.cardSet).toBe('ZZZ');
     // The stale metadata from the previous set is cleared, not carried over.
-    expect(row.sealedUuid).toBeNull();
+    expect(row.catalogId).toBeNull();
     expect(row.sealedCategory).toBeNull();
     expect(row.sealedSubtype).toBeNull();
-    expect(row.manapoolUrl).toBeNull();
+    expect(row.marketUrl).toBeNull();
   });
 
   it('still aborts a card set change when the card does not resolve (regression)', async () => {
@@ -357,7 +357,7 @@ describe('handleEditModal', () => {
       cardSet: null,
       cardImageUrl: null,
       collectorNumber: null,
-      manapoolUrl: null,
+      marketUrl: null,
       manapoolPriceCents: null,
       resolved: false,
     });
@@ -398,7 +398,7 @@ describe('handleEditModal', () => {
     expect(resolveCard).not.toHaveBeenCalled();
     expect(resolveSealedProduct).not.toHaveBeenCalled();
     expect(getListingById(cardId)!.condition).toBe('lp');
-    expect(getListingById(sealedId)!.sealedUuid).toBe('uuid-blb-bundle');
+    expect(getListingById(sealedId)!.catalogId).toBe('uuid-blb-bundle');
   });
 
   it('shows an "Edit next" button when a batch queue remains', async () => {
