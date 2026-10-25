@@ -51,8 +51,12 @@ configurable retention window.
    Add this line, then save and exit:
 
    ```cron
-   30 4 * * * cd ~/lfc-bot && ./scripts/backup.sh >> /var/log/lfcbot-backup.log 2>&1
+   30 4 * * * cd ~/lfc-bot && ./scripts/backup.sh >> ~/lfc-bot/logs/backup-cron.log 2>&1
    ```
+
+   Run `mkdir -p ~/lfc-bot/logs` first: cron's `>>` redirect fails (and the
+   job silently never runs) if the log's directory is missing or not writable,
+   which is why these logs live under the repo rather than `/var/log`.
 
 4. Confirm the job is registered:
 
@@ -143,7 +147,7 @@ cron job:
    Add this line, then save and exit:
 
    ```cron
-   0 5 * * * cd ~/lfc-bot && ./scripts/auto-update.sh >> /var/log/lfcbot-auto-update.log 2>&1
+   0 5 * * * cd ~/lfc-bot && ./scripts/auto-update.sh >> ~/lfc-bot/logs/auto-update-cron.log 2>&1
    ```
 
 4. Confirm the job is registered:
@@ -199,7 +203,7 @@ replaces the `scripts/auto-update.sh` job rather than running alongside it:
    Add this line, then save and exit:
 
    ```cron
-   0 5 * * * cd ~/lfc-bot && ./scripts/auto-update-prebuilt.sh >> /var/log/lfcbot-auto-update-prebuilt.log 2>&1
+   0 5 * * * cd ~/lfc-bot && ./scripts/auto-update-prebuilt.sh >> ~/lfc-bot/logs/auto-update-prebuilt-cron.log 2>&1
    ```
 
 4. Confirm the job is registered:

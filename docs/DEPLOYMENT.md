@@ -260,7 +260,7 @@ BACKUP_DIR=/mnt/offbox/lfcbot-backups ./scripts/backup.sh
 Schedule it with cron, for example daily at 04:30:
 
 ```cron
-30 4 * * * cd /path/to/lfc-bot && ./scripts/backup.sh >> /var/log/lfcbot-backup.log 2>&1
+30 4 * * * cd /path/to/lfc-bot && ./scripts/backup.sh >> /path/to/lfc-bot/logs/backup-cron.log 2>&1
 ```
 
 A SQLite copy taken while the bot is running can be torn, so the script stops
