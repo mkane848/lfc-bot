@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-10-25
+
 ### Added
 
 - A `language` option on `/have`, `/want`, `/have-sealed`, `/want-sealed`,
@@ -64,6 +66,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Upgrading from 1.6.x runs four database migrations (0005 to 0008) when the
+  bot first starts: `listings.manapool_url` and `listings.sealed_uuid` are
+  renamed to `market_url` and `catalog_id`, listings gain `language`,
+  `grading_company` and `grade`, and the Pokémon catalog tables are added. The
+  data is kept, but the migrations only go forward, so the 1.6.2 image can't
+  run against the migrated database. Take a backup first (`scripts/backup.sh`);
+  to roll back, restore it and pin `LFCBOT_IMAGE` to
+  `ghcr.io/mkane848/lfc-bot:v1.6.2`. The new options and `/admin games` are
+  registered globally on first start and can take up to an hour to appear.
+  Pokémon stays off for every server until an admin turns it on.
 - The docs front page now explains the permissions LFCbot requests and why:
   the scopes, the `Guilds`-only intent, each invite permission, and what members
   need. Its links are one section at the bottom, which now includes the privacy
@@ -106,7 +118,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `◇ injected env (N) from .env` and goes to stderr instead of stdout.
 - drizzle-orm moves from 0.45.2 to 0.45.3. This wasn't part of the release
   pull request: the `v1.6.2` tag landed on the dependency bump merged just
-  after it (see the tagging fix under Unreleased), so the published image
+  after it (see the tagging fix under 1.7.0), so the published image
   includes it. CI passed on that commit.
 
 ### Fixed
@@ -528,7 +540,8 @@ qty` for `/have-multi`, `Product Name | max_price` for `/want-multi`. Unlike
 - CI workflow running lint, format check, type-check, and tests on every push
   to `main` and every pull request.
 
-[Unreleased]: https://github.com/mkane848/lfc-bot/compare/v1.6.2...HEAD
+[Unreleased]: https://github.com/mkane848/lfc-bot/compare/v1.7.0...HEAD
+[1.7.0]: https://github.com/mkane848/lfc-bot/compare/v1.6.2...v1.7.0
 [1.6.2]: https://github.com/mkane848/lfc-bot/compare/v1.6.1...v1.6.2
 [1.6.1]: https://github.com/mkane848/lfc-bot/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/mkane848/lfc-bot/compare/v1.5.0...v1.6.0
