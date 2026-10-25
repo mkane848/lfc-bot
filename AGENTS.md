@@ -88,7 +88,11 @@ is the documentation surface for environment variables.
   second game for the multi-game paths, and `tests/helpers/migrations.ts`
   replays the generated SQL up to a migration
 - `scripts/` - operational helpers, including `backup.sh` for the SQLite volume
-- `docs/` - deployment and hosting documentation
+- `docs/` - deployment and hosting documentation, and the GitHub Pages site:
+  GitHub builds this folder with Jekyll itself (Settings > Pages: branch
+  `main`, `/docs`). There is deliberately no Pages workflow: a second deployer
+  races the built-in one, and when it lands last it publishes the raw folder
+  with no `index.html`. Links in `docs/` must stay inside `docs/` or be absolute
 - `Dockerfile`, `docker-compose.yml`, `docker-compose.prebuilt.yml` (GHCR image
   override), `.dockerignore` - container packaging
 

@@ -1,7 +1,7 @@
 # FAQ
 
 Common questions from people using LFCbot in a server. For command syntax, see
-the [README command reference](../README.md#command-reference) or run `/help`
+the [README command reference](https://github.com/mkane848/lfc-bot/blob/main/README.md#command-reference) or run `/help`
 in Discord. For self-hosting questions, see
 [DEPLOYMENT.md](DEPLOYMENT.md) and [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
@@ -150,5 +150,5 @@ listings, digest settings, and admin config are completely independent.
 **What data does the bot store about me?**
 Your Discord user ID, display name, and whatever you put in a listing
 (card, condition, price, notes). See the
-[Security and Privacy section of the README](../README.md#security-and-privacy)
-and the [Privacy Policy](../PRIVACY_POLICY.md) for the full picture.
+[Security and Privacy section of the README](https://github.com/mkane848/lfc-bot/blob/main/README.md#security-and-privacy)
+and the [Privacy Policy](./privacy-policy.html) for the full picture.
