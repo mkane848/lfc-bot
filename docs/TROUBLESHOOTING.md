@@ -115,6 +115,30 @@ enable live links and pricing.
   (or an equivalent stop-copy-restart) rather than copying the live file
   directly.
 
+## The bot isn't updating, or scheduled backups aren't running
+
+Cron can fire on schedule and still do nothing. If the log file in the job's
+`>>` redirect can't be created or written, the shell fails before the script
+starts, so nothing runs and nothing is logged. A `/var/log` path is the usual
+cause, since the `ubuntu` user can't create files there.
+
+1. **Check that cron fired.** `grep CRON /var/log/syslog | grep -E 'auto-update|backup' | tail`
+   shows each run. Entries here but no matching lines in `logs/` mean the
+   command is failing before the script starts.
+2. **Check the redirect target.** `ls -l` the log path in `crontab -l`. It
+   must exist or be creatable by the cron user. Log under `~/lfc-bot/logs/`,
+   as in [Manual_Tasks.md](Manual_Tasks.md).
+3. **Check how far behind the VM is.** From `~/lfc-bot`:
+   `git fetch origin main && git rev-list --count HEAD..origin/main`. Anything
+   other than `0` the morning after a push to `main` means auto-update didn't
+   run. Also compare `ls -lt backups | head` against the backup schedule.
+4. **Run it by hand** to see the real error: `./scripts/auto-update.sh` (or
+   `auto-update-prebuilt.sh` if you deploy the prebuilt image).
+5. **The scripts are paired with a deployment style.**
+   `auto-update-prebuilt.sh` refuses to run unless `COMPOSE_FILE` in `.env`
+   selects the prebuilt override, and `auto-update.sh` builds from the local
+   checkout. Use the one that matches how the bot was started.
+
 ## Still stuck
 
 Check the bot process logs first (`docker compose logs --tail=100 bot`) —
