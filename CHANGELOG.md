@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The docs site could lose its front page after a push to `main`: two Pages
+  deployments ran for every commit, and when the one that publishes the raw
+  `docs/` folder finished last, `index.html` was missing. The extra
+  deployment is removed, so only GitHub's own Jekyll build publishes the site.
+- The FAQ's links to the README and the Privacy Policy pointed outside the
+  published `docs/` folder and led nowhere on the docs site.
+
 ## [1.7.0] - 2026-10-25
 
 ### Added
