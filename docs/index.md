@@ -66,6 +66,7 @@ To build the invite link, see [Invite your friends](./DEPLOYMENT.md#6-invite-you
 **Documentation**
 
 - [Deployment Guide](./DEPLOYMENT.md)
+- [Running on Windows](./WINDOWS.md)
 - [Manual Tasks](./Manual_Tasks.md)
 - [FAQ](./FAQ.md)
 - [Troubleshooting](./TROUBLESHOOTING.md)

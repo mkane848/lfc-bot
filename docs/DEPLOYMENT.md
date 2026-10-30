@@ -11,7 +11,8 @@ There are two supported ways to run it for a community:
 1. **A shared bot you host** so friends add it with an invite link.
 2. **One instance per community**, each running on its own free cloud VM.
 
-Both use the same Docker packaging below.
+Both use the same Docker packaging below. A community can also run its own
+copy on a Windows PC without Docker; see [WINDOWS.md](./WINDOWS.md).
 
 ## Option A: One shared bot you host
 
