@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- A guide for running the bot on a Windows PC without Docker (`docs/WINDOWS.md`),
+  a PowerShell backup script, and a Windows build-and-test job in CI.
+
 ### Fixed
 
 - The docs site could lose its front page after a push to `main`: two Pages
