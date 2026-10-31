@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-10-31
+
 ### Added
 
 - A guide for running the bot on a Windows PC without Docker (`docs/WINDOWS.md`),
@@ -554,7 +556,8 @@ qty` for `/have-multi`, `Product Name | max_price` for `/want-multi`. Unlike
 - CI workflow running lint, format check, type-check, and tests on every push
   to `main` and every pull request.
 
-[Unreleased]: https://github.com/mkane848/lfc-bot/compare/v1.7.0...HEAD
+[Unreleased]: https://github.com/mkane848/lfc-bot/compare/v1.8.0...HEAD
+[1.8.0]: https://github.com/mkane848/lfc-bot/compare/v1.7.0...v1.8.0
 [1.7.0]: https://github.com/mkane848/lfc-bot/compare/v1.6.2...v1.7.0
 [1.6.2]: https://github.com/mkane848/lfc-bot/compare/v1.6.1...v1.6.2
 [1.6.1]: https://github.com/mkane848/lfc-bot/compare/v1.6.0...v1.6.1
