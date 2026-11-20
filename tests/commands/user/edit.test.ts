@@ -653,3 +653,21 @@ describe('/edit on a listing from another game', () => {
     expect(getListingById(id)).toMatchObject({ priceCents: 999, notes: 'still here' });
   });
 });
+
+// Counterexample found by `tests/models/listing.model.test.ts`: neither `/edit`
+// nor the modal looks at the status. A known bug, kept as an expected failure:
+// flip `it.fails` to `it` with the fix.
+describe('handleEditModal on a closed listing', () => {
+  it.fails('does not change a fulfilled listing', async () => {
+    const id = seedListing({ status: 'fulfilled' });
+    const i = fakeModalSubmitInteraction({
+      customId: encodeEditModalId(id),
+      userId: 'owner-1',
+      fields: { condition: 'lp', price: '5.00', quantity: '2', set: 'LEA', notes: 'edited' },
+    });
+
+    await handleEditModal(i);
+
+    expect(getListingById(id)?.notes).toBeNull();
+  });
+});

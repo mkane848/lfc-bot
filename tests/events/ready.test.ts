@@ -111,3 +111,40 @@ describe('handleReady', () => {
     process.off('unhandledRejection', unhandled);
   });
 });
+
+// Counterexamples found by `tests/models/server.model.test.ts`: gateway events
+// that happen while the bot is offline are never replayed, so boot has to
+// reconcile. An `it.fails` is a known bug, kept as an expected failure until
+// fixed: flip it to `it` with the fix.
+describe('handleReady reconciles guild membership', () => {
+  const markedRow = (id: string) => ({
+    id,
+    digestMode: 'disabled',
+    digestCron: '0 9 * * *',
+    digestTimezone: 'UTC',
+    enabledGames: '["mtg"]',
+    removedAt: Date.now() - 1000,
+    createdAt: 1,
+    updatedAt: 1,
+  });
+
+  it('clears the removal marker of a guild that re-added the bot while it was offline', () => {
+    // Left alone, the hourly purge deletes this live guild's listings 30 days later.
+    getDb().insert(servers).values(markedRow('g1')).run();
+
+    handleReady(fakeClient(['g1']));
+
+    expect(getDb().select().from(servers).get()?.removedAt).toBeNull();
+  });
+
+  it.fails('marks a guild that removed the bot while it was offline', () => {
+    getDb()
+      .insert(servers)
+      .values({ ...markedRow('gone'), removedAt: null })
+      .run();
+
+    handleReady(fakeClient([]));
+
+    expect(getDb().select().from(servers).get()?.removedAt).not.toBeNull();
+  });
+});
