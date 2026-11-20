@@ -414,3 +414,50 @@ describe('runDigest across games', () => {
     expect(getServerConfig('500')!.lastDigestAt).toBe(0);
   });
 });
+
+// Counterexamples found by `tests/models/digest.model.test.ts`. Known bugs, kept
+// as expected failures until fixed: flip `it.fails` to `it` with the fix.
+describe('runDigest watermark', () => {
+  const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  it.fails('puts a listing posted while a digest is being sent into the next digest', async () => {
+    getDb().insert(servers).values(serverRow).run();
+    addListing();
+    const first = vi.fn(async () => {
+      // Posted after the run selected its listings, before delivery finished.
+      await pause(2);
+      addListing({
+        userId: 'u2',
+        cardName: 'Posted Mid-Send',
+        cardNameNormalized: 'posted mid-send',
+      });
+      await pause(2);
+    });
+    await runDigest(fakeClientWithChannelSend(first), getServerConfig('500')!, 'scheduled');
+
+    // Typed as the helper's parameter; `channel.send` is really given `{ content, ... }`.
+    const second = vi.fn<(message: string) => Promise<unknown>>();
+    second.mockResolvedValue(undefined);
+    await runDigest(fakeClientWithChannelSend(second), getServerConfig('500')!, 'scheduled');
+
+    // The watermark was set to when the first delivery finished, past the new listing.
+    const sent = second.mock.calls
+      .map(([options]) => (options as unknown as { content: string }).content)
+      .join('\n');
+    expect(sent).toContain('Posted Mid-Send');
+  });
+
+  it.fails('does not send a listing twice when two digests run at once', async () => {
+    // A scheduled run and `/admin digest` read the same watermark.
+    getDb().insert(servers).values(serverRow).run();
+    addListing();
+    const send = vi.fn(() => pause(2));
+
+    await Promise.all([
+      runDigest(fakeClientWithChannelSend(send), getServerConfig('500')!, 'scheduled'),
+      runDigest(fakeClientWithChannelSend(send), getServerConfig('500')!, 'manual'),
+    ]);
+
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+});
