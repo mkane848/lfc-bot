@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, inArray, lte, ne } from 'drizzle-orm';
+import { and, asc, eq, gte, inArray, lte, ne, sql } from 'drizzle-orm';
 import { getDb } from '../db/index.js';
 import { listings, servers, type ListingRow, type ServerRow } from '../db/schema.js';
 import { enabledGameIdsFromConfig } from '../games/index.js';
@@ -26,7 +26,7 @@ export function listScheduledServers(): ServerRow[] {
  * are included. Listings of a game the server has since disabled are left out;
  * they are kept, and appear again if the game is re-enabled.
  */
-export function prepareDigestListings(server: ServerRow): ListingRow[] {
+export function prepareDigestListings(server: ServerRow, cutoff: number = now()): ListingRow[] {
   const db = getDb();
   const from = server.lastDigestAt ?? 0;
   return db
@@ -38,14 +38,30 @@ export function prepareDigestListings(server: ServerRow): ListingRow[] {
         eq(listings.status, 'active'),
         inArray(listings.game, enabledGameIdsFromConfig(server.enabledGames)),
         gte(listings.createdAt, from),
-        lte(listings.createdAt, now()),
+        lte(listings.createdAt, cutoff),
       ),
     )
     .orderBy(asc(listings.createdAt))
     .all();
 }
 
-/** Advance the server's digest watermark after a successful delivery. */
+/**
+ * Move the server's digest watermark forward to `timestamp` after a successful
+ * delivery, never back: when two runs overlap, the one that selected less must
+ * not undo the other's progress.
+ */
+export function advanceServerWatermark(serverId: string, timestamp: number): void {
+  const db = getDb();
+  db.update(servers)
+    .set({
+      lastDigestAt: sql`max(coalesce(${servers.lastDigestAt}, 0), ${timestamp})`,
+      updatedAt: now(),
+    })
+    .where(eq(servers.id, serverId))
+    .run();
+}
+
+/** Set the server's digest watermark. */
 export function setServerWatermark(serverId: string, timestamp: number): void {
   const db = getDb();
   db.update(servers)

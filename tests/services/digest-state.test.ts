@@ -4,6 +4,7 @@ import { listings, servers, type NewServerRow, type NewListingRow } from '../../
 import {
   getServerConfig,
   initializeWatermarkIfNeeded,
+  advanceServerWatermark,
   prepareDigestListings,
   setServerWatermark,
   upsertServerConfig,
@@ -66,6 +67,29 @@ describe('digest state', () => {
     const config = getServerConfig('300')!;
     const rows = prepareDigestListings(config);
     expect(rows.map((r) => r.cardName)).toEqual(['Card 2']);
+  });
+
+  it('selects nothing created after the cutoff', () => {
+    getDb().insert(servers).values(serverRow).run();
+    setServerWatermark('300', 1000);
+    addListing(1500, 1);
+    addListing(2500, 2);
+    const rows = prepareDigestListings(getServerConfig('300')!, 2000);
+    expect(rows.map((r) => r.cardName)).toEqual(['Card 1']);
+  });
+
+  it('only moves the watermark forward', () => {
+    // Two overlapping digests can finish in either order.
+    getDb().insert(servers).values(serverRow).run();
+    advanceServerWatermark('300', 2000);
+    advanceServerWatermark('300', 1000);
+    expect(getServerConfig('300')!.lastDigestAt).toBe(2000);
+  });
+
+  it('advances a watermark that was never set', () => {
+    getDb().insert(servers).values(serverRow).run();
+    advanceServerWatermark('300', 1000);
+    expect(getServerConfig('300')!.lastDigestAt).toBe(1000);
   });
 
   it('initializes the watermark when enabling an active mode for the first time', () => {

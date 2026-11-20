@@ -415,12 +415,12 @@ describe('runDigest across games', () => {
   });
 });
 
-// Counterexamples found by `tests/models/digest.model.test.ts`. Known bugs, kept
-// as expected failures until fixed: flip `it.fails` to `it` with the fix.
+// Counterexamples found by `tests/models/digest.model.test.ts`. An `it.fails` is
+// a known bug, kept as an expected failure until fixed: flip it to `it` with the fix.
 describe('runDigest watermark', () => {
   const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-  it.fails('puts a listing posted while a digest is being sent into the next digest', async () => {
+  it('puts a listing posted while a digest is being sent into the next digest', async () => {
     getDb().insert(servers).values(serverRow).run();
     addListing();
     const first = vi.fn(async () => {

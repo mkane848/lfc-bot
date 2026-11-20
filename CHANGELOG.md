@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- A server that re-added the bot while the bot was offline stayed marked for
+  removal, and its listings were deleted when the 30-day retention window
+  ended. Startup now clears the removal marker of every server the bot is in.
+- A listing posted while a digest was being sent was left out of every later
+  digest, because the watermark moved to when delivery finished. The watermark
+  now moves to the time the digest selected its listings, and never backward.
+
 ## [1.8.0] - 2026-10-31
 
 ### Added

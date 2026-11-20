@@ -5,7 +5,7 @@ import { DIGEST_SECTION_CAP, DISCORD_MESSAGE_MAX_LENGTH } from '../utils/constan
 import type { DigestTrigger } from '../types/index.js';
 import { enabledGameIdsFromConfig } from '../games/index.js';
 import { digestLine } from '../utils/embeds.js';
-import { prepareDigestListings, setServerWatermark } from './digest-state.js';
+import { advanceServerWatermark, prepareDigestListings } from './digest-state.js';
 import { sendCriticalAlert } from './alerts.js';
 import { retryWithBackoff } from '../utils/retry.js';
 
@@ -98,7 +98,11 @@ export async function runDigest(
   server: ServerRow,
   trigger: DigestTrigger,
 ): Promise<DigestResult> {
-  const collected = prepareDigestListings(server);
+  // The watermark advances to this cutoff, not to when delivery finishes: a
+  // listing posted while the messages are being sent (retries can take
+  // seconds) was not selected, and must be in the next digest.
+  const cutoff = now();
+  const collected = prepareDigestListings(server, cutoff);
 
   const empty: DigestResult = { sent: false, channelOk: false, dmOk: false, listingCount: 0 };
   if (collected.length === 0) {
@@ -130,7 +134,11 @@ export async function runDigest(
     return { sent: false, channelOk, dmOk, listingCount: collected.length };
   }
 
-  setServerWatermark(server.id, now());
+  // Inclusive: a listing created in the cutoff's own millisecond after the
+  // selection ran is picked up next time. The price is that one created in
+  // that millisecond before it may be sent twice, and a duplicate is
+  // preferable to dropping a listing.
+  advanceServerWatermark(server.id, cutoff);
   logDigest(server.id, trigger, collected, { channel: channelOk, dm: dmOk });
   return { sent: true, channelOk, dmOk, listingCount: collected.length };
 }

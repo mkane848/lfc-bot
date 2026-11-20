@@ -6,7 +6,7 @@ import {
   startSealedCatalogSync,
 } from '../services/scheduler.js';
 import { warmUpGameCatalogs } from '../services/game-catalogs.js';
-import { expireListings } from '../services/listing-expiry.js';
+import { clearRemovalMarker, expireListings } from '../services/listing-expiry.js';
 import { isSealedCatalogStale, syncSealedCatalog } from '../services/sealed.js';
 import { upsertServerConfig } from '../services/digest-state.js';
 import { getLogger } from '../utils/logger.js';
@@ -16,8 +16,12 @@ export function handleReady(client: Client): void {
   logger.info(`Logged in as ${client.user?.tag ?? 'unknown'}`);
 
   // Seed a config row for every guild the bot currently belongs to, then run
-  // an initial expiry pass and schedule per-server digest jobs.
+  // an initial expiry pass and schedule per-server digest jobs. A guild that
+  // re-added the bot while it was offline sent no `guildCreate`, so clear its
+  // removal marker here too; otherwise the retention purge would delete a
+  // guild the bot is still in.
   for (const guild of client.guilds.cache.values()) {
+    clearRemovalMarker(guild.id);
     upsertServerConfig({ serverId: guild.id });
   }
   expireListings();
