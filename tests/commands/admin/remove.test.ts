@@ -111,4 +111,17 @@ describe('/admin remove', () => {
       expect.objectContaining({ content: expect.stringContaining('already fulfilled') }),
     );
   });
+
+  it('replies ephemerally and bails when the interaction is outside a guild', async () => {
+    const i = fakeChatInputInteraction({
+      guildId: null,
+      options: { integers: { listing_id: 1 } },
+    });
+
+    await removeExecute(i);
+
+    expect(i.reply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('inside a server') }),
+    );
+  });
 });

@@ -91,6 +91,33 @@ describe('/mylistings execute', () => {
       expect.objectContaining({ content: expect.stringContaining('no active listings') }),
     );
   });
+
+  it('renders a sealed listing with the sealed Product field', async () => {
+    seedListing({
+      kind: 'sealed',
+      cardName: 'Bloomburrow Bundle',
+      cardNameNormalized: 'bloomburrow bundle',
+      condition: null,
+      priceCents: 4000,
+      sealedUuid: 'uuid-blb',
+      sealedCategory: 'bundle',
+      sealedSubtype: 'default',
+    });
+    const i = fakeChatInputInteraction({ userId: 'owner-1' });
+
+    await myListingsCommand.execute(i);
+
+    expect(i.reply).toHaveBeenCalled();
+  });
+
+  it('falls back to raw intent/accepts labels when not in the map', async () => {
+    seedListing({ intent: 'unknown-intent', accepts: 'unknown-accepts' });
+    const i = fakeChatInputInteraction({ userId: 'owner-1' });
+
+    await myListingsCommand.execute(i);
+
+    expect(i.reply).toHaveBeenCalled();
+  });
 });
 
 describe('handleListingButton', () => {
@@ -164,6 +191,29 @@ describe('handleListingButton', () => {
     expect(i.reply).toHaveBeenCalledWith(
       expect.objectContaining({ content: expect.stringContaining('Only the listing owner') }),
     );
+  });
+
+  it('replies with "Listing not found." when the id does not resolve', async () => {
+    const i = fakeButtonInteraction({
+      customId: encodeListingActionId('fulfill', 99999),
+      userId: 'owner-1',
+    });
+
+    await handleListingButton(i);
+
+    expect(i.reply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('Listing not found') }),
+    );
+  });
+
+  it('returns silently when the customId is not a recognised listing action', async () => {
+    const i = fakeButtonInteraction({
+      customId: 'lfc:garbage:1',
+      userId: 'owner-1',
+    });
+
+    await expect(handleListingButton(i)).resolves.toBeUndefined();
+    expect(i.reply).not.toHaveBeenCalled();
   });
 });
 
@@ -249,5 +299,111 @@ describe('handleBatchSelect', () => {
     await handleBatchSelect(i);
 
     expect(i.showModal).toHaveBeenCalledTimes(1);
+  });
+
+  it('replies with "Listing not found." on batchedit when the first id does not resolve', async () => {
+    const i = fakeSelectMenuInteraction({
+      customId: encodeBatchSelectId('batchedit'),
+      values: ['99999'],
+      userId: 'owner-1',
+    });
+
+    await handleBatchSelect(i);
+
+    expect(i.showModal).not.toHaveBeenCalled();
+    expect(i.reply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('Listing not found') }),
+    );
+  });
+
+  it('replies ephemeral on batchedit when the first id is not owned by the caller', async () => {
+    const first = seedListing({ userId: 'someone-else' });
+    const i = fakeSelectMenuInteraction({
+      customId: encodeBatchSelectId('batchedit'),
+      values: [String(first)],
+      userId: 'owner-1',
+    });
+
+    await handleBatchSelect(i);
+
+    expect(i.showModal).not.toHaveBeenCalled();
+    expect(i.reply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('Only the listing owner') }),
+    );
+  });
+
+  it('reports "Nothing to do." when neither succeeded nor skipped arrays have items', async () => {
+    const i = fakeSelectMenuInteraction({
+      customId: encodeBatchSelectId('batchfulfill'),
+      values: [],
+      userId: 'owner-1',
+    });
+
+    await handleBatchSelect(i);
+
+    // An empty values array bypasses the per-id loop; the function falls
+    // through to `parts.join(' ') || 'Nothing to do.'` reply.
+    expect(i.reply).toHaveBeenCalledWith({ content: 'Nothing to do.', ephemeral: true });
+  });
+});
+
+describe('/mylistings execute (no-guild / page options)', () => {
+  it('replies ephemerally and bails when the interaction is outside a guild', async () => {
+    const i = fakeChatInputInteraction({ guildId: null, userId: 'owner-1' });
+
+    await myListingsCommand.execute(i);
+
+    expect(i.reply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('inside a server') }),
+    );
+  });
+
+  it('uses page=1 when the page option is missing', async () => {
+    seedListing();
+    const i = fakeChatInputInteraction({ userId: 'owner-1', options: {} });
+
+    await myListingsCommand.execute(i);
+
+    expect(i.reply).toHaveBeenCalledWith(expect.objectContaining({ embeds: expect.any(Array) }));
+  });
+
+  it('renders a sealed listing with the sealed Product field included', async () => {
+    seedListing({
+      kind: 'sealed',
+      cardName: 'Bloomburrow Bundle',
+      cardNameNormalized: 'bloomburrow bundle',
+      condition: null,
+      sealedUuid: 'uuid-blb',
+      sealedCategory: 'bundle',
+      sealedSubtype: 'default',
+      priceCents: 4000,
+    });
+    const i = fakeChatInputInteraction({ userId: 'owner-1' });
+
+    await myListingsCommand.execute(i);
+
+    expect(i.reply).toHaveBeenCalled();
+  });
+
+  it('falls back to raw intent/accepts labels when not in the label map', async () => {
+    seedListing({ intent: 'unknown-intent', accepts: 'unknown-accepts' });
+    const i = fakeChatInputInteraction({ userId: 'owner-1' });
+
+    await myListingsCommand.execute(i);
+
+    expect(i.reply).toHaveBeenCalled();
+  });
+});
+
+describe('handleBatchSelect (invalid customId)', () => {
+  it('returns silently when the customId does not decode to a batch select action', async () => {
+    const i = fakeSelectMenuInteraction({
+      customId: 'lfc:totally-unrelated',
+      values: ['1'],
+      userId: 'owner-1',
+    });
+
+    await expect(handleBatchSelect(i)).resolves.toBeUndefined();
+    expect(i.reply).not.toHaveBeenCalled();
   });
 });

@@ -60,4 +60,18 @@ describe('/admin timezone', () => {
     );
     expect(refreshServerDigest).not.toHaveBeenCalled();
   });
+
+  it('replies ephemerally and bails when the interaction is outside a guild', async () => {
+    const i = fakeChatInputInteraction({
+      guildId: null,
+      options: { strings: { timezone: 'America/New_York' } },
+    });
+
+    await timezoneExecute(i);
+
+    expect(i.reply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('inside a server') }),
+    );
+    expect(refreshServerDigest).not.toHaveBeenCalled();
+  });
 });

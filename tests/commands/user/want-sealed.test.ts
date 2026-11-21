@@ -281,3 +281,60 @@ describe('/want-sealed across games', () => {
     expect(wanted()).toBeUndefined();
   });
 });
+
+describe('/want-sealed (validation error paths)', () => {
+  it('rejects notes that are too long', async () => {
+    const i = interaction({ notes: 'x'.repeat(1001) });
+
+    await wantSealedCommand.execute(i);
+
+    expect(i.editReply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringMatching(/notes/i) }),
+    );
+  });
+
+  it('replies with a graceful error when createListing throws (rate-limited)', async () => {
+    const now = Date.now();
+    getDb()
+      .insert(listings)
+      .values({
+        serverId: 'guild-1',
+        userId: 'user-1',
+        username: 'alice',
+        intent: 'want',
+        accepts: 'cash',
+        game: 'mtg',
+        cardName: 'Bloomburrow Bundle',
+        cardNameNormalized: 'bloomburrow bundle',
+        cardSet: 'BLB',
+        cardImageUrl: null,
+        finish: null,
+        variant: null,
+        collectorNumber: null,
+        marketUrl: null,
+        condition: null,
+        priceCents: null,
+        quantity: 1,
+        notes: null,
+        kind: 'sealed',
+        catalogId: 'uuid-blb',
+        sealedCategory: 'bundle',
+        sealedSubtype: 'default',
+        status: 'active',
+        expiresAt: now + 30 * 24 * 3600 * 1000,
+        createdAt: now - 1000,
+        updatedAt: now - 1000,
+      })
+      .run();
+
+    const i = interaction({ product_name: 'Bloomburrow Bundle', notes: null });
+
+    await wantSealedCommand.execute(i);
+
+    expect(i.editReply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: expect.stringMatching(/too quickly|posting/i),
+      }),
+    );
+  });
+});
