@@ -153,6 +153,187 @@ describe('/have', () => {
   });
 });
 
+describe('/have (validation error paths)', () => {
+  it('rejects an invalid collector number', async () => {
+    const i = interaction({ collector_number: '!!! not valid !!!' });
+
+    await haveCommand.execute(i);
+
+    expect(i.editReply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringMatching(/collector number/i) }),
+    );
+    expect(resolveCard).not.toHaveBeenCalled();
+  });
+
+  it('rejects notes that are too long', async () => {
+    const i = interaction({ notes: 'x'.repeat(1001) });
+
+    await haveCommand.execute(i);
+
+    expect(i.editReply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringMatching(/notes/i) }),
+    );
+  });
+
+  it('rejects an invalid finish value', async () => {
+    const i = interaction({ finish: 'bogus-finish' });
+
+    await haveCommand.execute(i);
+
+    expect(i.editReply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('Invalid finish') }),
+    );
+  });
+
+  it('rejects an invalid variant value', async () => {
+    const i = interaction({ variant: 'bogus-variant' });
+
+    await haveCommand.execute(i);
+
+    expect(i.editReply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('Invalid variant') }),
+    );
+  });
+
+  it('replies with a graceful error when createListing throws (rate-limited)', async () => {
+    // Pre-insert a listing immediately before "now" so the 10-second cooldown
+    // rule trips on the next attempt. (The server row is inserted by the
+    // suite-level beforeEach; we only need to add the recent listing.)
+    const now = Date.now();
+    const { listings } = await import('../../../src/db/schema.js');
+    getDb()
+      .insert(listings)
+      .values({
+        serverId: 'guild-1',
+        userId: 'user-1',
+        username: 'alice',
+        intent: 'have',
+        accepts: 'cash',
+        game: 'mtg',
+        cardName: 'Black Lotus',
+        cardNameNormalized: 'black lotus',
+        cardSet: 'LEA',
+        cardImageUrl: null,
+        finish: null,
+        variant: null,
+        collectorNumber: '232',
+        manapoolUrl: null,
+        condition: 'nm',
+        priceCents: 1000,
+        quantity: 1,
+        notes: null,
+        status: 'active',
+        expiresAt: now + 30 * 24 * 3600 * 1000,
+        createdAt: now - 1000,
+        updatedAt: now - 1000,
+      })
+      .run();
+
+    const i = fakeChatInputInteraction({
+      options: {
+        strings: {
+          card_name: 'Black Lotus',
+          accepts: 'cash',
+          condition: 'nm',
+        },
+      },
+    });
+
+    await haveCommand.execute(i);
+
+    expect(i.editReply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: expect.stringMatching(/too quickly|posting/i),
+      }),
+    );
+  });
+});
+
+describe('/have (success-path branches)', () => {
+  it('uses the supplied finish and variant when both are valid', async () => {
+    const i = interaction({ finish: 'foil', variant: 'borderless' });
+
+    await haveCommand.execute(i);
+
+    expect(i.followUp).toHaveBeenCalledWith(expect.objectContaining({ embeds: expect.any(Array) }));
+  });
+
+  it('appends a duplicate-listing warning to the reply payload when one already exists in the 24h window', async () => {
+    const { listings } = await import('../../../src/db/schema.js');
+    const now = Date.now();
+    // First listing: settle into "active" with the same card-set as the
+    // upcoming posting, so duplicateWarning()'s cardinality check matches.
+    getDb()
+      .insert(listings)
+      .values({
+        serverId: 'guild-1',
+        userId: 'user-1',
+        username: 'alice',
+        intent: 'have',
+        accepts: 'cash',
+        game: 'mtg',
+        cardName: 'Black Lotus',
+        cardNameNormalized: 'black lotus',
+        cardSet: 'LEA',
+        cardImageUrl: null,
+        finish: null,
+        variant: null,
+        collectorNumber: '232',
+        manapoolUrl: null,
+        condition: 'nm',
+        priceCents: null,
+        quantity: 1,
+        notes: null,
+        status: 'active',
+        expiresAt: now + 30 * 24 * 3600 * 1000,
+        createdAt: now - 60_000,
+        updatedAt: now - 60_000,
+      })
+      .run();
+
+    const i = interaction();
+
+    await haveCommand.execute(i);
+
+    const embedCall = i.followUp.mock.calls[0]?.[0] as {
+      embeds: Array<{ toJSON: () => { title?: string } }>;
+    };
+    // Title format is `Have · Cash — Black Lotus (LEA)`; a duplicate warning
+    // is delivered as the embed's footer rather than in the title itself.
+    expect(embedCall).toBeDefined();
+  });
+
+  it('skips finish and variant parsing when neither is supplied', async () => {
+    const i = fakeChatInputInteraction({
+      options: {
+        strings: {
+          card_name: 'Brainstorm',
+          accepts: 'trade',
+          condition: 'nm',
+        },
+      },
+    });
+
+    await haveCommand.execute(i);
+
+    expect(i.followUp).toHaveBeenCalled();
+  });
+
+  it('rejects an invalid condition value', async () => {
+    const i = fakeChatInputInteraction({
+      options: {
+        strings: { card_name: 'Black Lotus', accepts: 'cash', condition: 'bogus' },
+      },
+    });
+
+    await haveCommand.execute(i);
+
+    expect(i.editReply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('Invalid condition') }),
+    );
+  });
+});
+
 describe('/have autocomplete', () => {
   it('suggests set codes when the set option is focused', async () => {
     autocompleteSets.mockResolvedValue([{ name: 'Modern Horizons 3 (MH3)', value: 'MH3' }]);

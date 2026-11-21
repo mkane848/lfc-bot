@@ -423,6 +423,28 @@ describe('handleEditModal', () => {
   });
 });
 
+describe('/edit execute', () => {
+  it('rejects outside a guild before doing any work', async () => {
+    const i = fakeChatInputInteraction({ guildId: null, options: { integers: { listing_id: 1 } } });
+
+    await editCommand.execute(i);
+
+    expect(i.reply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('inside a server') }),
+    );
+  });
+
+  it('replies with "Listing not found." when the listing id does not resolve', async () => {
+    const i = fakeChatInputInteraction({ options: { integers: { listing_id: 99999 } } });
+
+    await editCommand.execute(i);
+
+    expect(i.reply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('Listing not found') }),
+    );
+  });
+});
+
 describe('handleEditNextButton', () => {
   it('opens the next listing modal for the owner', async () => {
     const first = seedListing();
@@ -448,6 +470,31 @@ describe('handleEditNextButton', () => {
     await handleEditNextButton(i);
 
     expect(i.showModal).not.toHaveBeenCalled();
+  });
+
+  it('replies ephemerally with "Listing not found." when the next id does not resolve', async () => {
+    const i = fakeButtonInteraction({
+      customId: encodeEditNextId(99999, []),
+      userId: 'owner-1',
+    });
+
+    await handleEditNextButton(i);
+
+    expect(i.showModal).not.toHaveBeenCalled();
+    expect(i.reply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('Listing not found') }),
+    );
+  });
+
+  it('returns silently when the customId is not in the expected format', async () => {
+    const i = fakeButtonInteraction({
+      customId: 'lfc:garbage:42',
+      userId: 'owner-1',
+    });
+
+    await expect(handleEditNextButton(i)).resolves.toBeUndefined();
+    expect(i.showModal).not.toHaveBeenCalled();
+    expect(i.reply).not.toHaveBeenCalled();
   });
 });
 

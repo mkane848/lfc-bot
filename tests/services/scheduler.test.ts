@@ -9,10 +9,13 @@ import {
   removeServerDigest,
   scheduleAllDigests,
   startGameCatalogSync,
+  startMaintenance,
   startSealedCatalogSync,
   stopAllJobs,
 } from '../../src/services/scheduler.js';
+import { pruneExpiredCardCache } from '../../src/services/card-cache.js';
 import { syncEnabledGameCatalogs } from '../../src/services/game-catalogs.js';
+import { expireListings, purgeMarkedServers } from '../../src/services/listing-expiry.js';
 import { syncSealedCatalog } from '../../src/services/sealed.js';
 import { setupTestDb } from '../helpers/db.js';
 
@@ -25,16 +28,34 @@ vi.mock('../../src/services/game-catalogs.js', () => ({
   syncEnabledGameCatalogs: vi.fn(),
 }));
 
+vi.mock('../../src/services/card-cache.js', () => ({
+  pruneExpiredCardCache: vi.fn(),
+}));
+
+vi.mock('../../src/services/listing-expiry.js', () => ({
+  expireListings: vi.fn(),
+  purgeMarkedServers: vi.fn(),
+}));
+
 setupTestDb();
 
 const mockSyncSealedCatalog = vi.mocked(syncSealedCatalog);
 const mockSyncGameCatalogs = vi.mocked(syncEnabledGameCatalogs);
+const mockPruneExpiredCardCache = vi.mocked(pruneExpiredCardCache);
+const mockExpireListings = vi.mocked(expireListings);
+const mockPurgeMarkedServers = vi.mocked(purgeMarkedServers);
 
 beforeEach(() => {
   mockSyncSealedCatalog.mockReset();
   mockSyncSealedCatalog.mockResolvedValue({ imported: 0, removed: 0 });
   mockSyncGameCatalogs.mockReset();
   mockSyncGameCatalogs.mockResolvedValue(undefined);
+  mockPruneExpiredCardCache.mockReset();
+  mockPruneExpiredCardCache.mockReturnValue(0);
+  mockExpireListings.mockReset();
+  mockExpireListings.mockReturnValue(0);
+  mockPurgeMarkedServers.mockReset();
+  mockPurgeMarkedServers.mockReturnValue(0);
 });
 
 // `createJob`/`cancelJob` are internal to the scheduler module (not exported);
@@ -126,6 +147,19 @@ describe('refreshServerDigest', () => {
     const client = fakeClient();
 
     expect(() => refreshServerDigest(client, 'guild-1')).not.toThrow();
+  });
+
+  it('falls back to "0 9 * * *" when digestCron is empty', () => {
+    getDb()
+      .insert(servers)
+      .values(serverRow({ digestCron: '' }))
+      .run();
+    const client = fakeClient();
+    const scheduleSpy = vi.spyOn(cron, 'schedule');
+
+    scheduleAllDigests(client);
+
+    expect(scheduleSpy).toHaveBeenCalledWith('0 9 * * *', expect.any(Function), expect.any(Object));
   });
 });
 
@@ -292,5 +326,42 @@ describe('digest jobs and the server lifecycle', () => {
     refreshServerDigest(fakeClient(), 'guild-1');
 
     expect(getServerConfig('guild-1')?.lastDigestAt).toBeGreaterThanOrEqual(before);
+  });
+});
+
+describe('startMaintenance', () => {
+  it('runs expireListings -> pruneExpiredCardCache -> purgeMarkedServers inside its scheduled callback', () => {
+    const scheduleSpy = vi.spyOn(cron, 'schedule');
+
+    startMaintenance();
+
+    expect(scheduleSpy).toHaveBeenCalled();
+    const [expression, callback, opts] = scheduleSpy.mock.calls[0]!;
+    expect(expression).toBe('0 * * * *');
+    expect(opts).toEqual({ timezone: 'UTC' });
+
+    (callback as () => void)();
+    expect(mockExpireListings).toHaveBeenCalledTimes(1);
+    expect(mockPruneExpiredCardCache).toHaveBeenCalledTimes(1);
+    expect(mockPurgeMarkedServers).toHaveBeenCalledTimes(1);
+  });
+
+  it('is idempotent: a second call does not register another job', () => {
+    const scheduleSpy = vi.spyOn(cron, 'schedule');
+
+    startMaintenance();
+    startMaintenance();
+
+    expect(scheduleSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('stopAllJobs clears the maintenance task and allows a fresh registration', () => {
+    const scheduleSpy = vi.spyOn(cron, 'schedule');
+
+    startMaintenance();
+    stopAllJobs();
+    startMaintenance();
+
+    expect(scheduleSpy).toHaveBeenCalledTimes(2);
   });
 });

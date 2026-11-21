@@ -13,7 +13,7 @@ npm test -- --coverage
 
 | Statements | Branches | Functions | Lines | Tests |
 |---|---|---|---|---|
-| **95.19 %** (2 562 / 2 692) | **90.39 %** (1 627 / 1 800) | **93.71 %** (492 / 525) | **95.40 %** (2 468 / 2 587) | 74 files, 1 020 passing + 10 expected fail |
+| **95.17 %** (2 562 / 2 692) | **90.38 %** (1 627 / 1 800) | **93.71 %** (492 / 525) | **95.40 %** (2 468 / 2 587) | 74 files, 1 020 passing + 10 expected fail |
 
 `vitest.config.ts` uses the strict `src/**/*.ts` include, so a source file with
 no test counts as 0 % instead of disappearing from the report. Excluded from
@@ -62,8 +62,8 @@ every run (including failures) so a drop can be inspected from the PR page.
 
 | | Gate | Measured |
 |---|---|---|
-| Statements | 95 | 95.19 |
-| Branches | 90 | 90.39 |
+| Statements | 95 | 95.17 |
+| Branches | 90 | 90.38 |
 | Functions | 90 | 93.71 |
 | Lines | 95 | 95.40 |
 

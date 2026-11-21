@@ -160,6 +160,32 @@ describe('/have-sealed', () => {
     expect(inserted?.catalogId).toBe(hitResult.uuid);
   });
 
+  it('parses a valid price and posts the listing', async () => {
+    resolveSealedProduct.mockResolvedValue(hitResult);
+    const i = interaction({ price: '40.00' });
+
+    await haveSealedCommand.execute(i);
+
+    expect(i.followUp).toHaveBeenCalledWith(expect.objectContaining({ embeds: expect.any(Array) }));
+    const inserted = getDb().select().from(listings).all()[0];
+    expect(inserted?.priceCents).toBe(4000);
+  });
+
+  it('uses quantity > 1 from the integer option', async () => {
+    resolveSealedProduct.mockResolvedValue(hitResult);
+    const i = fakeChatInputInteraction({
+      options: {
+        strings: { product_name: 'Bloomburrow Bundle', accepts: 'cash' },
+        integers: { quantity: 5 },
+      },
+    });
+
+    await haveSealedCommand.execute(i);
+
+    const inserted = getDb().select().from(listings).all()[0];
+    expect(inserted?.quantity).toBe(5);
+  });
+
   it('rejects outside a guild before deferring', async () => {
     const i = fakeChatInputInteraction({
       guildId: null,
@@ -341,5 +367,62 @@ describe('/have-sealed across games', () => {
     const i = interaction({ product_name: 'fk:id:fk-box-jp', language: 'en' });
     await haveSealedCommand.execute(i);
     expect(errorText(i)).toMatch(/Japanese printing, but you chose English/);
+  });
+});
+
+describe('/have-sealed (validation error paths)', () => {
+  it('rejects notes that are too long', async () => {
+    const i = interaction({ notes: 'x'.repeat(1001) });
+
+    await haveSealedCommand.execute(i);
+
+    expect(i.editReply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringMatching(/notes/i) }),
+    );
+  });
+
+  it('replies with a graceful error when createListing throws (rate-limited)', async () => {
+    const now = Date.now();
+    getDb()
+      .insert(listings)
+      .values({
+        serverId: 'guild-1',
+        userId: 'user-1',
+        username: 'alice',
+        intent: 'have',
+        accepts: 'cash',
+        game: 'mtg',
+        cardName: 'Bloomburrow Bundle',
+        cardNameNormalized: 'bloomburrow bundle',
+        cardSet: 'BLB',
+        cardImageUrl: null,
+        finish: null,
+        variant: null,
+        collectorNumber: null,
+        marketUrl: null,
+        condition: null,
+        priceCents: 1000,
+        quantity: 1,
+        notes: null,
+        kind: 'sealed',
+        catalogId: 'uuid-blb',
+        sealedCategory: 'bundle',
+        sealedSubtype: 'default',
+        status: 'active',
+        expiresAt: now + 30 * 24 * 3600 * 1000,
+        createdAt: now - 1000,
+        updatedAt: now - 1000,
+      })
+      .run();
+
+    const i = interaction({ product_name: 'Bloomburrow Bundle' });
+
+    await haveSealedCommand.execute(i);
+
+    expect(i.editReply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: expect.stringMatching(/too quickly|posting/i),
+      }),
+    );
   });
 });
