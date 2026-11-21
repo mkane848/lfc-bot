@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, inArray, lte, ne, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, gte, inArray, lt, lte, ne, not, sql } from 'drizzle-orm';
 import { getDb } from '../db/index.js';
 import { listings, servers, type ListingRow, type ServerRow } from '../db/schema.js';
 import { enabledGameIdsFromConfig } from '../games/index.js';
@@ -39,6 +39,16 @@ export function prepareDigestListings(server: ServerRow, cutoff: number = now())
         inArray(listings.game, enabledGameIdsFromConfig(server.enabledGames)),
         gte(listings.createdAt, from),
         lte(listings.createdAt, cutoff),
+        // Posted while digests were paused. The bounds are exclusive: a listing
+        // created in the very millisecond of a pause or resume is sent.
+        server.digestPausedAt !== null && server.digestResumedAt !== null
+          ? not(
+              and(
+                gt(listings.createdAt, server.digestPausedAt),
+                lt(listings.createdAt, server.digestResumedAt),
+              )!,
+            )
+          : undefined,
       ),
     )
     .orderBy(asc(listings.createdAt))
@@ -103,6 +113,8 @@ export function upsertServerConfig(partial: {
       digestCron: partial.digestCron ?? DEFAULT_DIGEST_CRON,
       digestTimezone: partial.digestTimezone ?? DEFAULT_DIGEST_TIMEZONE,
       lastDigestAt: null,
+      digestPausedAt: null,
+      digestResumedAt: null,
       enabledGames: JSON.stringify(partial.enabledGames ?? ['mtg']),
       removedAt: null,
       createdAt: timestamp,
@@ -114,13 +126,41 @@ export function upsertServerConfig(partial: {
   const update: Partial<ServerRow> = { updatedAt: timestamp };
   if (partial.adminChannelId !== undefined) update.adminChannelId = partial.adminChannelId;
   if (partial.digestDmUserId !== undefined) update.digestDmUserId = partial.digestDmUserId;
-  if (partial.digestMode !== undefined) update.digestMode = partial.digestMode;
+  if (partial.digestMode !== undefined) {
+    update.digestMode = partial.digestMode;
+    Object.assign(update, pauseChange(existing, partial.digestMode, timestamp));
+  }
   if (partial.digestCron !== undefined) update.digestCron = partial.digestCron;
   if (partial.digestTimezone !== undefined) update.digestTimezone = partial.digestTimezone;
   if (partial.enabledGames !== undefined)
     update.enabledGames = JSON.stringify(partial.enabledGames);
   db.update(servers).set(update).where(eq(servers.id, partial.serverId)).run();
   return db.select().from(servers).where(eq(servers.id, partial.serverId)).get() as ServerRow;
+}
+
+/**
+ * What changing the digest mode does to the watermark. Pausing records when.
+ * Resuming must not send what was posted while paused, but must still send
+ * what was posted before the pause and never sent, so the pause is kept as a
+ * window `prepareDigestListings` skips. A second pause before the next digest
+ * replaces the window, so the first pause's listings are sent after all:
+ * sending too much is preferred to dropping listings.
+ */
+function pauseChange(existing: ServerRow, mode: string, at: number): Partial<ServerRow> {
+  const wasOn = existing.digestMode !== 'disabled';
+  const turnsOn = mode !== 'disabled';
+  if (wasOn && !turnsOn) {
+    return { digestPausedAt: at, digestResumedAt: null };
+  }
+  if (wasOn || !turnsOn || existing.lastDigestAt === null) {
+    // No change, or the first time on, which `initializeWatermarkIfNeeded` handles.
+    return {};
+  }
+  // A pause from before pause times were recorded has no start, so there is no
+  // telling what was posted before it: start from now.
+  return existing.digestPausedAt !== null && existing.lastDigestAt <= existing.digestPausedAt
+    ? { digestResumedAt: at }
+    : { lastDigestAt: at, digestPausedAt: null, digestResumedAt: null };
 }
 
 /** Return a single server config row or undefined. */

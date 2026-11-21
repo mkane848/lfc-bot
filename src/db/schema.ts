@@ -9,6 +9,13 @@ export const servers = sqliteTable('servers', {
   digestCron: text('digest_cron').notNull().default('0 9 * * *'),
   digestTimezone: text('digest_timezone').notNull().default('UTC'),
   lastDigestAt: integer('last_digest_at'),
+  /**
+   * The last time digests were paused and resumed. While both are set, a digest
+   * skips listings created between them: they were posted while digests were
+   * off. Listings from before the pause that were never sent still go out.
+   */
+  digestPausedAt: integer('digest_paused_at'),
+  digestResumedAt: integer('digest_resumed_at'),
   enabledGames: text('enabled_games')
     .notNull()
     .default(sql`'["mtg"]'`),

@@ -3,12 +3,14 @@
  * next digest carries. A run selects active listings created in
  * `[last_digest_at, cutoff]`, where the cutoff is the time it started, awaits
  * delivery, and on success moves the watermark forward to that cutoff. Turning
- * digests on initializes the watermark, but only the first time
- * (`initializeWatermarkIfNeeded`).
+ * digests off records when; turning them back on skips what was posted in
+ * between, either by moving the watermark to now or, when listings from before
+ * the pause are still unsent, by keeping the pause as a window that selection
+ * leaves out. A scheduled run and `/admin digest` can
+ * start at the same time, and the second joins the run already in flight.
  *
  * The model has a clock of a few discrete ticks (one tick is one millisecond of
- * real time), up to two listings, and up to two runs in flight, since a
- * scheduled run and `/admin digest` can overlap. Each run is split into the
+ * real time) and up to two listings. Each run is split into the
  * `start` that selects listings and the `ok`/`fail` that finishes delivery, so
  * the search covers everything that can happen while a send is awaited.
  */
@@ -72,6 +74,9 @@ interface State {
   /** Game `a` is always enabled; `b` can be switched off and on. */
   bEnabled: boolean;
   listings: Listing[];
+  /** `digest_paused_at` and `digest_resumed_at`. */
+  pausedAt: number | null;
+  resumedAt: number | null;
   /** Runs in flight: when each started, and the indexes of the listings it selected. */
   runs: Array<{ cutoff: number; selected: number[] }>;
 }
@@ -79,7 +84,6 @@ interface State {
 interface Options {
   maxTicks: number;
   maxListings: number;
-  maxRuns: number;
   /**
    * Whether two events can share a millisecond. With `false`, the clock moves
    * after every post, start and finish, which rules out ties with the watermark.
@@ -90,7 +94,15 @@ interface Options {
 export function digestMachine(options: Options): Machine<State, Event> {
   const selectable = (s: State) =>
     s.listings.flatMap((l, i) =>
-      (l.game === 'a' || s.bEnabled) && l.created >= (s.watermark ?? 0) && l.created <= s.t
+      (l.game === 'a' || s.bEnabled) &&
+      l.created >= (s.watermark ?? 0) &&
+      l.created <= s.t &&
+      !(
+        s.pausedAt !== null &&
+        s.resumedAt !== null &&
+        l.created > s.pausedAt &&
+        l.created < s.resumedAt
+      )
         ? [i]
         : [],
     );
@@ -98,7 +110,16 @@ export function digestMachine(options: Options): Machine<State, Event> {
   const after = (s: State): State | null =>
     options.sameMillisecond ? s : s.t < options.maxTicks ? { ...s, t: s.t + 1 } : null;
   return {
-    init: { t: 0, on: false, watermark: null, bEnabled: true, listings: [], runs: [] },
+    init: {
+      t: 0,
+      on: false,
+      watermark: null,
+      bEnabled: true,
+      listings: [],
+      pausedAt: null,
+      resumedAt: null,
+      runs: [],
+    },
     events: (s) => [
       'tick',
       'modeOn',
@@ -115,16 +136,20 @@ export function digestMachine(options: Options): Machine<State, Event> {
       }
       if (event === 'modeOn') {
         if (s.on) return null;
-        return {
+        // A listing posted in the same millisecond digests turn on is owed too.
+        const turnedOn: State = {
           ...s,
           on: true,
-          watermark: s.watermark ?? s.t,
-          // A listing posted in the same millisecond digests turn on is owed too.
           listings: s.listings.map((l) => (l.created === s.t ? { ...l, owed: true } : l)),
         };
+        // `initializeWatermarkIfNeeded` the first time, `pauseChange` after that.
+        if (s.watermark === null) return { ...turnedOn, watermark: s.t };
+        return s.pausedAt !== null && s.watermark <= s.pausedAt
+          ? { ...turnedOn, resumedAt: s.t }
+          : { ...turnedOn, watermark: s.t, pausedAt: null, resumedAt: null };
       }
       if (event === 'modeOff') {
-        return s.on ? { ...s, on: false } : null;
+        return s.on ? { ...s, on: false, pausedAt: s.t, resumedAt: null } : null;
       }
       if (event === 'toggleB') {
         return { ...s, bEnabled: !s.bEnabled };
@@ -132,7 +157,9 @@ export function digestMachine(options: Options): Machine<State, Event> {
       if (event === 'start') {
         // Both the cron callback and `/admin digest` check the mode first; a
         // run that selects nothing returns before sending anything.
-        if (!s.on || s.runs.length >= options.maxRuns) return null;
+        if (!s.on) return null;
+        // `runDigest`: a start while a run is in flight joins it.
+        if (s.runs.length > 0) return s;
         const selected = selectable(s);
         return selected.length === 0
           ? null
@@ -144,7 +171,8 @@ export function digestMachine(options: Options): Machine<State, Event> {
           created: s.t,
           game: event.post,
           sent: 0,
-          owed: s.on,
+          // Posted in the very millisecond digests were paused, it is still sent.
+          owed: s.on || s.pausedAt === s.t,
           postedWhileDisabled: event.post === 'b' && !s.bEnabled,
         };
         return after({ ...s, listings: [...s.listings, listing] });
@@ -198,7 +226,7 @@ export function digestMachine(options: Options): Machine<State, Event> {
   };
 }
 
-const full = digestMachine({ maxTicks: 2, maxListings: 2, maxRuns: 2, sameMillisecond: true });
+const full = digestMachine({ maxTicks: 2, maxListings: 2, sameMillisecond: true });
 
 describe('digest model', () => {
   const result = explore(full, 8);
@@ -211,11 +239,14 @@ describe('digest model', () => {
     expect(violationOf(result, 'noListingLost'), trace('noListingLost')).toBeUndefined();
   });
 
-  it.fails('turning digests off and on again does not send the backlog', () => {
+  it('turning digests off and on again does not send the backlog', () => {
     expect(violationOf(result, 'noBacklogFlood'), trace('noBacklogFlood')).toBeUndefined();
   });
 
   it.fails('no listing is sent twice', () => {
+    // Still open, by design: the watermark is inclusive, so a listing created in
+    // the very millisecond a run selects is sent by that run and the next. A
+    // duplicate is preferred to a listing that is never sent.
     expect(violationOf(result, 'noDuplicate'), trace('noDuplicate')).toBeUndefined();
   });
 
@@ -224,21 +255,10 @@ describe('digest model', () => {
     expect(violation, trace('disabledGameListingsReturn')).toBeUndefined();
   });
 
-  it.fails('runs that never overlap still never send a listing twice', () => {
-    // One run at a time: the duplicate comes from the inclusive `>=` on a
-    // watermark equal to a listing's creation millisecond.
-    const sequential = explore(
-      digestMachine({ maxTicks: 2, maxListings: 2, maxRuns: 1, sameMillisecond: true }),
-      8,
-    );
-    const violation = violationOf(sequential, 'noDuplicate');
-    expect(violation, violation && formatTrace(violation.trace)).toBeUndefined();
-  });
-
-  it.fails('runs at distinct milliseconds never send a listing twice', () => {
-    // No ties with the watermark: the duplicate comes from two runs overlapping.
+  it('with no shared milliseconds, no listing is sent twice', () => {
+    // Rules out the watermark tie above, so this covers overlapping runs.
     const distinct = explore(
-      digestMachine({ maxTicks: 6, maxListings: 2, maxRuns: 2, sameMillisecond: false }),
+      digestMachine({ maxTicks: 6, maxListings: 2, sameMillisecond: false }),
       8,
     );
     const violation = violationOf(distinct, 'noDuplicate');
@@ -247,14 +267,12 @@ describe('digest model', () => {
 
   it('reports the shortest counterexamples', () => {
     expect({
-      noBacklogFlood: trace('noBacklogFlood'),
       noDuplicate: trace('noDuplicate'),
       disabledGameListingsReturn: trace('disabledGameListingsReturn'),
     }).toMatchInlineSnapshot(`
       {
         "disabledGameListingsReturn": "modeOn → toggleB → post(a) → post(b) → tick → start → toggleB → ok(0)",
-        "noBacklogFlood": "modeOn → modeOff → post(a) → tick → modeOn → start → ok(0)",
-        "noDuplicate": "modeOn → post(a) → start → start → ok(0) → ok(0)",
+        "noDuplicate": "modeOn → post(a) → start → ok(0) → start → ok(0)",
       }
     `);
   });
@@ -317,7 +335,6 @@ describe('digest model conforms to the real code', () => {
     const machine = digestMachine({
       maxTicks: 1,
       maxListings: 2,
-      maxRuns: 2,
       sameMillisecond: true,
     });
     const all = traces(machine, 5);

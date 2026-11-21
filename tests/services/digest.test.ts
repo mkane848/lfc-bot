@@ -447,7 +447,7 @@ describe('runDigest watermark', () => {
     expect(sent).toContain('Posted Mid-Send');
   });
 
-  it.fails('does not send a listing twice when two digests run at once', async () => {
+  it('does not send a listing twice when two digests run at once', async () => {
     // A scheduled run and `/admin digest` read the same watermark.
     getDb().insert(servers).values(serverRow).run();
     addListing();
@@ -459,5 +459,42 @@ describe('runDigest watermark', () => {
     ]);
 
     expect(send).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('runDigest while another run is in flight', () => {
+  it('lets the next run start once the first has finished', async () => {
+    getDb().insert(servers).values(serverRow).run();
+    addListing();
+    const send = vi.fn().mockResolvedValue(undefined);
+    await runDigest(fakeClientWithChannelSend(send), getServerConfig('500')!, 'scheduled');
+
+    addListing({ userId: 'u2', cardName: 'Later Card', cardNameNormalized: 'later card' });
+    const result = await runDigest(
+      fakeClientWithChannelSend(send),
+      getServerConfig('500')!,
+      'manual',
+    );
+
+    expect(result.sent).toBe(true);
+    expect(send).toHaveBeenCalledTimes(2);
+  });
+
+  it('joins a run on another server only for that server', async () => {
+    getDb().insert(servers).values(serverRow).run();
+    getDb()
+      .insert(servers)
+      .values({ ...serverRow, id: '501' })
+      .run();
+    addListing();
+    addListing({ serverId: '501', userId: 'u2' });
+    const send = vi.fn(() => new Promise((resolve) => setTimeout(resolve, 2)));
+
+    await Promise.all([
+      runDigest(fakeClientWithChannelSend(send), getServerConfig('500')!, 'scheduled'),
+      runDigest(fakeClientWithChannelSend(send), getServerConfig('501')!, 'scheduled'),
+    ]);
+
+    expect(send).toHaveBeenCalledTimes(2);
   });
 });

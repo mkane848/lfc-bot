@@ -3,7 +3,7 @@ import type { Client } from 'discord.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getDb } from '../../src/db/index.js';
 import { servers, type NewServerRow } from '../../src/db/schema.js';
-import { getServerConfig } from '../../src/services/digest-state.js';
+import { getServerConfig, upsertServerConfig } from '../../src/services/digest-state.js';
 import {
   refreshServerDigest,
   removeServerDigest,
@@ -263,8 +263,8 @@ describe('startGameCatalogSync', () => {
 });
 
 // Counterexamples found by `tests/models/server.model.test.ts` and
-// `tests/models/digest.model.test.ts`. Known bugs, kept as expected failures
-// until fixed: flip `it.fails` to `it` with the fix.
+// `tests/models/digest.model.test.ts`. An `it.fails` is a known bug, kept as an
+// expected failure until fixed: flip it to `it` with the fix.
 describe('digest jobs and the server lifecycle', () => {
   it.fails('does not schedule a digest for a server the bot has left', () => {
     // `listScheduledServers` selects on digest_mode alone, so every restart in
@@ -280,17 +280,15 @@ describe('digest jobs and the server lifecycle', () => {
     expect(schedule).not.toHaveBeenCalled();
   });
 
-  it.fails('turning digests back on after a pause does not send the backlog', () => {
-    // `initializeWatermarkIfNeeded` only sets the watermark when it is null,
-    // so an old one survives the pause and the next digest carries everything
-    // posted since.
+  it('turning digests back on after a pause does not send the backlog', () => {
+    // The watermark from before the pause would send everything posted since.
     getDb()
       .insert(servers)
       .values(serverRow({ digestMode: 'disabled', lastDigestAt: 1 }))
       .run();
-    getDb().update(servers).set({ digestMode: 'channel' }).run();
 
     const before = Date.now();
+    upsertServerConfig({ serverId: 'guild-1', digestMode: 'channel' });
     refreshServerDigest(fakeClient(), 'guild-1');
 
     expect(getServerConfig('guild-1')?.lastDigestAt).toBeGreaterThanOrEqual(before);
