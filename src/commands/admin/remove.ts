@@ -1,5 +1,9 @@
 import type { ChatInputCommandInteraction } from 'discord.js';
-import { getListingById, softDeleteListing } from '../../services/listings.js';
+import {
+  closedListingMessage,
+  getListingById,
+  softDeleteListing,
+} from '../../services/listings.js';
 import { replyError, replySuccess } from '../../utils/replies.js';
 import { requireGuild } from './context.js';
 
@@ -20,6 +24,11 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
   }
   if (listing.serverId !== serverId) {
     await replyError(interaction, 'Listing is not in this server.');
+    return;
+  }
+  const closed = closedListingMessage(listing);
+  if (closed) {
+    await replyError(interaction, closed);
     return;
   }
   softDeleteListing(listingId);

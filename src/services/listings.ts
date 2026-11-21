@@ -301,22 +301,46 @@ export function updateListing(
   if (fields.catalogId !== undefined) update.catalogId = fields.catalogId;
   if (fields.sealedCategory !== undefined) update.sealedCategory = fields.sealedCategory;
   if (fields.sealedSubtype !== undefined) update.sealedSubtype = fields.sealedSubtype;
-  db.update(listings).set(update).where(eq(listings.id, id)).run();
+  // Only an active listing can be edited; a closed one is left as it was.
+  db.update(listings)
+    .set(update)
+    .where(and(eq(listings.id, id), eq(listings.status, 'active')))
+    .run();
   return getListingById(id);
 }
 
-/** Mark a listing fulfilled. Only the owner may do this. */
-export function fulfillListing(id: number): ListingRow | undefined {
+/**
+ * Why a listing can no longer be changed, or `null` while it is active.
+ * Fulfilled, deleted and expired are final.
+ */
+export function closedListingMessage(listing: ListingRow): string | null {
+  return listing.status === 'active'
+    ? null
+    : `Listing #${listing.id} is already ${listing.status}, so it can't be changed.`;
+}
+
+/**
+ * Mark an active listing fulfilled. Only the owner may do this. Returns whether
+ * it changed: a listing that is already fulfilled, deleted or expired stays so.
+ */
+export function fulfillListing(id: number): boolean {
   return setStatus(id, 'fulfilled');
 }
 
-/** Soft-delete a listing. Only the owner or an admin may do this. */
-export function softDeleteListing(id: number): ListingRow | undefined {
+/**
+ * Soft-delete an active listing. Only the owner or an admin may do this.
+ * Returns whether it changed, like `fulfillListing`.
+ */
+export function softDeleteListing(id: number): boolean {
   return setStatus(id, 'deleted');
 }
 
-function setStatus(id: number, status: 'fulfilled' | 'deleted'): ListingRow | undefined {
+function setStatus(id: number, status: 'fulfilled' | 'deleted'): boolean {
   const db = getDb();
-  db.update(listings).set({ status, updatedAt: now() }).where(eq(listings.id, id)).run();
-  return getListingById(id);
+  const result = db
+    .update(listings)
+    .set({ status, updatedAt: now() })
+    .where(and(eq(listings.id, id), eq(listings.status, 'active')))
+    .run();
+  return result.changes > 0;
 }

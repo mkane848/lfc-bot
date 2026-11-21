@@ -69,6 +69,27 @@ export function encodeEditModalId(id: number, queue: number[] = []): string {
   return encodeIdWithQueue(EDIT_MODAL_KIND, id, queue);
 }
 
+/** Discord's limit on the length of a component's custom id. */
+export const CUSTOM_ID_MAX_LENGTH = 100;
+
+/**
+ * How many listings one batch edit can carry. The queue rides in the edit
+ * modal's custom id, so this is the most ids whose modal id fits in Discord's
+ * limit, assuming the longest of `ids` are the ones picked. Never less than 1.
+ */
+export function maxEditBatchSize(ids: readonly number[]): number {
+  const longestFirst = [...ids].sort((a, b) => String(b).length - String(a).length);
+  let count = 1;
+  while (count < longestFirst.length) {
+    const [first, ...rest] = longestFirst.slice(0, count + 1);
+    if (encodeEditModalId(first!, rest).length > CUSTOM_ID_MAX_LENGTH) {
+      break;
+    }
+    count += 1;
+  }
+  return count;
+}
+
 export function decodeEditModalId(customId: string): IdWithQueue | null {
   return decodeIdWithQueue(customId, EDIT_MODAL_KIND);
 }

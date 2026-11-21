@@ -654,11 +654,10 @@ describe('/edit on a listing from another game', () => {
   });
 });
 
-// Counterexample found by `tests/models/listing.model.test.ts`: neither `/edit`
-// nor the modal looks at the status. A known bug, kept as an expected failure:
-// flip `it.fails` to `it` with the fix.
+// Found by `tests/models/listing.model.test.ts`: only an active listing can be
+// edited, including from a modal opened before the listing was closed.
 describe('handleEditModal on a closed listing', () => {
-  it.fails('does not change a fulfilled listing', async () => {
+  it('does not change a fulfilled listing', async () => {
     const id = seedListing({ status: 'fulfilled' });
     const i = fakeModalSubmitInteraction({
       customId: encodeEditModalId(id),
@@ -669,5 +668,8 @@ describe('handleEditModal on a closed listing', () => {
     await handleEditModal(i);
 
     expect(getListingById(id)?.notes).toBeNull();
+    expect(i.editReply).toHaveBeenCalledWith({
+      content: `Listing #${id} is already fulfilled, so it can't be changed.`,
+    });
   });
 });
