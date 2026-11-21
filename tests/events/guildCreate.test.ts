@@ -33,9 +33,8 @@ describe('handleGuildCreate', () => {
   });
 
   // Found by `tests/models/server.model.test.ts`: `handleGuildDelete` cancels
-  // the digest job, and nothing restores it on rejoin until the next restart.
-  // A known bug, kept as an expected failure: flip `it.fails` to `it` with the fix.
-  it.fails('restores the digest job of a guild that re-adds the bot', () => {
+  // the digest job, so rejoining has to restore it.
+  it('restores the digest job of a guild that re-adds the bot', () => {
     getDb()
       .insert(servers)
       .values({ id: 'g1', digestMode: 'channel', removedAt: 5, createdAt: 1, updatedAt: 1 })

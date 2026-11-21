@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, gte, inArray, lt, lte, ne, not, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, gte, inArray, isNull, lt, lte, ne, not, sql } from 'drizzle-orm';
 import { getDb } from '../db/index.js';
 import { listings, servers, type ListingRow, type ServerRow } from '../db/schema.js';
 import { enabledGameIdsFromConfig } from '../games/index.js';
@@ -11,12 +11,17 @@ import {
 const now = () => Date.now();
 
 /**
- * Fetch all servers that have an active digest delivery mode. Used at startup
- * to schedule cron jobs.
+ * Fetch the servers the bot is in that have an active digest delivery mode.
+ * Used at startup to schedule cron jobs. A server the bot has left keeps its
+ * row, and its mode, for the retention window, but gets no digest.
  */
 export function listScheduledServers(): ServerRow[] {
   const db = getDb();
-  return db.select().from(servers).where(ne(servers.digestMode, 'disabled')).all();
+  return db
+    .select()
+    .from(servers)
+    .where(and(ne(servers.digestMode, 'disabled'), isNull(servers.removedAt)))
+    .all();
 }
 
 /**

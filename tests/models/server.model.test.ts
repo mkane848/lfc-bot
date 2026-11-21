@@ -106,8 +106,10 @@ export const serverMachine: Machine<State, Event> = {
     switch (event) {
       case 'join':
         if (s.member) return null;
-        // `handleGuildCreate`: clear the marker and upsert. It never touches the scheduler.
-        return s.online ? { ...s, member: true, row: 'live' } : { ...s, member: true };
+        // `handleGuildCreate`: clear the marker, upsert, and refresh the digest job.
+        return s.online
+          ? { ...s, member: true, row: 'live', job: s.row !== 'none' && s.digestOn }
+          : { ...s, member: true };
       case 'leave':
         if (!s.member) return null;
         // `handleGuildDelete`: cancel the job, mark the row if there is one.
@@ -119,11 +121,11 @@ export const serverMachine: Machine<State, Event> = {
         return s.online ? { ...s, online: false, job: false } : null;
       case 'boot': {
         if (s.online) return null;
-        // `handleReady`: clear the marker of and upsert every guild the bot is
-        // in, then `scheduleAllDigests`, which selects on digest_mode alone.
-        const row: Row = s.member ? 'live' : s.row;
+        // `handleReady`: clear the marker of and upsert every guild the bot is in,
+        // mark every live row it isn't in, then `scheduleAllDigests` for live rows.
+        const row: Row = s.member ? 'live' : s.row === 'live' ? 'marked' : s.row;
         const digestOn = row === 'none' ? false : s.digestOn;
-        return { ...s, online: true, row, digestOn, job: row !== 'none' && digestOn };
+        return { ...s, online: true, row, digestOn, job: row === 'live' && digestOn };
       }
       case 'modeOn':
       case 'modeOff': {
@@ -162,7 +164,7 @@ describe('server lifecycle model', () => {
     expect(violation, violation && formatTrace(violation.trace)).toBeUndefined();
   });
 
-  it.fails('a guild that removes the bot while it is offline is marked for removal', () => {
+  it('a guild that removes the bot while it is offline is marked for removal', () => {
     const violation = violationOf(result, 'leftGuildIsMarked');
     expect(violation, violation && formatTrace(violation.trace)).toBeUndefined();
   });
@@ -172,19 +174,13 @@ describe('server lifecycle model', () => {
     expect(violation, violation && formatTrace(violation.trace)).toBeUndefined();
   });
 
-  it.fails('a server has a digest job exactly when it is live with digests on', () => {
+  it('a server has a digest job exactly when it is live with digests on', () => {
     const violation = violationOf(result, 'jobMatchesConfig');
     expect(violation, violation && formatTrace(violation.trace)).toBeUndefined();
   });
 
-  it('reports the shortest counterexamples', () => {
-    const shortest = Object.fromEntries(
-      result.violations.map((v) => [v.invariant, formatTrace(v.trace)]),
-    );
-    expect(shortest).toEqual({
-      leftGuildIsMarked: 'join → crash → leave → boot',
-      jobMatchesConfig: 'join → modeOn → leave → join',
-    });
+  it('finds no violation at all', () => {
+    expect(result.violations).toEqual([]);
   });
 });
 
@@ -208,7 +204,7 @@ describe('server lifecycle model conforms to the real code', () => {
       channels: { fetch: vi.fn() },
       users: { fetch: vi.fn() },
     }) as unknown as Client;
-  const guild = { id: 'guild-1', name: 'Test' } as never;
+  const guild = { id: 'guild-1', name: 'Test', client: client(['guild-1']) } as never;
 
   const project = (member: boolean, online: boolean, purgedWhileMember: boolean): State => {
     const row = getServerConfig('guild-1');
@@ -256,7 +252,9 @@ describe('server lifecycle model conforms to the real code', () => {
             break;
           case 'boot':
             online = true;
-            handleReady(client(member ? ['guild-1'] : []));
+            // The bot is always in some other guild: `markServersNotIn` does
+            // nothing for an empty guild list, as a guard against a bad cache.
+            handleReady(client(member ? ['guild-0', 'guild-1'] : ['guild-0']));
             break;
           case 'modeOn':
           case 'modeOff':

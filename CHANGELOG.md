@@ -26,6 +26,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the pause that no digest had sent yet still go out.
 - A scheduled digest and `/admin digest` running at the same time sent the same
   listings twice. The second now joins the run already in progress.
+- A server that re-added the bot got no digests until the bot restarted, and
+  after a restart the bot scheduled digests for servers that had removed it,
+  each failing with an alert. A server that removed the bot while it was
+  offline is now marked for removal at startup too, so its data is cleaned up
+  after 30 days like any other.
 
 ## [1.8.0] - 2026-10-31
 

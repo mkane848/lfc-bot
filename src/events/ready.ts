@@ -6,7 +6,11 @@ import {
   startSealedCatalogSync,
 } from '../services/scheduler.js';
 import { warmUpGameCatalogs } from '../services/game-catalogs.js';
-import { clearRemovalMarker, expireListings } from '../services/listing-expiry.js';
+import {
+  clearRemovalMarker,
+  expireListings,
+  markServersNotIn,
+} from '../services/listing-expiry.js';
 import { isSealedCatalogStale, syncSealedCatalog } from '../services/sealed.js';
 import { upsertServerConfig } from '../services/digest-state.js';
 import { getLogger } from '../utils/logger.js';
@@ -24,6 +28,8 @@ export function handleReady(client: Client): void {
     clearRemovalMarker(guild.id);
     upsertServerConfig({ serverId: guild.id });
   }
+  // The other way round: guilds that removed the bot while it was offline.
+  markServersNotIn([...client.guilds.cache.keys()]);
   expireListings();
   scheduleAllDigests(client);
   startMaintenance();

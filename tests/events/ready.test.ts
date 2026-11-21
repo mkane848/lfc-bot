@@ -112,10 +112,8 @@ describe('handleReady', () => {
   });
 });
 
-// Counterexamples found by `tests/models/server.model.test.ts`: gateway events
-// that happen while the bot is offline are never replayed, so boot has to
-// reconcile. An `it.fails` is a known bug, kept as an expected failure until
-// fixed: flip it to `it` with the fix.
+// Found by `tests/models/server.model.test.ts`: gateway events that happen while
+// the bot is offline are never replayed, so boot has to reconcile.
 describe('handleReady reconciles guild membership', () => {
   const markedRow = (id: string) => ({
     id,
@@ -137,14 +135,32 @@ describe('handleReady reconciles guild membership', () => {
     expect(getDb().select().from(servers).get()?.removedAt).toBeNull();
   });
 
-  it.fails('marks a guild that removed the bot while it was offline', () => {
+  it('marks a guild that removed the bot while it was offline', () => {
     getDb()
       .insert(servers)
       .values({ ...markedRow('gone'), removedAt: null })
       .run();
 
+    handleReady(fakeClient(['still-here']));
+
+    const gone = getDb()
+      .select()
+      .from(servers)
+      .all()
+      .find((row) => row.id === 'gone');
+    expect(gone?.removedAt).not.toBeNull();
+  });
+
+  it('marks nothing when the guild cache is empty', () => {
+    // More likely a cache problem than a bot in no guilds; marking every server
+    // would start the 30-day purge for all of them.
+    getDb()
+      .insert(servers)
+      .values({ ...markedRow('g1'), removedAt: null })
+      .run();
+
     handleReady(fakeClient([]));
 
-    expect(getDb().select().from(servers).get()?.removedAt).not.toBeNull();
+    expect(getDb().select().from(servers).get()?.removedAt).toBeNull();
   });
 });
