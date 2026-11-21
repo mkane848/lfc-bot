@@ -4,8 +4,7 @@
  * the 16:00 UTC cron; the Pokémon (TCGCSV) sync from the boot warm-up, the
  * 21:00 UTC cron, and `/admin games` enabling the game. A second start while a
  * run is in flight should join it, not download the catalog again alongside it.
- * `syncPokemonCatalog` keeps an `inFlight` promise for exactly this; the
- * sealed sync has no such guard.
+ * Both keep an `inFlight` promise for exactly this.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { syncSealedCatalog } from '../../src/services/sealed.js';
@@ -42,14 +41,14 @@ const syncMachine = (coalesce: boolean): Machine<State, Event> => ({
 });
 
 describe('catalog sync model', () => {
-  it('the Pokémon sync never runs two downloads at once', () => {
+  it('a sync that joins a second start never runs two downloads at once', () => {
     expect(explore(syncMachine(true), 6).violations).toEqual([]);
   });
 
-  it.fails('the sealed sync never runs two downloads at once', () => {
+  it('without joining, the second start downloads alongside the first', () => {
+    // What the sealed sync did before it kept an in-flight promise.
     const violation = violationOf(explore(syncMachine(false), 6), 'oneDownloadAtATime');
-    // start → start: the boot warm-up and the cron (or two boots in quick succession).
-    expect(violation, violation && formatTrace(violation.trace)).toBeUndefined();
+    expect(violation && formatTrace(violation.trace)).toBe('start → start');
   });
 });
 
@@ -81,11 +80,12 @@ describe('catalog sync model conforms to the real code', () => {
     expect(requests.count()).toBe(1);
   });
 
-  it.fails('a second sealed start joins the first run', async () => {
+  it('a second sealed start joins the first run', async () => {
     const requests = hangingFetch('Meta.json');
-    void syncSealedCatalog();
-    void syncSealedCatalog();
+    const first = syncSealedCatalog();
+    const second = syncSealedCatalog();
     await settle();
+    expect(second).toBe(first);
     expect(requests.count()).toBe(1);
   });
 });

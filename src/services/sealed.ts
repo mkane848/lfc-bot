@@ -138,9 +138,21 @@ function recordSyncMeta(
  * Never throws: every failure is caught and logged, leaving the previous
  * catalog intact, so a bad sync can't crash boot or the cron.
  *
+ * A boot warm-up and the 16:00 UTC cron can ask at the same moment; the second
+ * gets the first's run rather than starting another 11.6 MB download.
+ *
  * @returns counts of rows upserted (`imported`) and deleted (`removed`).
  */
-export async function syncSealedCatalog(): Promise<{ imported: number; removed: number }> {
+export function syncSealedCatalog(): Promise<{ imported: number; removed: number }> {
+  inFlight ??= runSealedSync().finally(() => {
+    inFlight = null;
+  });
+  return inFlight;
+}
+
+let inFlight: Promise<{ imported: number; removed: number }> | null = null;
+
+async function runSealedSync(): Promise<{ imported: number; removed: number }> {
   const logger = getLogger();
   const unchanged = { imported: 0, removed: 0 };
 
