@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A listing posted while a digest was being sent was left out of every later
   digest, because the watermark moved to when delivery finished. The watermark
   now moves to the time the digest selected its listings, and never backward.
+- Selecting more than about 20 listings in `/mylistings`' edit menu failed with
+  "Something went wrong". The menu now allows only as many as one batch edit
+  can carry (21 with three-digit listing numbers), and says so.
+- Fulfilled, deleted and expired listings could still be fulfilled, deleted or
+  edited, for example from an old `/mylistings` message. They are now final,
+  and the bot explains why it left them alone.
 
 ## [1.8.0] - 2026-10-31
 

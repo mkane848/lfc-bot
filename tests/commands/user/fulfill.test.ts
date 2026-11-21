@@ -103,11 +103,10 @@ describe('/fulfill', () => {
   });
 });
 
-// Counterexample found by `tests/models/listing.model.test.ts`: `setStatus`
-// updates by id alone, so a closed listing changes status again. A known bug,
-// kept as an expected failure: flip `it.fails` to `it` with the fix.
+// Found by `tests/models/listing.model.test.ts`: fulfilled, deleted and expired
+// are final, so a closed listing never changes status again.
 describe('/fulfill on a closed listing', () => {
-  it.fails('leaves a deleted listing deleted', async () => {
+  it('leaves a deleted listing deleted, and says why', async () => {
     const id = seedListing({ status: 'deleted' });
     const i = fakeChatInputInteraction({
       userId: 'owner-1',
@@ -118,5 +117,10 @@ describe('/fulfill on a closed listing', () => {
 
     const row = getDb().select().from(listings).get();
     expect(row?.status).toBe('deleted');
+    expect(i.reply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: `Listing #${id} is already deleted, so it can't be changed.`,
+      }),
+    );
   });
 });

@@ -136,6 +136,21 @@ describe('handleListingButton', () => {
     expect(getListingById(id)?.status).toBe('deleted');
   });
 
+  it('leaves a closed listing alone when an old button is pressed', async () => {
+    const id = seedListing({ status: 'deleted' });
+    const i = fakeButtonInteraction({
+      customId: encodeListingActionId('fulfill', id),
+      userId: 'owner-1',
+    });
+
+    await handleListingButton(i);
+
+    expect(getListingById(id)?.status).toBe('deleted');
+    expect(i.reply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('already deleted') }),
+    );
+  });
+
   it('rejects a non-owner delete attempt', async () => {
     const id = seedListing();
     const i = fakeButtonInteraction({
@@ -173,6 +188,38 @@ describe('handleBatchSelect', () => {
     );
     const call = i.reply.mock.calls[0]?.[0] as { content: string };
     expect(call.content).toContain('Skipped');
+  });
+
+  it('skips listings that are already closed', async () => {
+    const open = seedListing();
+    const fulfilled = seedListing({ status: 'fulfilled' });
+    const i = fakeSelectMenuInteraction({
+      customId: encodeBatchSelectId('batchdelete'),
+      values: [String(open), String(fulfilled)],
+      userId: 'owner-1',
+    });
+
+    await handleBatchSelect(i);
+
+    expect(getListingById(open)?.status).toBe('deleted');
+    expect(getListingById(fulfilled)?.status).toBe('fulfilled');
+    expect(i.reply).toHaveBeenCalledWith({
+      content: `Deleted #${open}. Skipped #${fulfilled} (not yours, or already closed).`,
+      ephemeral: true,
+    });
+  });
+
+  it('refuses to start a batch edit on a closed listing', async () => {
+    const closed = seedListing({ status: 'expired' });
+    const i = fakeSelectMenuInteraction({
+      customId: encodeBatchSelectId('batchedit'),
+      values: [String(closed)],
+      userId: 'owner-1',
+    });
+
+    await handleBatchSelect(i);
+
+    expect(i.showModal).not.toHaveBeenCalled();
   });
 
   it('deletes owned listings and skips ones not owned by the caller', async () => {

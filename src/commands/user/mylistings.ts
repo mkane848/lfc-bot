@@ -13,6 +13,7 @@ import type {
 } from 'discord.js';
 import {
   activeListingsForUser,
+  closedListingMessage,
   fulfillListing,
   getListingById,
   myListings,
@@ -26,6 +27,7 @@ import {
   decodeListingActionId,
   encodeBatchSelectId,
   encodeListingActionId,
+  maxEditBatchSize,
 } from '../../utils/customId.js';
 import { brandColor, conditionText, formatPrice, languageTag } from '../../utils/embeds.js';
 import { replyError } from '../../utils/replies.js';
@@ -39,12 +41,13 @@ function buildBatchSelectRow(
   customId: string,
   placeholder: string,
   rows: ListingRow[],
+  maxValues = rows.length,
 ): ActionRowBuilder<StringSelectMenuBuilder> {
   const menu = new StringSelectMenuBuilder()
     .setCustomId(customId)
     .setPlaceholder(placeholder)
     .setMinValues(1)
-    .setMaxValues(rows.length)
+    .setMaxValues(maxValues)
     .addOptions(
       rows.map((listing) => {
         const parts: string[] = [];
@@ -153,11 +156,22 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
         'Select listings to fulfill…',
         batchable,
       ),
-      buildBatchSelectRow(encodeBatchSelectId('batchedit'), 'Select listings to edit…', batchable),
+      buildEditSelectRow(batchable),
     );
   }
 
   await interaction.reply({ embeds: [embed], components, ephemeral: true });
+}
+
+/**
+ * The batch-edit select. Its queue rides in the edit modal's custom id, which
+ * Discord caps at 100 characters, so it allows only as many picks as fit.
+ */
+function buildEditSelectRow(rows: ListingRow[]): ActionRowBuilder<StringSelectMenuBuilder> {
+  const max = maxEditBatchSize(rows.map((listing) => listing.id));
+  const placeholder =
+    max < rows.length ? `Select up to ${max} listings to edit…` : 'Select listings to edit…';
+  return buildBatchSelectRow(encodeBatchSelectId('batchedit'), placeholder, rows, max);
 }
 
 /** Handle a batch-action select menu (delete/fulfill/edit several listings at once). */
@@ -169,6 +183,15 @@ export async function handleBatchSelect(interaction: StringSelectMenuInteraction
   const ids = interaction.values.map(Number);
 
   if (action === 'batchedit') {
+    // A select sent before the cap existed can still carry too many.
+    const max = maxEditBatchSize(ids);
+    if (ids.length > max) {
+      await interaction.reply({
+        content: `Select at most ${max} listings to edit at once.`,
+        ephemeral: true,
+      });
+      return;
+    }
     const [firstId, ...rest] = ids;
     if (firstId === undefined) {
       return;
@@ -180,6 +203,11 @@ export async function handleBatchSelect(interaction: StringSelectMenuInteraction
     }
     if (listing.userId !== interaction.user.id) {
       await interaction.reply({ content: 'Only the listing owner can edit it.', ephemeral: true });
+      return;
+    }
+    const closed = closedListingMessage(listing);
+    if (closed) {
+      await interaction.reply({ content: closed, ephemeral: true });
       return;
     }
     await interaction.showModal(buildEditModal(listing, rest));
@@ -195,12 +223,8 @@ export async function handleBatchSelect(interaction: StringSelectMenuInteraction
         skipped.push(id);
         continue;
       }
-      if (action === 'batchfulfill') {
-        fulfillListing(id);
-      } else {
-        softDeleteListing(id);
-      }
-      succeeded.push(id);
+      const changed = action === 'batchfulfill' ? fulfillListing(id) : softDeleteListing(id);
+      (changed ? succeeded : skipped).push(id);
     }
     const verb = action === 'batchfulfill' ? 'Fulfilled' : 'Deleted';
     const parts: string[] = [];
@@ -209,7 +233,7 @@ export async function handleBatchSelect(interaction: StringSelectMenuInteraction
     }
     if (skipped.length > 0) {
       parts.push(
-        `Skipped ${skipped.map((id) => `#${id}`).join(', ')} (not yours or already gone).`,
+        `Skipped ${skipped.map((id) => `#${id}`).join(', ')} (not yours, or already closed).`,
       );
     }
     await interaction.reply({ content: parts.join(' ') || 'Nothing to do.', ephemeral: true });
@@ -230,6 +254,12 @@ export async function handleListingButton(interaction: ButtonInteraction): Promi
   }
   if (listing.userId !== interaction.user.id) {
     await interaction.reply({ content: 'Only the listing owner can do that.', ephemeral: true });
+    return;
+  }
+  // The buttons stay on the message after the listing is closed.
+  const closed = closedListingMessage(listing);
+  if (closed) {
+    await interaction.reply({ content: closed, ephemeral: true });
     return;
   }
   if (action === 'fulfill') {

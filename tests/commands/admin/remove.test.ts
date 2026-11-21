@@ -99,4 +99,16 @@ describe('/admin remove', () => {
     );
     expect(getListingById(id)?.status).toBe('deleted');
   });
+
+  it('leaves a fulfilled listing fulfilled', async () => {
+    const id = seedListing({ status: 'fulfilled' });
+    const i = fakeChatInputInteraction({ options: { integers: { listing_id: id } } });
+
+    await removeExecute(i);
+
+    expect(getListingById(id)?.status).toBe('fulfilled');
+    expect(i.reply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('already fulfilled') }),
+    );
+  });
 });

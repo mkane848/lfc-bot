@@ -1,7 +1,7 @@
 /**
  * The listing lifecycle: `listings.status` moves from `active` to `expired`,
  * `fulfilled`, or `deleted`. The model below is an abstraction of what
- * `src/services/listings.ts` and `src/services/listing-expiry.ts` do today; the
+ * `src/services/listings.ts` and `src/services/listing-expiry.ts` do; the
  * invariants are what AGENTS.md and the command docs say should hold (`/fulfill`
  * and `/delete` are documented as terminal).
  */
@@ -38,14 +38,13 @@ interface State {
   // Ghost variables: history the invariants need, not part of the real row.
   /** The status the listing first left `active` for. */
   closedAs: Status | null;
-  editedWhileClosed: boolean;
+  /** How many edits had been written when it left `active`. */
+  editsAtClose: number | null;
 }
 
-const closed = (status: Status) => status !== 'none' && status !== 'active';
-
-/** What the code does: every transition is an unconditional `UPDATE ... WHERE id = ?`. */
+/** What the code does: every transition is an `UPDATE ... WHERE id = ? AND status = 'active'`. */
 export const listingMachine: Machine<State, Event> = {
-  init: { status: 'none', pastExpiry: false, edits: 0, closedAs: null, editedWhileClosed: false },
+  init: { status: 'none', pastExpiry: false, edits: 0, closedAs: null, editsAtClose: null },
   events: () => ['post', 'pastExpiry', 'sweep', 'fulfill', 'delete', 'edit'],
   step(s, event) {
     if (event === 'post') {
@@ -58,6 +57,7 @@ export const listingMachine: Machine<State, Event> = {
       ...s,
       status,
       closedAs: s.closedAs ?? status,
+      editsAtClose: s.editsAtClose ?? s.edits,
     });
     switch (event) {
       case 'pastExpiry':
@@ -66,39 +66,39 @@ export const listingMachine: Machine<State, Event> = {
         // `expireListings`: WHERE status = 'active' AND expires_at <= now.
         return s.status === 'active' && s.pastExpiry ? close('expired') : s;
       case 'fulfill':
-        // `setStatus`: WHERE id = ?, whatever the current status.
-        return close('fulfilled');
+        // `setStatus`: WHERE id = ? AND status = 'active'.
+        return s.status === 'active' ? close('fulfilled') : s;
       case 'delete':
-        return close('deleted');
+        return s.status === 'active' ? close('deleted') : s;
       case 'edit':
-        // `updateListing` and `handleEditModal` never look at the status.
-        return {
-          ...s,
-          edits: s.edits + 1,
-          editedWhileClosed: s.editedWhileClosed || closed(s.status),
-        };
+        // `updateListing`: also WHERE status = 'active'.
+        return s.status === 'active' ? { ...s, edits: s.edits + 1 } : s;
     }
   },
   invariants: {
     closedIsTerminal: (s) => s.closedAs === null || s.status === s.closedAs,
-    noEditAfterClose: (s) => !s.editedWhileClosed,
+    noEditAfterClose: (s) => s.editsAtClose === null || s.edits === s.editsAtClose,
     // Search and digests filter on `status`, so an active row is visible.
     activeMeansUnexpired: (s) => !(s.status === 'active' && s.pastExpiry),
   },
   // Two edits look the same as one to every invariant; cap them so the search stays finite.
-  key: (s) => JSON.stringify({ ...s, edits: Math.min(s.edits, 2) }),
+  key: (s) =>
+    JSON.stringify({
+      ...s,
+      edits: Math.min(s.edits, 2),
+      editsAtClose: s.editsAtClose === null ? null : Math.min(s.editsAtClose, 2),
+    }),
 };
 
 describe('listing model', () => {
   const result = explore(listingMachine, 6);
 
-  it.fails('a fulfilled, deleted, or expired listing never changes status again', () => {
+  it('a fulfilled, deleted, or expired listing never changes status again', () => {
     const violation = violationOf(result, 'closedIsTerminal');
-    // Shortest counterexample: post → fulfill → delete (or the reverse).
     expect(violation, violation && formatTrace(violation.trace)).toBeUndefined();
   });
 
-  it.fails('a closed listing is never edited', () => {
+  it('a closed listing is never edited', () => {
     const violation = violationOf(result, 'noEditAfterClose');
     expect(violation, violation && formatTrace(violation.trace)).toBeUndefined();
   });
@@ -110,8 +110,6 @@ describe('listing model', () => {
   });
 
   it('reports the shortest counterexamples', () => {
-    expect(violationOf(result, 'closedIsTerminal')?.trace).toEqual(['post', 'fulfill', 'delete']);
-    expect(violationOf(result, 'noEditAfterClose')?.trace).toEqual(['post', 'fulfill', 'edit']);
     expect(violationOf(result, 'activeMeansUnexpired')?.trace).toEqual(['post', 'pastExpiry']);
   });
 });

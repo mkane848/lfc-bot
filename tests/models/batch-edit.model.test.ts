@@ -4,7 +4,9 @@
  * button, which opens the next modal, until the queue is empty. No state is
  * kept on the server: the remaining queue rides along in each modal's and
  * button's custom id (`encodeEditModalId` / `encodeEditNextId`), and Discord
- * caps a custom id at 100 characters.
+ * caps a custom id at 100 characters. So the select allows only
+ * `maxEditBatchSize` picks, and a larger selection (from a menu sent before
+ * that cap) is refused with a reply instead of a modal.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import { handleBatchSelect } from '../../src/commands/user/mylistings.js';
@@ -14,6 +16,7 @@ import {
   encodeBatchSelectId,
   encodeEditModalId,
   encodeEditNextId,
+  maxEditBatchSize,
 } from '../../src/utils/customId.js';
 import { setupTestDb } from '../helpers/db.js';
 import { fakeSelectMenuInteraction } from '../helpers/interaction.js';
@@ -31,7 +34,7 @@ const idsOf = (digits: number, count: number) =>
 type Event = { select: { count: number; digits: number } } | 'save' | 'next';
 
 interface State {
-  phase: 'idle' | 'modal' | 'button' | 'done';
+  phase: 'idle' | 'refused' | 'modal' | 'button' | 'done';
   /** The listing ids not yet edited, the one on screen first. */
   queue: number[];
   /** The longest custom id built so far. */
@@ -49,7 +52,10 @@ const machine: Machine<State, Event> = {
   step(s, event) {
     if (typeof event === 'object') {
       if (s.phase !== 'idle') return null;
-      const [first, ...rest] = idsOf(event.select.digits, event.select.count);
+      const ids = idsOf(event.select.digits, event.select.count);
+      // `handleBatchSelect` refuses more than fit, before building any custom id.
+      if (ids.length > maxEditBatchSize(ids)) return { ...s, phase: 'refused' };
+      const [first, ...rest] = ids;
       const id = encodeEditModalId(first!, rest);
       return { phase: 'modal', queue: [first!, ...rest], longest: id.length };
     }
@@ -71,13 +77,13 @@ const machine: Machine<State, Event> = {
 };
 
 describe('batch-edit queue model', () => {
-  it.fails('every custom id the queue builds fits in 100 characters', () => {
+  it('every custom id the queue builds fits in 100 characters', () => {
     const violation = violationOf(explore(machine, 3), 'customIdsFit');
     expect(violation, violation && formatTrace(violation.trace)).toBeUndefined();
   });
 
-  it('breaks once the selection is this large, by id length', () => {
-    // The first modal carries the longest queue, so the select itself is what overflows.
+  it('the encoder alone overflows once the selection is this large, by id length', () => {
+    // The first modal carries the longest queue, so the select is what overflows.
     const smallestFailing = Object.fromEntries(
       [1, 2, 3, 4, 5, 6].map((digits) => {
         const count = Array.from({ length: SELECT_LIMIT }, (_, i) => i + 1).find((n) => {
@@ -95,6 +101,13 @@ describe('batch-edit queue model', () => {
       '5-digit ids': 15,
       '6-digit ids': 13,
     });
+  });
+
+  it('caps the selection one below where the encoder overflows', () => {
+    const caps = [3, 4, 5, 6].map((digits) => maxEditBatchSize(idsOf(digits, SELECT_LIMIT)));
+    expect(caps).toEqual([21, 17, 14, 12]);
+    // Short ids never overflow, so the whole select is allowed.
+    expect(maxEditBatchSize(idsOf(2, SELECT_LIMIT))).toBe(SELECT_LIMIT);
   });
 });
 
@@ -127,25 +140,31 @@ describe('batch-edit queue model conforms to the real code', () => {
     }
   }
 
-  const select = (ids: number[]) =>
-    handleBatchSelect(
-      fakeSelectMenuInteraction({
-        customId: encodeBatchSelectId('batchedit'),
-        values: ids.map(String),
-      }),
-    );
+  async function select(ids: number[]) {
+    const interaction = fakeSelectMenuInteraction({
+      customId: encodeBatchSelectId('batchedit'),
+      values: ids.map(String),
+    });
+    await handleBatchSelect(interaction);
+    return interaction;
+  }
 
   it('opens the modal while the queue fits', async () => {
     const ids = idsOf(3, 21);
     seed(ids);
-    await expect(select(ids)).resolves.toBeUndefined();
+    const interaction = await select(ids);
+    expect(interaction.showModal.mock.calls).toHaveLength(1);
   });
 
-  it.fails('opens the modal for a full selection of 3-digit ids', async () => {
-    // `buildEditModal` -> `ModalBuilder.setCustomId` throws "Invalid string length",
-    // which `interactionCreate` turns into "Something went wrong" and a critical alert.
+  it('refuses a selection too large for the queue instead of throwing', async () => {
+    // Before the cap, `ModalBuilder.setCustomId` threw "Invalid string length" here,
+    // which reached the member as "Something went wrong" and fired a critical alert.
     const ids = idsOf(3, 22);
     seed(ids);
-    await expect(select(ids)).resolves.toBeUndefined();
+    const interaction = await select(ids);
+    expect(interaction.showModal.mock.calls).toHaveLength(0);
+    expect(interaction.reply.mock.calls).toEqual([
+      [{ content: 'Select at most 21 listings to edit at once.', ephemeral: true }],
+    ]);
   });
 });

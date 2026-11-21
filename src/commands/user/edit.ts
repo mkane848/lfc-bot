@@ -13,7 +13,7 @@ import type {
   ModalSubmitInteraction,
 } from 'discord.js';
 import { getGame } from '../../games/index.js';
-import { getListingById, updateListing } from '../../services/listings.js';
+import { closedListingMessage, getListingById, updateListing } from '../../services/listings.js';
 import type { GuildCommand } from '../../types/index.js';
 import {
   decodeEditModalId,
@@ -48,6 +48,11 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
   }
   if (listing.userId !== interaction.user.id) {
     await replyError(interaction, 'Only the listing owner can edit it.');
+    return;
+  }
+  const closed = closedListingMessage(listing);
+  if (closed) {
+    await replyError(interaction, closed);
     return;
   }
 
@@ -153,6 +158,12 @@ export async function handleEditModal(interaction: ModalSubmitInteraction): Prom
   }
   if (listing.userId !== interaction.user.id) {
     await interaction.editReply({ content: 'Only the listing owner can edit it.' });
+    return;
+  }
+  // The modal may have been opened before the listing was fulfilled, deleted or expired.
+  const closed = closedListingMessage(listing);
+  if (closed) {
+    await interaction.editReply({ content: closed });
     return;
   }
 
@@ -304,6 +315,11 @@ export async function handleEditNextButton(interaction: ButtonInteraction): Prom
   }
   if (listing.userId !== interaction.user.id) {
     await interaction.reply({ content: 'Only the listing owner can edit it.', ephemeral: true });
+    return;
+  }
+  const closed = closedListingMessage(listing);
+  if (closed) {
+    await interaction.reply({ content: closed, ephemeral: true });
     return;
   }
   await interaction.showModal(buildEditModal(listing, queue));

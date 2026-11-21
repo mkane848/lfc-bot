@@ -1,6 +1,6 @@
 import { SlashCommandBuilder } from 'discord.js';
 import type { ChatInputCommandInteraction } from 'discord.js';
-import { fulfillListing, getListingById } from '../../services/listings.js';
+import { closedListingMessage, fulfillListing, getListingById } from '../../services/listings.js';
 import type { GuildCommand } from '../../types/index.js';
 import { replyError, replySuccess } from '../../utils/replies.js';
 
@@ -18,6 +18,11 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
   }
   if (listing.userId !== interaction.user.id) {
     await replyError(interaction, 'Only the listing owner can do that.');
+    return;
+  }
+  const closed = closedListingMessage(listing);
+  if (closed) {
+    await replyError(interaction, closed);
     return;
   }
   fulfillListing(id);
