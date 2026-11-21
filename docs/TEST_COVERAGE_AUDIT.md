@@ -13,7 +13,7 @@ npm test -- --coverage
 
 | Statements | Branches | Functions | Lines | Tests |
 |---|---|---|---|---|
-| **96.80 %** (2 606 / 2 692) | **90.61 %** (1 631 / 1 800) | **96.00 %** (504 / 525) | **97.02 %** (2 510 / 2 587) | 75 files, 1 031 passing + 10 expected fail |
+| **97.91 %** (2 636 / 2 692) | **91.55 %** (1 648 / 1 800) | **97.90 %** (514 / 525) | **98.18 %** (2 540 / 2 587) | 80 files, 1 057 passing + 10 expected fail |
 
 `vitest.config.ts` uses the strict `src/**/*.ts` include, so a source file with
 no test counts as 0 % instead of disappearing from the report. Excluded from
@@ -27,18 +27,17 @@ registry test).
 | Directory | % Stmts | % Branch | % Funcs | % Lines |
 |---|---|---|---|---|
 | `src/` (entrypoint) | 100.00 | 100.00 | 100.00 | 100.00 |
-| `src/commands` | 95.74 | 85.95 | 97.87 | 95.85 |
-| `src/db` | 91.07 | 90.00 | 80.00 | 91.07 |
+| `src/commands` | 97.33 | 87.42 | 99.29 | 97.47 |
+| `src/db` | 98.21 | 95.00 | 100.00 | 98.21 |
 | `src/events` | 98.51 | 89.47 | 100.00 | 98.51 |
-| `src/games` | 95.04 | 88.10 | 92.31 | 94.70 |
-| `src/services` | 97.68 | 94.18 | 94.76 | 98.34 |
-| `src/utils` | 98.08 | 92.67 | 99.07 | 98.03 |
+| `src/games` | 97.16 | 88.10 | 98.08 | 96.97 |
+| `src/services` | 98.23 | 94.83 | 95.81 | 98.93 |
+| `src/utils` | 98.50 | 93.38 | 99.07 | 98.46 |
 
-`src/index.ts` is the entrypoint smoke in `tests/index.test.ts`: it imports the
-module with Discord, the database, the schedule, and the health server mocked,
-then drives startup, `ClientReady`, every event, both signal handlers, and the
-fatal-startup path. It covers the wiring that only shows up in production
-boots.
+`src/index.ts` is covered by the entrypoint smoke in `tests/index.test.ts`,
+which drives startup, `ClientReady`, every event, both signal handlers, and the
+fatal-startup path with Discord, the database, the schedule, and the health
+server mocked.
 
 ## Where the gap is
 
@@ -46,20 +45,21 @@ Files with the lowest statement coverage, in ascending order:
 
 | File | % Stmts | % Branch | % Lines | What's missing |
 |---|---|---|---|---|
-| `src/games/pokemon.ts` | 80.00 | 100.00 | 80.00 | Game metadata wiring. |
-| `src/utils/version.ts` | 80.00 | 50.00 | 80.00 | Cache/fallback branch. |
-| `src/db/schema.ts` | 84.21 | 100.00 | 84.21 | Index declarations with no observable behavior. |
-| `src/commands/user/want-multi.ts` | 84.88 | 76.00 | 84.33 | Malformed batch line and early-return edges. |
-| `src/games/registry.ts` | 85.71 | 100.00 | 85.71 | Duplicate-registration guard. |
-| `src/services/scheduler.ts` | 88.33 | 81.25 | 89.65 | Cron lifecycle and job removal. |
-| `src/commands/admin/digest.ts` | 89.47 | 91.66 | 89.47 | Empty-digest reply. |
-| `src/commands/user/delete.ts` | 89.47 | 87.50 | 89.47 | Already-closed guard. |
-| `src/utils/permissions.ts` | 90.90 | 77.77 | 90.90 | Permission-denied branches. |
-| `src/db/migrate.ts` | 91.66 | 75.00 | 91.66 | `findProjectRoot` failure path. |
+| `src/commands/user/have-multi.ts` | 91.86 | 84.00 | 91.56 | The batch's creation catch and duplicate-warning line, mirroring `want-multi`. |
+| `src/commands/user/edit.ts` | 92.45 | 78.65 | 92.45 | "Edit another" button and the modal owner-check edges. |
+| `src/utils/schedule-parser.ts` | 92.50 | 82.60 | 92.50 | Natural-language schedule fallbacks. |
+| `src/services/card-cache.ts` | 94.44 | 100.00 | 94.11 | The `expiresAt` prune where a row survives. |
+| `src/services/health.ts` | 94.73 | 91.66 | 94.73 | The degraded-status branch. |
+| `src/games/autocomplete.ts` | 95.31 | 88.63 | 94.91 | A game's suggestions missing the deadline. |
+| `src/commands/user/want.ts` | 95.45 | 79.16 | 95.45 | Early-return edges ("name already used", invalid condition). |
+| `src/services/manapool.ts` | 95.83 | 95.00 | 100.00 | The price-lookup miss. |
+| `src/db/index.ts` | 96.00 | 93.75 | 96.00 | Parent-directory creation and the `closeDb` re-init throw. |
+| `src/commands/user/want-sealed.ts` | 96.22 | 76.92 | 96.22 | Sealed validation guards. |
 
-Branch coverage is the limiting dimension at 90.61 %. The remaining sharp
-edges are the DM-target and per-server fallback branches in `digest.ts`, the
-no-guild guards, and the scheduler's cron callbacks.
+Branch coverage is the limiting dimension at 91.55 %. What is left is mostly
+one-line defensive guards (a `slot === undefined` fallback, a missing-row
+return that another caller already checks) plus the negative edges in
+`edit.ts` and `want-sealed.ts`.
 
 ## The gate
 
@@ -69,15 +69,10 @@ every run (including failures) so a drop can be inspected from the PR page.
 
 | | Gate | Measured |
 |---|---|---|
-| Statements | 96 | 96.80 |
-| Branches | 90 | 90.61 |
-| Functions | 95 | 96.00 |
-| Lines | 97 | 97.02 |
+| Statements | 97 | 97.91 |
+| Branches | 91 | 91.55 |
+| Functions | 97 | 97.90 |
+| Lines | 98 | 98.18 |
 
 These thresholds are a ratchet: a PR that measurably improves coverage should
-raise them in the same commit, and none may lower them. The margins are
-deliberately thin on lines — that is what makes the gate useful.
-
-The function threshold sits one point below the measured value because it is
-the smallest denominator (525 functions), so a single refactor that deletes a
-well-covered helper moves it further than the other dimensions.
+raise them in the same commit, and none may lower them.

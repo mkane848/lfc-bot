@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
+import { getTableConfig } from 'drizzle-orm/sqlite-core';
 import { getDb } from '../../src/db/index.js';
 import {
   adminAuditLog,
@@ -258,5 +259,22 @@ describe('database schema', () => {
 
     db.delete(servers).where(eq(servers.id, 'cascade-server-3')).run();
     expect(sql().prepare('select count(*) as c from admin_audit_log').get()).toEqual({ c: 0 });
+  });
+});
+
+describe('declared foreign keys', () => {
+  it.each([
+    ['listings', listings],
+    ['digest_log', digestLog],
+    ['admin_audit_log', adminAuditLog],
+  ])('%s cascades from servers', (tableName, table) => {
+    // Drizzle only runs the `references(() => servers.id)` callbacks when the
+    // table config is materialized, which is what drizzle-kit does. Calling it
+    // here keeps every declared key exercised.
+    const [foreignKey] = getTableConfig(table).foreignKeys;
+
+    expect(foreignKey?.getName()).toBe(`${tableName}_server_id_servers_id_fk`);
+    expect(foreignKey?.onDelete).toBe('cascade');
+    expect(foreignKey?.reference().columns.map((column) => column.name)).toEqual(['server_id']);
   });
 });

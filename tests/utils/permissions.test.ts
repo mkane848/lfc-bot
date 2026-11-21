@@ -25,6 +25,22 @@ describe('permissions', () => {
   });
 
   describe('requireManageServer', () => {
+    it('returns true when a guild member instance grants Manage Server', async () => {
+      // A real prototype makes `instanceof GuildMember` hold, which is the
+      // first of the two permission sources. `permissions` is a getter on the
+      // real prototype, so it has to be defined rather than assigned.
+      const member = Object.create(GuildMember.prototype) as GuildMember;
+      Object.defineProperty(member, 'permissions', { value: { has: () => true } });
+      const i = fakeChatInputInteraction({});
+      Object.defineProperty(i, 'member', { value: member });
+      Object.defineProperty(i, 'memberPermissions', { value: null });
+
+      const result = await requireManageServer(i);
+
+      expect(result).toBe(true);
+      expect(i.reply).not.toHaveBeenCalled();
+    });
+
     it('returns true when interaction.memberPermissions grants Manage Server', async () => {
       const i = fakeChatInputInteraction({
         rawMemberPermissions: PermissionFlagsBits.ManageGuild,
