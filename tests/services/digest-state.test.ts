@@ -100,6 +100,45 @@ describe('digest state', () => {
     const after = getServerConfig('300')!;
     expect(after.lastDigestAt).not.toBeNull();
   });
+
+  it('does not initialize the watermark when digestMode is "disabled"', () => {
+    getDb().insert(servers).values(serverRow).run();
+    const config = getServerConfig('300')!;
+    initializeWatermarkIfNeeded(config);
+    expect(getServerConfig('300')!.lastDigestAt).toBeNull();
+  });
+
+  it('does not initialize the watermark when lastDigestAt is already set', () => {
+    // Insert already in an active mode: enabling it through upsertServerConfig
+    // counts as a resume and deliberately moves the watermark past the pause.
+    getDb()
+      .insert(servers)
+      .values({ ...serverRow, digestMode: 'channel' })
+      .run();
+    setServerWatermark('300', 12345);
+    const config = getServerConfig('300')!;
+    initializeWatermarkIfNeeded(config);
+    expect(getServerConfig('300')!.lastDigestAt).toBe(12345);
+  });
+
+  it('updates partial fields one at a time via upsertServerConfig', () => {
+    getDb()
+      .insert(servers)
+      .values({ ...serverRow, digestMode: 'channel', digestCron: '0 8 * * *' })
+      .run();
+    upsertServerConfig({ serverId: '300', digestTimezone: 'America/New_York' });
+    const after = getServerConfig('300')!;
+    expect(after.digestMode).toBe('channel');
+    expect(after.digestCron).toBe('0 8 * * *');
+    expect(after.digestTimezone).toBe('America/New_York');
+  });
+
+  it('prefers the provided enabledGames list for new servers', () => {
+    getDb().insert(servers).values(serverRow).run();
+    upsertServerConfig({ serverId: '401', enabledGames: ['mtg', 'pokemon'] });
+    const after = getServerConfig('401')!;
+    expect(JSON.parse(after.enabledGames)).toEqual(['mtg', 'pokemon']);
+  });
 });
 
 describe('turning digests on and off', () => {

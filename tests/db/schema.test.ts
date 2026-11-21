@@ -1,15 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
+import { getTableConfig } from 'drizzle-orm/sqlite-core';
 import { getDb } from '../../src/db/index.js';
 import {
+  adminAuditLog,
+  digestLog,
   servers,
   listings,
   sealedCache,
   sealedCatalogMeta,
-  type NewServerRow,
   type NewListingRow,
   type NewSealedCacheRow,
   type NewSealedCatalogMetaRow,
+  type NewServerRow,
 } from '../../src/db/schema.js';
 import { setupTestDb, sql } from '../helpers/db.js';
 
@@ -216,5 +219,62 @@ describe('database schema', () => {
         )
         .run(),
     ).toThrow(/NOT NULL constraint failed/);
+  });
+
+  it('cascades digest_log deletion when the parent server is removed', () => {
+    const db = getDb();
+    db.insert(servers)
+      .values(serverRow({ id: 'cascade-server-2' }))
+      .run();
+    db.insert(digestLog)
+      .values({
+        serverId: 'cascade-server-2',
+        sentAt: 1,
+        trigger: 'manual',
+        listingCount: 0,
+        listingIdsIncluded: '[]',
+        deliveryResults: '{}',
+      })
+      .run();
+
+    db.delete(servers).where(eq(servers.id, 'cascade-server-2')).run();
+    expect(sql().prepare('select count(*) as c from digest_log').get()).toEqual({ c: 0 });
+  });
+
+  it('cascades admin_audit_log deletion when the parent server is removed', () => {
+    const db = getDb();
+    db.insert(servers)
+      .values(serverRow({ id: 'cascade-server-3' }))
+      .run();
+    db.insert(adminAuditLog)
+      .values({
+        serverId: 'cascade-server-3',
+        adminId: 'admin-1',
+        adminUsername: 'admin',
+        action: 'mode',
+        details: '{}',
+        createdAt: 1,
+      })
+      .run();
+
+    db.delete(servers).where(eq(servers.id, 'cascade-server-3')).run();
+    expect(sql().prepare('select count(*) as c from admin_audit_log').get()).toEqual({ c: 0 });
+  });
+});
+
+describe('declared foreign keys', () => {
+  it.each([
+    ['listings', listings],
+    ['digest_log', digestLog],
+    ['admin_audit_log', adminAuditLog],
+  ])('%s cascades from servers', (tableName, table) => {
+    // Drizzle only runs the `references(() => servers.id)` callbacks when the
+    // table config is materialized, which is what drizzle-kit does. Calling it
+    // here keeps every declared key exercised.
+    const [foreignKey] = getTableConfig(table).foreignKeys;
+
+    expect(foreignKey?.getName()).toBe(`${tableName}_server_id_servers_id_fk`);
+    expect(foreignKey?.onDelete).toBe('cascade');
+    expect(foreignKey?.reference().columns.map((column) => column.name)).toEqual(['server_id']);
   });
 });

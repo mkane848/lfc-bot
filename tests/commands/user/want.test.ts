@@ -139,6 +139,121 @@ describe('/want', () => {
   });
 });
 
+describe('/want (validation error paths)', () => {
+  it('rejects an invalid collector number', async () => {
+    const i = interaction({ collector_number: '!!! not valid !!!' });
+
+    await wantCommand.execute(i);
+
+    expect(i.editReply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringMatching(/collector number/i) }),
+    );
+    expect(resolveCard).not.toHaveBeenCalled();
+  });
+
+  it('rejects notes that are too long', async () => {
+    const i = interaction({ notes: 'x'.repeat(1001) });
+
+    await wantCommand.execute(i);
+
+    expect(i.editReply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringMatching(/notes/i) }),
+    );
+  });
+
+  it('rejects an invalid finish value', async () => {
+    const i = interaction({ finish: 'bogus-finish' });
+
+    await wantCommand.execute(i);
+
+    expect(i.editReply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('Invalid finish') }),
+    );
+  });
+
+  it('rejects an invalid variant value', async () => {
+    const i = interaction({ variant: 'bogus-variant' });
+
+    await wantCommand.execute(i);
+
+    expect(i.editReply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('Invalid variant') }),
+    );
+  });
+
+  it('replies with a graceful error when createListing throws (rate-limited)', async () => {
+    const now = Date.now();
+    const { listings } = await import('../../../src/db/schema.js');
+    getDb()
+      .insert(listings)
+      .values({
+        serverId: 'guild-1',
+        userId: 'user-1',
+        username: 'alice',
+        intent: 'want',
+        accepts: 'cash',
+        game: 'mtg',
+        cardName: 'Black Lotus',
+        cardNameNormalized: 'black lotus',
+        cardSet: 'LEA',
+        cardImageUrl: null,
+        finish: null,
+        variant: null,
+        collectorNumber: '232',
+        manapoolUrl: null,
+        condition: null,
+        priceCents: null,
+        quantity: 1,
+        notes: null,
+        status: 'active',
+        expiresAt: now + 30 * 24 * 3600 * 1000,
+        createdAt: now - 1000,
+        updatedAt: now - 1000,
+      })
+      .run();
+
+    const i = fakeChatInputInteraction({
+      options: {
+        strings: { card_name: 'Black Lotus', accepts: 'cash', condition: null },
+      },
+    });
+
+    await wantCommand.execute(i);
+
+    expect(i.editReply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: expect.stringMatching(/too quickly|posting/i),
+      }),
+    );
+  });
+});
+
+describe('/want (success-path branches)', () => {
+  it('uses the supplied finish, variant, and condition when all are valid', async () => {
+    const i = interaction({
+      card_name: 'Brainstorm',
+      accepts: 'trade',
+      condition: 'lp',
+      finish: 'foil',
+      variant: 'borderless',
+    });
+
+    await wantCommand.execute(i);
+
+    expect(i.followUp).toHaveBeenCalled();
+  });
+
+  it('rejects an invalid condition value', async () => {
+    const i = interaction({ card_name: 'Brainstorm', accepts: 'trade', condition: 'bogus' });
+
+    await wantCommand.execute(i);
+
+    expect(i.editReply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('Invalid condition') }),
+    );
+  });
+});
+
 describe('/want autocomplete', () => {
   it('suggests set codes when the set option is focused', async () => {
     autocompleteSets.mockResolvedValue([{ name: 'Modern Horizons 3 (MH3)', value: 'MH3' }]);

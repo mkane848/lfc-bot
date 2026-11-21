@@ -29,4 +29,22 @@ describe('buildManapoolUrl', () => {
   it('returns null for an empty card name', () => {
     expect(buildManapoolUrl({ cardName: '   ', cardSet: 'ICE', collectorNumber: '89' })).toBeNull();
   });
+
+  it('returns null when the set is whitespace only', () => {
+    expect(
+      buildManapoolUrl({ cardName: 'Polar Kraken', cardSet: '   ', collectorNumber: '89' }),
+    ).toBeNull();
+  });
+
+  it('returns null when the collector number is whitespace only', () => {
+    expect(
+      buildManapoolUrl({ cardName: 'Polar Kraken', cardSet: 'ICE', collectorNumber: '   ' }),
+    ).toBeNull();
+  });
+
+  it('lowercases the set code in the URL', () => {
+    expect(
+      buildManapoolUrl({ cardName: 'Force of Will', cardSet: 'ALL', collectorNumber: '76b' }),
+    ).toBe('https://manapool.com/card/all/76b/force-of-will');
+  });
 });

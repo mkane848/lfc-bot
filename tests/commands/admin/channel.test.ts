@@ -38,4 +38,20 @@ describe('/admin channel', () => {
     );
     expect(getDb().select().from(servers).all()[0]?.adminChannelId).toBe('channel-42');
   });
+
+  it('replies ephemerally and bails when the interaction is outside a guild', async () => {
+    const i = fakeChatInputInteraction({
+      guildId: null,
+      options: { channels: { channel: { id: 'channel-42' } } },
+    });
+
+    await channelExecute(i);
+
+    expect(i.reply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('inside a server') }),
+    );
+    // The pre-existing server row from beforeEach is untouched -- no new
+    // adminChannelId is written.
+    expect(getDb().select().from(servers).all()[0]?.adminChannelId).toBeNull();
+  });
 });

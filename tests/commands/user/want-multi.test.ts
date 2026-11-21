@@ -220,6 +220,35 @@ describe('/want-multi sealed', () => {
     expect(message).not.toContain('could not resolve');
   });
 
+  it('reports a malformed sealed line via failures and posts the resolvable one', async () => {
+    resolveSealedProduct.mockImplementation((name: string) =>
+      Promise.resolve(resolvedProduct(name)),
+    );
+    const i = fakeModalSubmitInteraction({
+      customId: SEALED_MODAL_ID,
+      fields: { card1: 'NoPipeSegments', card2: 'Bloomburrow Bundle', card3: '', accepts: 'cash' },
+    });
+
+    await handleWantMultiModal(i);
+
+    const message = followUpContent(i);
+    expect(message).toContain('Product 2');
+    expect(message).toContain('Product 1');
+  });
+
+  it('says "No products were entered" for an empty sealed submission', async () => {
+    const i = fakeModalSubmitInteraction({
+      customId: SEALED_MODAL_ID,
+      fields: { card1: '', card2: '', card3: '', accepts: 'cash' },
+    });
+
+    await handleWantMultiModal(i);
+
+    expect(i.editReply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('No products were entered') }),
+    );
+  });
+
   it('never calls the card resolver on a sealed submission', async () => {
     resolveSealedProduct.mockImplementation((name: string) =>
       Promise.resolve(resolvedProduct(name)),
@@ -232,6 +261,51 @@ describe('/want-multi sealed', () => {
     await handleWantMultiModal(i);
 
     expect(resolveCard).not.toHaveBeenCalled();
+  });
+
+  it('reports a malformed card line via failures and posts the resolvable one alongside', async () => {
+    resolveCard.mockImplementation((name: string) => Promise.resolve(resolved(name)));
+    const i = fakeModalSubmitInteraction({
+      customId: WANT_MULTI_MODAL_ID,
+      fields: {
+        card1: 'NoPipeSegments',
+        card2: 'Brainstorm | nm | 5.00',
+        card3: '',
+        accepts: 'cash',
+      },
+    });
+
+    await handleWantMultiModal(i);
+
+    const message = followUpContent(i);
+    expect(message).toContain('Card 1');
+    expect(message).toContain('Card 2');
+  });
+
+  it('uses sort + replyPublicText when there are no failures and no warnings', async () => {
+    resolveCard.mockImplementation((name: string) => Promise.resolve(resolved(name)));
+    const i = fakeModalSubmitInteraction({
+      customId: WANT_MULTI_MODAL_ID,
+      fields: { card1: 'Brainstorm | nm | 5.00', card2: '', card3: '', accepts: 'cash' },
+    });
+
+    await handleWantMultiModal(i);
+
+    const message = followUpContent(i);
+    expect(message).toContain('Card 1');
+  });
+
+  it('uses singular phrasing when exactly one listing is created', async () => {
+    resolveCard.mockImplementation((name: string) => Promise.resolve(resolved(name)));
+    const i = fakeModalSubmitInteraction({
+      customId: WANT_MULTI_MODAL_ID,
+      fields: { card1: 'Brainstorm | nm | 5.00', card2: '', card3: '', accepts: 'cash' },
+    });
+
+    await handleWantMultiModal(i);
+
+    const message = followUpContent(i);
+    expect(message).toMatch(/^Product 1|^Card 1/);
   });
 });
 
@@ -290,4 +364,181 @@ describe('/want-multi game, language and grade', () => {
     );
     expect(stored()).toHaveLength(0);
   });
+});
+
+describe('/want-multi edge branches', () => {
+  it('rejects an invalid universal option before opening the modal', async () => {
+    const i = fakeChatInputInteraction({ options: { strings: { language: 'xx' } } });
+
+    await wantMultiCommand.execute(i);
+
+    expect(i.showModal).not.toHaveBeenCalled();
+    expect(i.reply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('Invalid language') }),
+    );
+  });
+
+  it('refuses to open the modal for a game the server has not enabled', async () => {
+    registerFakeGame();
+    const i = fakeChatInputInteraction({ options: { strings: { game: FAKE_GAME_ID } } });
+
+    await wantMultiCommand.execute(i);
+
+    expect(i.showModal).not.toHaveBeenCalled();
+    expect(i.reply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('not enabled') }),
+    );
+    unregisterFakeGame();
+  });
+
+  it('replies when the modal is submitted outside a guild', async () => {
+    const i = fakeModalSubmitInteraction({
+      customId: WANT_MULTI_MODAL_ID,
+      guildId: null,
+      fields: { accepts: 'cash' },
+    });
+
+    await handleWantMultiModal(i);
+
+    expect(i.reply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('inside a server') }),
+    );
+  });
+
+  it('reports a malformed line and still posts the good ones', async () => {
+    resolveCard.mockResolvedValue(resolved('Brainstorm'));
+    const i = fakeModalSubmitInteraction({
+      customId: WANT_MULTI_MODAL_ID,
+      fields: {
+        card1: 'Too | many | parts | here',
+        card2: 'Brainstorm | nm | 5.00',
+        card3: '',
+        accepts: 'cash',
+      },
+    });
+
+    await handleWantMultiModal(i);
+
+    const content = followUpContent(i);
+    expect(content).toContain('Card 1:');
+    expect(content).toContain('posted');
+  });
+
+  it('replies with every failure when no line is usable', async () => {
+    const i = fakeModalSubmitInteraction({
+      customId: WANT_MULTI_MODAL_ID,
+      fields: {
+        card1: 'a | b | c | d',
+        card2: 'e | f | g | h',
+        card3: '',
+        accepts: 'cash',
+      },
+    });
+
+    await handleWantMultiModal(i);
+
+    const reply = i.editReply.mock.calls[0]?.[0] as { content: string };
+    expect(reply.content).toContain('Use the format');
+  });
+
+  it('reports the cooldown error when the batch cannot be posted', async () => {
+    getDb()
+      .insert(listings)
+      .values({
+        serverId: 'guild-1',
+        userId: 'user-1',
+        username: 'alice',
+        intent: 'want',
+        accepts: 'cash',
+        game: 'mtg',
+        language: 'en',
+        cardName: 'Brainstorm',
+        cardNameNormalized: 'brainstorm',
+        status: 'active',
+        expiresAt: Date.now() + 1000,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      })
+      .run();
+    resolveCard.mockResolvedValue(resolved('Brainstorm'));
+    const i = fakeModalSubmitInteraction({
+      customId: WANT_MULTI_MODAL_ID,
+      fields: { card1: 'Brainstorm | nm | 5.00', card2: '', card3: '', accepts: 'cash' },
+    });
+
+    await handleWantMultiModal(i);
+
+    const reply = i.editReply.mock.calls[0]?.[0] as { content: string };
+    expect(reply.content).toMatch(/too quickly/);
+  });
+
+  it('notes a duplicate listing on the posted line', async () => {
+    getDb()
+      .insert(listings)
+      .values({
+        serverId: 'guild-1',
+        userId: 'user-1',
+        username: 'alice',
+        intent: 'want',
+        accepts: 'cash',
+        game: 'mtg',
+        language: 'en',
+        cardName: 'Brainstorm',
+        cardNameNormalized: 'brainstorm',
+        collectorNumber: '1',
+        condition: 'nm',
+        priceCents: 500,
+        status: 'active',
+        expiresAt: Date.now() + 1000,
+        createdAt: Date.now() - 60_000,
+        updatedAt: Date.now() - 60_000,
+      })
+      .run();
+    resolveCard.mockResolvedValue(resolved('Brainstorm'));
+    const i = fakeModalSubmitInteraction({
+      customId: WANT_MULTI_MODAL_ID,
+      fields: { card1: 'Brainstorm | nm | 5.00', card2: '', card3: '', accepts: 'cash' },
+    });
+
+    await handleWantMultiModal(i);
+
+    expect(followUpContent(i)).toMatch(/already have an active matching listing/);
+  });
+});
+
+it('reports a malformed line alongside a batch that could not be posted', async () => {
+  getDb()
+    .insert(listings)
+    .values({
+      serverId: 'guild-1',
+      userId: 'user-1',
+      username: 'alice',
+      intent: 'want',
+      accepts: 'cash',
+      game: 'mtg',
+      language: 'en',
+      cardName: 'Brainstorm',
+      cardNameNormalized: 'brainstorm',
+      status: 'active',
+      expiresAt: Date.now() + 1000,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    })
+    .run();
+  resolveCard.mockResolvedValue(resolved('Brainstorm'));
+  const i = fakeModalSubmitInteraction({
+    customId: WANT_MULTI_MODAL_ID,
+    fields: {
+      card1: 'Too | many | parts | here',
+      card2: 'Brainstorm | nm | 5.00',
+      card3: '',
+      accepts: 'cash',
+    },
+  });
+
+  await handleWantMultiModal(i);
+
+  const reply = i.editReply.mock.calls[0]?.[0] as { content: string };
+  expect(reply.content).toContain('Use the format');
+  expect(reply.content).toMatch(/too quickly/);
 });

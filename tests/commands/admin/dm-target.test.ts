@@ -38,4 +38,17 @@ describe('/admin dm-target', () => {
     );
     expect(getDb().select().from(servers).all()[0]?.digestDmUserId).toBe('user-42');
   });
+
+  it('replies ephemerally and bails when the interaction is outside a guild', async () => {
+    const i = fakeChatInputInteraction({
+      guildId: null,
+      options: { users: { user: { id: 'user-42', username: 'bob' } } },
+    });
+
+    await dmTargetExecute(i);
+
+    expect(i.reply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('inside a server') }),
+    );
+  });
 });
