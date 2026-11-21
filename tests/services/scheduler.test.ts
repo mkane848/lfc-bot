@@ -302,13 +302,11 @@ describe('startGameCatalogSync', () => {
   });
 });
 
-// Counterexamples found by `tests/models/server.model.test.ts` and
-// `tests/models/digest.model.test.ts`. An `it.fails` is a known bug, kept as an
-// expected failure until fixed: flip it to `it` with the fix.
+// Found by `tests/models/server.model.test.ts` and `tests/models/digest.model.test.ts`.
 describe('digest jobs and the server lifecycle', () => {
-  it.fails('does not schedule a digest for a server the bot has left', () => {
-    // `listScheduledServers` selects on digest_mode alone, so every restart in
-    // the 30-day retention window schedules a digest that can only fail.
+  it('does not schedule a digest for a server the bot has left', () => {
+    // It would fail on every run, with a critical alert, for the whole
+    // 30-day retention window.
     getDb()
       .insert(servers)
       .values(serverRow({ removedAt: Date.now() }))
