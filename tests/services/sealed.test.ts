@@ -310,6 +310,23 @@ describe('syncSealedCatalog', () => {
     expect(isSealedCatalogStale()).toBe(false);
   });
 
+  it('starts a fresh run once the previous one has finished', async () => {
+    // Runs that overlap share one download; runs one after the other don't.
+    getDb()
+      .insert(sealedCatalogMeta)
+      .values({ id: 1, buildVersion: '5.3.0+20260913', setListEtag: '"etag-1"', syncedAt: 1000 })
+      .run();
+    routeFetch({
+      meta: () =>
+        jsonResponse({ meta: {}, data: { date: '2026-09-13', version: '5.3.0+20260913' } }),
+    });
+
+    await syncSealedCatalog();
+    await syncSealedCatalog();
+
+    expect(fetchedUrls()).toEqual([SEALED_CATALOG_META_URL, SEALED_CATALOG_META_URL]);
+  });
+
   it('sends If-None-Match and treats a 304 as no change', async () => {
     getDb()
       .insert(sealedCatalogMeta)

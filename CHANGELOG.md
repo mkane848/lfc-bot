@@ -31,6 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   each failing with an alert. A server that removed the bot while it was
   offline is now marked for removal at startup too, so its data is cleaned up
   after 30 days like any other.
+- The sealed product catalog could be downloaded twice at once when the startup
+  refresh and the daily one overlapped. The second now waits for the first.
 
 ## [1.8.0] - 2026-10-31
 
