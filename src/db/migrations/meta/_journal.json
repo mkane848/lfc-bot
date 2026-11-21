@@ -64,6 +64,13 @@
       "when": 1792863073383,
       "tag": "0008_catalog_sets_import_version",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1795271821062,
+      "tag": "0009_digest_pause_window",
+      "breakpoints": true
     }
   ]
 }

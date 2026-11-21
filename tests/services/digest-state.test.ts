@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { getDb } from '../../src/db/index.js';
 import { listings, servers, type NewServerRow, type NewListingRow } from '../../src/db/schema.js';
 import {
@@ -99,5 +99,70 @@ describe('digest state', () => {
     initializeWatermarkIfNeeded(config);
     const after = getServerConfig('300')!;
     expect(after.lastDigestAt).not.toBeNull();
+  });
+});
+
+describe('turning digests on and off', () => {
+  it('keeps the watermark while a mode changes between active ones', () => {
+    getDb()
+      .insert(servers)
+      .values({ ...serverRow, digestMode: 'channel', lastDigestAt: 1000 })
+      .run();
+    upsertServerConfig({ serverId: '300', digestMode: 'both' });
+    expect(getServerConfig('300')!.lastDigestAt).toBe(1000);
+  });
+
+  it('keeps the watermark when digests are turned off', () => {
+    getDb()
+      .insert(servers)
+      .values({ ...serverRow, digestMode: 'channel', lastDigestAt: 1000 })
+      .run();
+    upsertServerConfig({ serverId: '300', digestMode: 'disabled' });
+    expect(getServerConfig('300')!.lastDigestAt).toBe(1000);
+  });
+
+  describe('pausing and resuming', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    const at = (time: number) => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(time);
+    };
+
+    it('skips what was posted while paused, and still sends what was unsent before', () => {
+      getDb()
+        .insert(servers)
+        .values({ ...serverRow, digestMode: 'channel', lastDigestAt: 1000 })
+        .run();
+      addListing(1500, 1); // before the pause, never sent
+      at(2000);
+      upsertServerConfig({ serverId: '300', digestMode: 'disabled' });
+      addListing(2500, 2); // while paused
+      at(3000);
+      upsertServerConfig({ serverId: '300', digestMode: 'channel' });
+      addListing(3500, 3); // after resuming
+      at(4000);
+
+      const rows = prepareDigestListings(getServerConfig('300')!);
+
+      expect(rows.map((r) => r.cardName)).toEqual(['Card 1', 'Card 3']);
+    });
+
+    it('starts from the resume for a pause with no recorded start', () => {
+      // Paused before pause times were recorded: what is unsent can't be told
+      // apart from what was posted while paused, so neither is sent.
+      getDb()
+        .insert(servers)
+        .values({ ...serverRow, digestMode: 'disabled', lastDigestAt: 1000 })
+        .run();
+      at(3000);
+      upsertServerConfig({ serverId: '300', digestMode: 'channel' });
+
+      const config = getServerConfig('300')!;
+      expect(config.lastDigestAt).toBe(3000);
+      expect(config.digestPausedAt).toBeNull();
+    });
   });
 });

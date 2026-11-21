@@ -93,7 +93,28 @@ export function splitDigestMessage(text: string, limit = DISCORD_MESSAGE_MAX_LEN
  * `digest_mode`, and the watermark only advances when at least one destination
  * succeeds.
  */
-export async function runDigest(
+export function runDigest(
+  client: Client,
+  server: ServerRow,
+  trigger: DigestTrigger,
+): Promise<DigestResult> {
+  // A scheduled run and `/admin digest` can overlap. Both would read the same
+  // watermark and send the same listings, so the second joins the first.
+  const running = inFlight.get(server.id);
+  if (running) {
+    return running;
+  }
+  const run = deliverDigest(client, server, trigger).finally(() => {
+    inFlight.delete(server.id);
+  });
+  inFlight.set(server.id, run);
+  return run;
+}
+
+/** Digests in progress, by server id. */
+const inFlight = new Map<string, Promise<DigestResult>>();
+
+async function deliverDigest(
   client: Client,
   server: ServerRow,
   trigger: DigestTrigger,

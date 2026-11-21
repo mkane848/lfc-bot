@@ -21,6 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fulfilled, deleted and expired listings could still be fulfilled, deleted or
   edited, for example from an old `/mylistings` message. They are now final,
   and the bot explains why it left them alone.
+- Turning digests off and back on sent everything posted during the pause.
+  Listings posted while digests were off are now skipped. Ones posted before
+  the pause that no digest had sent yet still go out.
+- A scheduled digest and `/admin digest` running at the same time sent the same
+  listings twice. The second now joins the run already in progress.
 
 ## [1.8.0] - 2026-10-31
 
