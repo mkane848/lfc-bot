@@ -114,4 +114,18 @@ describe('/delete', () => {
       expect.objectContaining({ content: expect.stringContaining('inside a server') }),
     );
   });
+
+  it('refuses to delete a listing that is already closed', async () => {
+    const id = seedListing({ status: 'fulfilled' });
+    const i = fakeChatInputInteraction({
+      userId: 'owner-1',
+      options: { integers: { listing_id: id } },
+    });
+
+    await deleteCommand.execute(i);
+
+    expect(i.reply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('already fulfilled') }),
+    );
+  });
 });

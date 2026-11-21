@@ -14,6 +14,7 @@ import {
   stopAllJobs,
 } from '../../src/services/scheduler.js';
 import { pruneExpiredCardCache } from '../../src/services/card-cache.js';
+import { runDigest } from '../../src/services/digest.js';
 import { syncEnabledGameCatalogs } from '../../src/services/game-catalogs.js';
 import { expireListings, purgeMarkedServers } from '../../src/services/listing-expiry.js';
 import { syncSealedCatalog } from '../../src/services/sealed.js';
@@ -37,6 +38,8 @@ vi.mock('../../src/services/listing-expiry.js', () => ({
   purgeMarkedServers: vi.fn(),
 }));
 
+vi.mock('../../src/services/digest.js', () => ({ runDigest: vi.fn() }));
+
 setupTestDb();
 
 const mockSyncSealedCatalog = vi.mocked(syncSealedCatalog);
@@ -44,8 +47,11 @@ const mockSyncGameCatalogs = vi.mocked(syncEnabledGameCatalogs);
 const mockPruneExpiredCardCache = vi.mocked(pruneExpiredCardCache);
 const mockExpireListings = vi.mocked(expireListings);
 const mockPurgeMarkedServers = vi.mocked(purgeMarkedServers);
+const mockRunDigest = vi.mocked(runDigest);
 
 beforeEach(() => {
+  mockRunDigest.mockReset();
+  mockRunDigest.mockResolvedValue({ sent: true, channelOk: true, dmOk: false, listingCount: 1 });
   mockSyncSealedCatalog.mockReset();
   mockSyncSealedCatalog.mockResolvedValue({ imported: 0, removed: 0 });
   mockSyncGameCatalogs.mockReset();
@@ -363,5 +369,44 @@ describe('startMaintenance', () => {
     startMaintenance();
 
     expect(scheduleSpy).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('scheduled digest callback', () => {
+  async function fireDigestCallback(): Promise<void> {
+    const scheduleSpy = vi.spyOn(cron, 'schedule');
+    scheduleAllDigests(fakeClient());
+
+    const digestCall = scheduleSpy.mock.calls.find(([expression]) => expression === '0 9 * * *');
+    const callback = digestCall?.[1] as () => void;
+    callback();
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+
+  it('runs the digest for the server whose job fired', async () => {
+    getDb().insert(servers).values(serverRow()).run();
+
+    await fireDigestCallback();
+
+    expect(mockRunDigest).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ id: 'guild-1' }),
+      'scheduled',
+    );
+  });
+
+  it('skips the run when the server was disabled after its job was scheduled', async () => {
+    getDb().insert(servers).values(serverRow()).run();
+    const scheduleSpy = vi.spyOn(cron, 'schedule');
+    scheduleAllDigests(fakeClient());
+    getDb().update(servers).set({ digestMode: 'disabled' }).run();
+
+    const callback = scheduleSpy.mock.calls.find(
+      ([expression]) => expression === '0 9 * * *',
+    )?.[1] as (() => void) | undefined;
+    callback?.();
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(mockRunDigest).not.toHaveBeenCalled();
   });
 });
