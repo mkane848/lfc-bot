@@ -1,7 +1,7 @@
 # Test coverage audit
 
 Snapshot of the Vitest suite against `src/`, taken 2026-11-21, generated with
-[`@vitest/coverage-v8@5.1`](https://vitest.dev/guide/coverage):
+[`@vitest/coverage-v8`](https://vitest.dev/guide/coverage):
 
 ```
 npm test -- --coverage
@@ -13,7 +13,7 @@ npm test -- --coverage
 
 | Statements | Branches | Functions | Lines | Tests |
 |---|---|---|---|---|
-| **95.17 %** (2 562 / 2 692) | **90.38 %** (1 627 / 1 800) | **93.71 %** (492 / 525) | **95.40 %** (2 468 / 2 587) | 74 files, 1 020 passing + 10 expected fail |
+| **96.80 %** (2 606 / 2 692) | **90.61 %** (1 631 / 1 800) | **96.00 %** (504 / 525) | **97.02 %** (2 510 / 2 587) | 75 files, 1 031 passing + 10 expected fail |
 
 `vitest.config.ts` uses the strict `src/**/*.ts` include, so a source file with
 no test counts as 0 % instead of disappearing from the report. Excluded from
@@ -26,13 +26,19 @@ registry test).
 
 | Directory | % Stmts | % Branch | % Funcs | % Lines |
 |---|---|---|---|---|
-| `src/` (entrypoint) | 0.00 | 0.00 | 0.00 | 0.00 |
+| `src/` (entrypoint) | 100.00 | 100.00 | 100.00 | 100.00 |
 | `src/commands` | 95.74 | 85.95 | 97.87 | 95.85 |
 | `src/db` | 91.07 | 90.00 | 80.00 | 91.07 |
 | `src/events` | 98.51 | 89.47 | 100.00 | 98.51 |
 | `src/games` | 95.04 | 88.10 | 92.31 | 94.70 |
-| `src/services` | 97.64 | 94.00 | 94.68 | 98.31 |
+| `src/services` | 97.68 | 94.18 | 94.76 | 98.34 |
 | `src/utils` | 98.08 | 92.67 | 99.07 | 98.03 |
+
+`src/index.ts` is the entrypoint smoke in `tests/index.test.ts`: it imports the
+module with Discord, the database, the schedule, and the health server mocked,
+then drives startup, `ClientReady`, every event, both signal handlers, and the
+fatal-startup path. It covers the wiring that only shows up in production
+boots.
 
 ## Where the gap is
 
@@ -40,7 +46,6 @@ Files with the lowest statement coverage, in ascending order:
 
 | File | % Stmts | % Branch | % Lines | What's missing |
 |---|---|---|---|---|
-| `src/index.ts` | 0.00 | 0.00 | 0.00 | The whole entrypoint: env validation, migrations, signal traps, client wiring, graceful shutdown. No test imports it. |
 | `src/games/pokemon.ts` | 80.00 | 100.00 | 80.00 | Game metadata wiring. |
 | `src/utils/version.ts` | 80.00 | 50.00 | 80.00 | Cache/fallback branch. |
 | `src/db/schema.ts` | 84.21 | 100.00 | 84.21 | Index declarations with no observable behavior. |
@@ -49,10 +54,12 @@ Files with the lowest statement coverage, in ascending order:
 | `src/services/scheduler.ts` | 88.33 | 81.25 | 89.65 | Cron lifecycle and job removal. |
 | `src/commands/admin/digest.ts` | 89.47 | 91.66 | 89.47 | Empty-digest reply. |
 | `src/commands/user/delete.ts` | 89.47 | 87.50 | 89.47 | Already-closed guard. |
+| `src/utils/permissions.ts` | 90.90 | 77.77 | 90.90 | Permission-denied branches. |
+| `src/db/migrate.ts` | 91.66 | 75.00 | 91.66 | `findProjectRoot` failure path. |
 
-Branch coverage now sits at 90.28 %, so the remaining sharp edges are narrow:
-the DM-target and per-server fallback branches in `digest.ts`, the no-guild
-guards, and the scheduler's cron callbacks.
+Branch coverage is the limiting dimension at 90.61 %. The remaining sharp
+edges are the DM-target and per-server fallback branches in `digest.ts`, the
+no-guild guards, and the scheduler's cron callbacks.
 
 ## The gate
 
@@ -62,18 +69,15 @@ every run (including failures) so a drop can be inspected from the PR page.
 
 | | Gate | Measured |
 |---|---|---|
-| Statements | 95 | 95.17 |
-| Branches | 90 | 90.38 |
-| Functions | 90 | 93.71 |
-| Lines | 95 | 95.40 |
+| Statements | 96 | 96.80 |
+| Branches | 90 | 90.61 |
+| Functions | 95 | 96.00 |
+| Lines | 97 | 97.02 |
 
-This is the **Gold** tier from the original audit, and it is a ratchet: a PR
-that measurably improves coverage should raise the thresholds in the same
-commit, and none may lower them. The margins are deliberately thin on
-statements and lines — that is what makes the gate useful.
+These thresholds are a ratchet: a PR that measurably improves coverage should
+raise them in the same commit, and none may lower them. The margins are
+deliberately thin on lines — that is what makes the gate useful.
 
-Gold also called for an integration smoke for `src/index.ts` startup and
-graceful shutdown. That is the one item still open: the file is 0 % covered
-and is worth roughly 2 points of statements and 3 of lines on its own, so it
-would put real headroom under the thresholds rather than leaving them on the
-edge.
+The function threshold sits one point below the measured value because it is
+the smallest denominator (525 functions), so a single refactor that deletes a
+well-covered helper moves it further than the other dimensions.
