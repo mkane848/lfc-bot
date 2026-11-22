@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.2] - 2026-11-21
+
+### Fixed
+
+- The sealed product catalog could be downloaded twice at once when the startup
+  refresh and the daily one overlapped. The second now waits for the first.
+
 ## [1.8.1] - 2026-11-21
 
 ### Fixed
@@ -33,8 +40,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   each failing with an alert. A server that removed the bot while it was
   offline is now marked for removal at startup too, so its data is cleaned up
   after 30 days like any other.
-- The sealed product catalog could be downloaded twice at once when the startup
-  refresh and the daily one overlapped. The second now waits for the first.
 
 ## [1.8.0] - 2026-10-31
 
@@ -585,7 +590,8 @@ qty` for `/have-multi`, `Product Name | max_price` for `/want-multi`. Unlike
 - CI workflow running lint, format check, type-check, and tests on every push
   to `main` and every pull request.
 
-[Unreleased]: https://github.com/mkane848/lfc-bot/compare/v1.8.1...HEAD
+[Unreleased]: https://github.com/mkane848/lfc-bot/compare/v1.8.2...HEAD
+[1.8.2]: https://github.com/mkane848/lfc-bot/compare/v1.8.1...v1.8.2
 [1.8.1]: https://github.com/mkane848/lfc-bot/compare/v1.8.0...v1.8.1
 [1.8.0]: https://github.com/mkane848/lfc-bot/compare/v1.7.0...v1.8.0
 [1.7.0]: https://github.com/mkane848/lfc-bot/compare/v1.6.2...v1.7.0
